@@ -1,0 +1,16 @@
+{
+    "author_name": "Your Name",
+    "email": "Your Email",
+    "year": "{% now 'utc', '%Y' %}",
+    "_extensions": ["jinja2_time.TimeExtension"],
+    "version": "0.0.1",
+    "project_name": "project_name",
+    "repo_name": "{{ cookiecutter.project_name|replace(' ', '_')|replace('-', '_') }}",
+    "description": "{{ cookiecutter.project_name }} website",
+    "languages": "en",
+    "timezone": "UTC",
+    "domain_name": "{{ cookiecutter.project_name }}.com",
+    "cms_package": ["django-cms", "wagtail"],
+    "django_filer": "n",
+    "s3": "n"
+}

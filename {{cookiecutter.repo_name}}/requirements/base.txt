@@ -1,0 +1,24 @@
+# Django 
+Django==2.2.13
+django-kn-defaults==0.2.2
+raven==6.10.0
+
+{% if cookiecutter.cms_package == "django-cms" %}
+# Django CMS + dependencies
+appdirs==1.4.4
+django-appconf==1.0.4
+django-cms==3.7.3
+djangocms-text-ckeditor==3.9.1
+{% endif %}
+
+{% if cookiecutter.django_filer == "y" or cookiecutter.django_filer == "Y" %}
+# Django filer plugin
+django-filer==1.7.1
+easy-thumbnails==2.7
+{% endif %}
+
+# for windows please add following libe before installing compressor
+# rcssmin==1.0.6 --install-option="--without-c-extensions"
+django-compressor==2.4
+django-rq==2.3.2
+redis==3.5.3
