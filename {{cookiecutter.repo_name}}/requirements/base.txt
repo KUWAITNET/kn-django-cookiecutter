@@ -11,13 +11,17 @@ django-cms==3.7.3
 djangocms-text-ckeditor==3.9.1
 {% endif %}
 
+{% if cookiecutter.cms_package == "wagtail" %}
+wagtail==2.9
+{% endif %}
+
 {% if cookiecutter.django_filer == "y" or cookiecutter.django_filer == "Y" %}
 # Django filer plugin
 django-filer==1.7.1
 easy-thumbnails==2.7
 {% endif %}
 
-# for windows please add following libe before installing compressor
+# for windows please add following lib before installing compressor
 # rcssmin==1.0.6 --install-option="--without-c-extensions"
 django-compressor==2.4
 django-rq==2.3.2

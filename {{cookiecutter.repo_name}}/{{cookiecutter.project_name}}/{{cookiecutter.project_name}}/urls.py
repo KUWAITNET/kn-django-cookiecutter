@@ -4,6 +4,14 @@ from django.contrib import admin
 from django.conf import settings
 from django.views.generic.base import TemplateView
 
+{% if cookiecutter.cms_package == "wagtail" %}
+from wagtail.admin import urls as wagtailadmin_urls
+from wagtail.core import urls as wagtail_urls
+from wagtail.documents import urls as wagtaildocs_urls
+
+from search import views as search_views
+{% endif %}
+
 
 def bad(request):
     """ Simulates a server error """
@@ -16,11 +24,25 @@ urlpatterns = [
 
 urlpatterns += i18n_patterns(
     path('bad/', bad),
+    {% if cookiecutter.cms_package == "wagtail" %}
+    path('django-admin/', admin.site.urls),
+    path('admin/', include(wagtailadmin_urls)),
+    path('documents/', include(wagtaildocs_urls)),
+
+    path('search/', search_views.search, name='search'),
+    {% else %}
     path('admin/', admin.site.urls),
+    {% endif %}
     path('django-rq/', include('django_rq.urls')),
 
     {% if cookiecutter.cms_package == "django-cms" %}
     path('', include('cms.urls')),
+    {% endif %}
+    {% if cookiecutter.cms_package == "wagtail" %}
+    # For anything not caught by a more specific rule above, hand over to
+    # Wagtail's page serving mechanism. This should be the last pattern in
+    # the list:
+    path('', include(wagtail_urls)),
     {% endif %}
 )
 

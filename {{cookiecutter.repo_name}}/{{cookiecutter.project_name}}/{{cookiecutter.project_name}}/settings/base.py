@@ -173,6 +173,9 @@ MIDDLEWARE = (
     'cms.middleware.toolbar.ToolbarMiddleware',
     'cms.middleware.language.LanguageCookieMiddleware',
     {% endif %}
+    {% if cookiecutter.cms_package == "wagtail" %}
+    'wagtail.contrib.redirects.middleware.RedirectMiddleware',
+    {% endif %}
 
     'kn_defaults.logging.middlewares.KnLogging',
 )
@@ -186,6 +189,25 @@ INSTALLED_APPS = (
     {% if cookiecutter.cms_package == "django-cms" %}
     # Django CMS admin style
     'djangocms_admin_style',
+    {% endif %}
+    {% if cookiecutter.cms_package == "wagtail" %}
+    'home',
+    'search',
+
+    'wagtail.contrib.forms',
+    'wagtail.contrib.redirects',
+    'wagtail.embeds',
+    'wagtail.sites',
+    'wagtail.users',
+    'wagtail.snippets',
+    'wagtail.documents',
+    'wagtail.images',
+    'wagtail.search',
+    'wagtail.admin',
+    'wagtail.core',
+
+    'modelcluster',
+    'taggit',
     {% endif %}
 
     'django.contrib.auth',
@@ -299,6 +321,16 @@ CMS_LANGUAGES = {
 CMS_PERMISSION = True
 
 CMS_PLACEHOLDER_CONF = {}
+{% endif %}
+
+{% if cookiecutter.cms_package == "wagtail" %}
+# Wagtail settings
+
+WAGTAIL_SITE_NAME = PROJECT_NAME
+
+# Base URL to use when referring to full URLs within the Wagtail admin backend -
+# e.g. in notification emails. Don't include '/admin' or a trailing slash
+BASE_URL = 'http://%s' % PROJECT_DOMAIN
 {% endif %}
 
 {% if cookiecutter.django_filer == "y" or cookiecutter.django_filer == "Y" %}
