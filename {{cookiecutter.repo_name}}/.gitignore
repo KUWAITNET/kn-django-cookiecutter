@@ -1,5 +1,4 @@
 {{cookiecutter.project_name}}/{{cookiecutter.project_name}}/settings/dev.py
-{{cookiecutter.project_name}}/{{cookiecutter.project_name}}/settings/production.py
 *.py[co]
 *.sw[po]
 *.egg*
