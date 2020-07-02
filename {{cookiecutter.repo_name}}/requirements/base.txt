@@ -1,5 +1,5 @@
 # Django 
-Django==2.2.13
+Django==2.2.14
 django-kn-defaults==0.2.2
 raven==6.10.0
 
@@ -12,7 +12,7 @@ djangocms-text-ckeditor==3.9.1
 {% endif %}
 
 {% if cookiecutter.cms_package == "wagtail" %}
-wagtail==2.9
+wagtail==2.9.1
 {% endif %}
 
 {% if cookiecutter.django_filer == "y" or cookiecutter.django_filer == "Y" %}
@@ -26,3 +26,5 @@ easy-thumbnails==2.7
 django-compressor==2.4
 django-rq==2.3.2
 redis==3.5.3
+djangorestframework==3.11.0
+django-environ==0.4.5
