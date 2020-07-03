@@ -10,8 +10,9 @@
     "languages": "en",
     "timezone": "UTC",
     "domain_name": "{{ cookiecutter.project_name }}.com",
-    "cms_package": ["django-cms", "wagtail"],
+    "cms_package": ["None", "django-cms", "wagtail"],
     "django_filer": "n",
     "s3": "n",
-    "django_cors": "n"
+    "django_cors": "n",
+    "redis": "n"
 }

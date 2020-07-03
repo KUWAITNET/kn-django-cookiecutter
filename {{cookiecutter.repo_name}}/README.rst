@@ -80,4 +80,7 @@ DJANGO_AWS_STORAGE_BUCKET_NAME          AWS_STORAGE_BUCKET_NAME     n/a         
 DJANGO_AWS_S3_REGION_NAME               AWS_S3_REGION_NAME          n/a                                            None
 DJANGO_AWS_S3_CUSTOM_DOMAIN             AWS_S3_CUSTOM_DOMAIN        n/a                                            None
 SENTRY_DSN                              SENTRY_DSN                  n/a                                            raises error
+REDIS_HOST                              REDIS_HOST                  localhost                                      localhost
+REDIS_PORT                              REDIS_PORT                  6379                                           6379
+REDIS_PASSWORD                          REDIS_PASSWORD              ''                                             ''
 ======================================= =========================== ============================================== ======================================================================

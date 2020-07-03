@@ -33,8 +33,11 @@ urlpatterns += i18n_patterns(
     {% else %}
     path(f"{settings.ADMIN_URL}/", admin.site.urls),
     {% endif %}
-    path("users/", include("users.urls", namespace="users")),
+    path("user/", include("user.urls", namespace="user")),
+
+    {% if cookiecutter.redis == "y" or cookiecutter.redis == "Y" %}
     path("django-rq/", include("django_rq.urls")),
+    {% endif %}
 
     {% if cookiecutter.cms_package == "django-cms" %}
     path("", include("cms.urls")),

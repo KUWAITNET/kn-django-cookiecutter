@@ -6,7 +6,7 @@ from .views import (
     UserUpdateView,
 )
 
-app_name = "users"
+app_name = "user"
 urlpatterns = [
     path("~redirect/", view=UserRedirectView.as_view(), name="redirect"),
     path("~update/", view=UserUpdateView.as_view(), name="update"),

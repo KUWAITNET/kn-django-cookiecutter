@@ -205,7 +205,7 @@ ROOT_URLCONF = "{{ cookiecutter.project_name }}.urls"
 WSGI_APPLICATION = "{{ cookiecutter.project_name }}.wsgi.application"
 
 INSTALLED_APPS = (
-    "users.apps.UsersConfig",
+    "user.apps.UsersConfig",
 
     {% if cookiecutter.cms_package == "django-cms" %}
     # Django CMS admin style
@@ -269,8 +269,8 @@ INSTALLED_APPS = (
     {% endif %}
 )
 
-AUTH_USER_MODEL = "users.User"
-LOGIN_REDIRECT_URL = "users:redirect"
+AUTH_USER_MODEL = "user.User"
+LOGIN_REDIRECT_URL = "user:redirect"
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -377,40 +377,41 @@ THUMBNAIL_PROCESSORS = (
 GOOGLE_ANALYTICS = env.str("GOOGLE_ANALYTICS", default="")
 
 CACHE_ENGINES = {
+    {% if cookiecutter.redis == "y" or cookiecutter.redis == "Y" %}
     "redis": {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "localhost:6379:0",
+        "LOCATION": f'redis://{env.str("REDIS_HOST", default="localhost")}:{env.int("REDIS_PORT", default=6379)}/0',
     },
+    {% endif %}
     "dummy": {
         "BACKEND": "django.core.cache.backends.dummy.DummyCache",
     }
 }
 
 CACHES = {
-    "redis": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "localhost:6379:0",
-    }
+    "default": CACHE_ENGINES[env.str("CACHE", default="dummy")]
 }
 
-CACHES["default"] = CACHE_ENGINES[env.str("CACHE", default="dummy")]
-
+{% if cookiecutter.redis == "y" or cookiecutter.redis == "Y" %}
 ########## REDIS QUEUE CONFIGURATION
 # https://github.com/ui/django-rq#support-for-django-redis-and-django-redis-cache
 RQ_QUEUES = {
-    "default": {
-        "USE_REDIS_CACHE": "redis"
-    },
-    "high": {
-        "USE_REDIS_CACHE": "redis"
-    },
-    "low": {
-        "USE_REDIS_CACHE": "redis"
+    'default': {
+        'HOST': env.str("REDIS_HOST", default="localhost"),
+        'PORT': env.int("REDIS_PORT", default=6379),
+        'DB': 0,
+        'PASSWORD': env.str("REDIS_PASSWORD", default=""),
+        'DEFAULT_TIMEOUT': 86400 * 7,
     }
+}
+
+RQ = {
+    'DEFAULT_RESULT_TTL': 86400 * 7,
 }
 
 RQ_SHOW_ADMIN_LINK = True
 ########## END REDIS QUEUE CONFIGURATION
+{% endif %}
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
