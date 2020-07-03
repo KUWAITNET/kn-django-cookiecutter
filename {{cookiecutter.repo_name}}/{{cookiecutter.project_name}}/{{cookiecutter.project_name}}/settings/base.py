@@ -170,6 +170,10 @@ TEMPLATES = [
 ]
 
 MIDDLEWARE = (
+    {% if cookiecutter.django_cors == "y" or cookiecutter.django_cors == "Y" %}
+    'corsheaders.middleware.CorsMiddleware',
+    {% endif %}
+
     {% if cookiecutter.cms_package == "django-cms" %}
     "cms.middleware.utils.ApphookReloadMiddleware",
     {% endif %}
@@ -258,6 +262,10 @@ INSTALLED_APPS = (
     "compressor",
     {% if cookiecutter.s3 == "y" or cookiecutter.s3 == "Y" %}
     "storages",
+    {% endif %}
+
+    {% if cookiecutter.django_cors == "y" or cookiecutter.django_cors == "Y" %}
+    'corsheaders',
     {% endif %}
 )
 
