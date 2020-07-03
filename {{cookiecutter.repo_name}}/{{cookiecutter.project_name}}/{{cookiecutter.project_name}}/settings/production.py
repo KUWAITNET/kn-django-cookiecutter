@@ -28,31 +28,31 @@ SECURE_CONTENT_TYPE_NOSNIFF = env.bool(
 
 {% if cookiecutter.s3 == "y" or cookiecutter.s3 == "Y" %}
 
-# Honor the 'X-Forwarded-Proto' header for request.is_secure()
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# Honor the "X-Forwarded-Proto" header for request.is_secure()
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # Static files location
-AWS_ACCESS_KEY_ID = environ.get('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = environ.get('AWS_SECRET_ACCESS_KEY')
-AWS_STORAGE_BUCKET_NAME = environ.get('AWS_STORAGE_BUCKET_NAME')
+AWS_ACCESS_KEY_ID = env.str("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = env.str("AWS_SECRET_ACCESS_KEY")
+AWS_STORAGE_BUCKET_NAME = env.str("AWS_STORAGE_BUCKET_NAME")
 AWS_AUTO_CREATE_BUCKET = True
 AWS_QUERYSTRING_AUTH = False
 AWS_IS_GZIPPED = True
 
-S3_URL = 'https://%s.s3.amazonaws.com/' % AWS_STORAGE_BUCKET_NAME
+S3_URL = "https://%s.s3.amazonaws.com/" % AWS_STORAGE_BUCKET_NAME
 
 # Static on S3
-STATICFILES_LOCATION = 'static'
-STATICFILES_STORAGE = '{{ cookiecutter.project_name }}.utils.storages.StaticRootS3Boto3Storage'
+STATICFILES_LOCATION = "static"
+STATICFILES_STORAGE = "{{ cookiecutter.project_name }}.utils.storages.StaticRootS3Boto3Storage"
 STATIC_URL = "%s%s/" % (S3_URL, STATICFILES_LOCATION)
 
 COMPRESS_STORAGE = STATICFILES_STORAGE
 COMPRESS_URL = STATIC_URL
 
 # Media on S3
-MEDIAFILES_LOCATION = 'media'
+MEDIAFILES_LOCATION = "media"
 MEDIA_URL = "%s%s/" % (S3_URL, MEDIAFILES_LOCATION)
-DEFAULT_FILE_STORAGE = '{{ cookiecutter.project_name }}.utils.storages.MediaRootS3Boto3Storage'
+DEFAULT_FILE_STORAGE = "{{ cookiecutter.project_name }}.utils.storages.MediaRootS3Boto3Storage"
 
 AWS_QUERYSTRING_AUTH = False
 _AWS_EXPIRY = 60 * 60 * 24 * 7
