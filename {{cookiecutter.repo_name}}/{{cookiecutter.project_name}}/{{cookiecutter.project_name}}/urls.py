@@ -24,6 +24,7 @@ urlpatterns = [
 
 urlpatterns += i18n_patterns(
     path("bad/", bad),
+	path('', include('djvue.urls')),
     {% if cookiecutter.cms_package == "wagtail" %}
     path("django-admin/", admin.site.urls),
     path(f"{settings.ADMIN_URL}/", include(wagtailadmin_urls)),

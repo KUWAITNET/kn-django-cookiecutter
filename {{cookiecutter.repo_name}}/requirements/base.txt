@@ -1,6 +1,7 @@
 # Django 
 Django==2.2.14
 django-kn-defaults==0.2.2
+djvue==0.1.0
 raven==6.10.0
 
 {% if cookiecutter.cms_package == "django-cms" %}

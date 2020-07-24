@@ -243,6 +243,7 @@ INSTALLED_APPS = (
 
     "rest_framework",
     "rest_framework.authtoken",
+	"djvue",
 
     {% if cookiecutter.cms_package == "django-cms" %}
     # Django CMS
