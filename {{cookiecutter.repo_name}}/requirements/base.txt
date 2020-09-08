@@ -1,5 +1,5 @@
 # Django 
-Django==2.2.14
+Django==2.2.16
 django-kn-defaults==0.2.2
 djvue==0.1.0
 raven==6.10.0
@@ -13,7 +13,7 @@ djangocms-text-ckeditor==3.9.1
 {% endif %}
 
 {% if cookiecutter.cms_package == "wagtail" %}
-wagtail==2.9.1
+wagtail==2.10.1
 {% endif %}
 
 {% if cookiecutter.django_filer == "y" or cookiecutter.django_filer == "Y" %}
