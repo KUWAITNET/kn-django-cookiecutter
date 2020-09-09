@@ -45,7 +45,7 @@ sentry_sdk.init(
 
 ENABLE_APM = env.bool("ENABLE_APM", default=True)
 if ENABLE_APM:
-    ELASTIC_APM_IP = env.str("ELASTIC_APM", default="")
+    ELASTIC_APM_IP = env.str("ELASTIC_APM_IP", default="")
     INSTALLED_APPS.append("elasticapm.contrib.django")
     MIDDLEWARE.insert(0, "elasticapm.contrib.django.middleware.TracingMiddleware")
     ELASTIC_APM = {
