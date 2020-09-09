@@ -43,6 +43,17 @@ sentry_sdk.init(
     send_default_pii=True
 )
 
+ENABLE_APM = env.bool("ENABLE_APM", default=True)
+
+if ENABLE_APM:
+    INSTALLED_APPS.append("elasticapm.contrib.django")
+    MIDDLEWARE.insert(0, "elasticapm.contrib.django.middleware.TracingMiddleware")
+    ELASTIC_APM = {
+        "SERVICE_NAME": PROJECT_NAME,
+        "SERVER_URL": "",
+        "DJANGO_TRANSACTION_NAME_FROM_ROUTE": True,
+    }
+
 
 {% if cookiecutter.s3 == "y" or cookiecutter.s3 == "Y" %}
 
