@@ -44,13 +44,13 @@ sentry_sdk.init(
 )
 
 ENABLE_APM = env.bool("ENABLE_APM", default=True)
-
 if ENABLE_APM:
+    ELASTIC_APM_IP = env.str("ELASTIC_APM", default="")
     INSTALLED_APPS.append("elasticapm.contrib.django")
     MIDDLEWARE.insert(0, "elasticapm.contrib.django.middleware.TracingMiddleware")
     ELASTIC_APM = {
         "SERVICE_NAME": PROJECT_NAME,
-        "SERVER_URL": "",
+        "SERVER_URL": ELASTIC_APM_IP,
         "DJANGO_TRANSACTION_NAME_FROM_ROUTE": True,
     }
 
