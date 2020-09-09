@@ -1,8 +1,8 @@
 # Django 
 Django==2.2.16
-django-kn-defaults==0.2.2
+django-kn-defaults==0.2.4
 djvue==0.1.0
-raven==6.10.0
+sentry-sdk==0.17.3
 
 {% if cookiecutter.cms_package == "django-cms" %}
 # Django CMS + dependencies

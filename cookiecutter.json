@@ -8,7 +8,7 @@
     "repo_name": "{{ cookiecutter.project_name|replace(' ', '_')|replace('-', '_') }}",
     "description": "{{ cookiecutter.project_name }} website",
     "languages": "en",
-    "timezone": "UTC",
+    "timezone": "Asia/Kuwait",
     "domain_name": "{{ cookiecutter.project_name }}.com",
     "cms_package": ["None", "django-cms", "wagtail"],
     "django_filer": "n",

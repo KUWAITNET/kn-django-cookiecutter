@@ -1,3 +1,9 @@
+import logging
+
+import sentry_sdk
+from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
+
 from .base import *  # noqa
 from .base import env
 
@@ -25,6 +31,18 @@ SECURE_HSTS_PRELOAD = env.bool("DJANGO_SECURE_HSTS_PRELOAD", default=True)
 SECURE_CONTENT_TYPE_NOSNIFF = env.bool(
     "DJANGO_SECURE_CONTENT_TYPE_NOSNIFF", default=True
 )
+
+SENTRY_LOG_LEVEL = env.int("DJANGO_SENTRY_LOG_LEVEL", logging.ERROR)
+sentry_logging = LoggingIntegration(
+    level=SENTRY_LOG_LEVEL,  # Capture info and above as breadcrumbs
+    event_level=logging.ERROR,  # Send errors as events
+)
+sentry_sdk.init(
+    dsn=SENTRY_DSN, 
+    integrations=[sentry_logging, DjangoIntegration()],
+    send_default_pii=True
+)
+
 
 {% if cookiecutter.s3 == "y" or cookiecutter.s3 == "Y" %}
 

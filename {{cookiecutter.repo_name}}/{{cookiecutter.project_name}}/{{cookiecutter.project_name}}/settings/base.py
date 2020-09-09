@@ -296,19 +296,6 @@ AUTH_PASSWORD_VALIDATORS = [
 KN_LOG_FILE_PATH = join(DJANGO_ROOT, "logs/log.log")
 
 from kn_defaults.logging.defaults import BASE_LOGGING
-BASE_LOGGING["handlers"].update({
-    "sentry": {
-        "level": "ERROR",
-        "class": "raven.contrib.django.raven_compat.handlers.SentryHandler",
-        "tags": {"custom-tag": "x"},
-    },
-})
-BASE_LOGGING.update({
-    "root": {
-        "handlers": ["sentry"],
-        "level": "DEBUG",
-    },
-})
 LOGGING = BASE_LOGGING
 
 KN_LOGGING_URL_PATTERNS = []
@@ -423,6 +410,4 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 10
 }
 
-RAVEN_CONFIG = {
-	"dsn": env.str("SENTRY_DSN", "")
-}
+SENTRY_DSN = env.str("SENTRY_DSN", "")
