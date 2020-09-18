@@ -25,6 +25,8 @@ test_db/
 *.sublime-workspace
 media/*
 {{cookiecutter.project_name}}/media/*
+assets/*
+{{cookiecutter.project_name}}/assets/*
 .idea/*
 whoosh_index/*
 .templates/
