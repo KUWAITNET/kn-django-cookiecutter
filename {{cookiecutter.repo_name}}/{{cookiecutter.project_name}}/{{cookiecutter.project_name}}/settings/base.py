@@ -169,7 +169,7 @@ TEMPLATES = [
     },
 ]
 
-MIDDLEWARE = (
+MIDDLEWARE = [
     {% if cookiecutter.django_cors == "y" or cookiecutter.django_cors == "Y" %}
     'corsheaders.middleware.CorsMiddleware',
     {% endif %}
@@ -197,14 +197,14 @@ MIDDLEWARE = (
     {% endif %}
 
     "kn_defaults.logging.middlewares.KnLogging",
-)
+]
 
 ROOT_URLCONF = "{{ cookiecutter.project_name }}.urls"
 
 # Python dotted path to the WSGI application used by Django"s runserver.
 WSGI_APPLICATION = "{{ cookiecutter.project_name }}.wsgi.application"
 
-INSTALLED_APPS = (
+INSTALLED_APPS = [
     "user.apps.UsersConfig",
 
     {% if cookiecutter.cms_package == "django-cms" %}
@@ -268,7 +268,7 @@ INSTALLED_APPS = (
     {% if cookiecutter.django_cors == "y" or cookiecutter.django_cors == "Y" %}
     'corsheaders',
     {% endif %}
-)
+]
 
 AUTH_USER_MODEL = "user.User"
 LOGIN_REDIRECT_URL = "user:redirect"
