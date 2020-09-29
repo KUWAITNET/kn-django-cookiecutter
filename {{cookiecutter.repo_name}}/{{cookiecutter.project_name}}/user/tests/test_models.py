@@ -1,6 +1,6 @@
 import pytest
 
-from {{ cookiecutter.project_name }}.users.models import User
+from user.models import User
 
 pytestmark = pytest.mark.django_db
 

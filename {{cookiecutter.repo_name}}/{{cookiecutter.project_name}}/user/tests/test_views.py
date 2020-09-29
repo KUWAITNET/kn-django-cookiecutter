@@ -3,13 +3,13 @@ from django.contrib.auth.models import AnonymousUser
 from django.http.response import Http404
 from django.test import RequestFactory
 
-from {{ cookiecutter.project_name }}.users.models import User
-from {{ cookiecutter.project_name }}.users.tests.factories import UserFactory
-from {{ cookiecutter.project_name }}.users.views import (
+from user.models import User
+from user.views import (
     UserRedirectView,
     UserUpdateView,
-    user_detail_view,
+    UserDetailView,
 )
+from .factories import UserFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -58,7 +58,7 @@ class TestUserDetailView:
         request = rf.get("/fake-url/")
         request.user = UserFactory()
 
-        response = user_detail_view(request, username=user.username)
+        response = UserDetailView.as_view()(request, username=user.username)
 
         assert response.status_code == 200
 
@@ -66,7 +66,7 @@ class TestUserDetailView:
         request = rf.get("/fake-url/")
         request.user = AnonymousUser()  # type: ignore
 
-        response = user_detail_view(request, username=user.username)
+        response = UserDetailView.as_view()(request, username=user.username)
 
         assert response.status_code == 302
         assert response.url == "/accounts/login/?next=/fake-url/"
@@ -76,4 +76,4 @@ class TestUserDetailView:
         request.user = UserFactory(username="UserName")
 
         with pytest.raises(Http404):
-            user_detail_view(request, username="username")
+            UserDetailView.as_view()(request, username="username")

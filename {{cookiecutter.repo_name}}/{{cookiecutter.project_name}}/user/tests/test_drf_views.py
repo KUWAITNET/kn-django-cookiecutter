@@ -1,8 +1,8 @@
 import pytest
 from django.test import RequestFactory
 
-from {{ cookiecutter.project_name }}.users.api.views import UserViewSet
-from {{ cookiecutter.project_name }}.users.models import User
+from user.api.views import UserViewSet
+from user.models import User
 
 pytestmark = pytest.mark.django_db
 
