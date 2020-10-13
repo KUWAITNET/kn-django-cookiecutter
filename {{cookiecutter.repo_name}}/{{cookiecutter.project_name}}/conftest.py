@@ -1,7 +1,7 @@
 import pytest
 
-from {{ cookiecutter.project_name }}.user.models import User
-from {{ cookiecutter.project_name }}.user.tests.factories import UserFactory
+from user.models import User
+from user.tests.factories import UserFactory
 
 
 @pytest.fixture(autouse=True)
