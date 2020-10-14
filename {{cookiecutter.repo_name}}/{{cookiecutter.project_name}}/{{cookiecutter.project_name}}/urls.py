@@ -35,6 +35,7 @@ urlpatterns += i18n_patterns(
     path(f"{settings.ADMIN_URL}/", admin.site.urls),
     {% endif %}
     path("user/", include("user.urls", namespace="user")),
+    path("api/v1/", include("user.api.urls", namespace="user_api")),
 
     {% if cookiecutter.redis == "y" or cookiecutter.redis == "Y" %}
     path("django-rq/", include("django_rq.urls")),
