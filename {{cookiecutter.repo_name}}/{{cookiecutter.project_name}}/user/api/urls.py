@@ -1,24 +1,11 @@
-import pytest
-from django.urls import resolve, reverse
+from rest_framework.routers import SimpleRouter
 
-from user.models import User
+from .views import UserViewSet
 
-pytestmark = pytest.mark.django_db
+app_name = "user_api"
 
+router = SimpleRouter()
 
-def test_user_detail(user: User):
-    assert (
-        reverse("user_api:user-detail", kwargs={"username": user.username})
-        == f"/en/api/v1/users/{user.username}/"
-    )
-    assert resolve(f"/en/api/v1/users/{user.username}/").view_name == "user_api:user-detail"
+router.register("users", UserViewSet)
 
-
-def test_user_list():
-    assert reverse("user_api:user-list") == "/en/api/v1/users/"
-    assert resolve("/en/api/v1/users/").view_name == "user_api:user-list"
-
-
-def test_user_me():
-    assert reverse("user_api:user-me") == "/en/api/v1/users/me/"
-    assert resolve("/en/api/v1/users/me/").view_name == "user_api:user-me"
+urlpatterns = router.urls
