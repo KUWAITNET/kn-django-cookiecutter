@@ -19,7 +19,7 @@ First, get cookiecutter
 
 Now run it against this repo
 
-    $ cookiecutter https://github.com/jab3z/kn-django-cookiecutter
+    $ cookiecutter https://github.com/KuwaitNET/kn-django-cookiecutter
 
 You'll be prompted for some questions.
 After project generation, you'll find a README.rst in which you'll find all information to sync your database with fake migrations. Before your first commit remember to change (if required) the ``LICENSE`` file.
