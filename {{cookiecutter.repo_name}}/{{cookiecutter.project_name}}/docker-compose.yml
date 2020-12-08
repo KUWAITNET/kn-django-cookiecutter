@@ -1,0 +1,26 @@
+version: '3.5'
+
+services:
+  web:
+    build: ./
+    command: python {{ cookiecutter.project_name}}/manage.py runserver 0.0.0.0:8000 --settings={{ cookiecutter.project_name}}.{{ cookiecutter.project_name}}.settings.docker
+    volumes:
+      - .//:/usr/src/app/
+    ports:
+      - 8000:8000
+    env_file:
+      - ./.env.dev
+
+    depends_on:
+      - db
+  db:
+    image: mysql:5.7
+
+    environment:
+      MYSQL_DATABASE: 'hello_django'
+      MYSQL_USER: 'hello_django'
+      MYSQL_PASSWORD: 'hello_django'
+      MYSQL_ROOT_PASSWORD: 'hello_django'
+
+    volumes:
+      - .setup.sql:/docker-entrypoint-initbd.d/setup.sql
