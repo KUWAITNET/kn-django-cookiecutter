@@ -60,32 +60,34 @@ if ENABLE_APM:
 # Honor the "X-Forwarded-Proto" header for request.is_secure()
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-# Static files location
-AWS_ACCESS_KEY_ID = env.str("AWS_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = env.str("AWS_SECRET_ACCESS_KEY")
-AWS_STORAGE_BUCKET_NAME = env.str("AWS_STORAGE_BUCKET_NAME")
-AWS_AUTO_CREATE_BUCKET = True
-AWS_QUERYSTRING_AUTH = False
-AWS_IS_GZIPPED = True
+USE_S3 = env.bool("USE_S3", default=True)
+if USE_S3:
+    # Static files location
+    AWS_ACCESS_KEY_ID = env.str("AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY = env.str("AWS_SECRET_ACCESS_KEY")
+    AWS_STORAGE_BUCKET_NAME = env.str("AWS_STORAGE_BUCKET_NAME")
+    AWS_AUTO_CREATE_BUCKET = True
+    AWS_QUERYSTRING_AUTH = False
+    AWS_IS_GZIPPED = True
 
-S3_URL = "https://%s.s3.amazonaws.com/" % AWS_STORAGE_BUCKET_NAME
+    S3_URL = "https://%s.s3.amazonaws.com/" % AWS_STORAGE_BUCKET_NAME
 
-# Static on S3
-STATICFILES_LOCATION = "static"
-STATICFILES_STORAGE = "{{ cookiecutter.project_name }}.utils.storages.StaticRootS3Boto3Storage"
-STATIC_URL = "%s%s/" % (S3_URL, STATICFILES_LOCATION)
+    # Static on S3
+    STATICFILES_LOCATION = "static"
+    STATICFILES_STORAGE = "utils.storages.StaticRootS3Boto3Storage"
+    STATIC_URL = "%s%s/" % (S3_URL, STATICFILES_LOCATION)
 
-COMPRESS_STORAGE = STATICFILES_STORAGE
-COMPRESS_URL = STATIC_URL
+    COMPRESS_STORAGE = STATICFILES_STORAGE
+    COMPRESS_URL = STATIC_URL
 
-# Media on S3
-MEDIAFILES_LOCATION = "media"
-MEDIA_URL = "%s%s/" % (S3_URL, MEDIAFILES_LOCATION)
-DEFAULT_FILE_STORAGE = "{{ cookiecutter.project_name }}.utils.storages.MediaRootS3Boto3Storage"
+    # Media on S3
+    MEDIAFILES_LOCATION = "media"
+    MEDIA_URL = "%s%s/" % (S3_URL, MEDIAFILES_LOCATION)
+    DEFAULT_FILE_STORAGE = "utils.storages.MediaRootS3Boto3Storage"
 
-AWS_QUERYSTRING_AUTH = False
-_AWS_EXPIRY = 60 * 60 * 24 * 7
-AWS_S3_OBJECT_PARAMETERS = {
-    "CacheControl": f"max-age={_AWS_EXPIRY}, s-maxage={_AWS_EXPIRY}, must-revalidate"
-}
+    AWS_QUERYSTRING_AUTH = False
+    _AWS_EXPIRY = 60 * 60 * 24 * 7
+    AWS_S3_OBJECT_PARAMETERS = {
+        "CacheControl": f"max-age={_AWS_EXPIRY}, s-maxage={_AWS_EXPIRY}, must-revalidate"
+    }
 {% endif %}
