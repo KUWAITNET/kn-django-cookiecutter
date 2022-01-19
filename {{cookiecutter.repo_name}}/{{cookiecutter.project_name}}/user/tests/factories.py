@@ -13,17 +13,11 @@ class UserFactory(DjangoModelFactory):
 
     @post_generation
     def password(self, create: bool, extracted: Sequence[Any], **kwargs):
+        from factory.faker import faker
         password = (
             extracted
             if extracted
-            else Faker(
-                "password",
-                length=42,
-                special_chars=True,
-                digits=True,
-                upper_case=True,
-                lower_case=True,
-            ).generate(params={"locale": None})
+            else faker.Faker().password()
         )
         self.set_password(password)
 
