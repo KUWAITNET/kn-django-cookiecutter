@@ -243,7 +243,7 @@ INSTALLED_APPS = [
 
     "rest_framework",
     "rest_framework.authtoken",
-	"djvue",
+	# "djvue",
 
     {% if cookiecutter.cms_package == "django-cms" %}
     # Django CMS
@@ -295,8 +295,8 @@ AUTH_PASSWORD_VALIDATORS = [
 # more details on how to customize your logging configuration.
 KN_LOG_FILE_PATH = join(DJANGO_ROOT, "logs/log.log")
 
-from kn_defaults.logging.defaults import BASE_LOGGING
-LOGGING = BASE_LOGGING
+from kn_defaults.logging.defaults import get_base_logging
+LOGGING = get_base_logging(logstash=False)
 
 KN_LOGGING_URL_PATTERNS = []
 
