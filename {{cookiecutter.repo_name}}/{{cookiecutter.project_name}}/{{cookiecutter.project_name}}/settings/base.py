@@ -2,51 +2,52 @@
 Django settings for {{ cookiecutter.project_name }} project.
 """
 
-from os.path import abspath, basename, dirname, join, normpath
+from os.path import normpath
+from pathlib import Path
 from sys import path
 
 import environ
 
-########## PATH CONFIGURATION
-BASE_DIR = dirname(dirname(__file__) + "../../../")
+# PATH CONFIGURATION
+# --------------------------------------------------------------------------------------
+BASE_DIR = Path(Path(__file__).parent.parent.parent)
 
 # Absolute filesystem path to the config directory:
-
-CONFIG_ROOT = dirname(dirname(abspath(__file__)))
+CONFIG_ROOT = Path(Path(Path(__file__).resolve()).parent).parent
 
 # Absolute filesystem path to the project directory:
-PROJECT_ROOT = dirname(CONFIG_ROOT)
+PROJECT_ROOT = Path(CONFIG_ROOT).parent
 
 env = environ.Env()
 READ_DOT_ENV_FILE = env.bool("DJANGO_READ_DOT_ENV_FILE", default=True)
 if READ_DOT_ENV_FILE:
     # OS environment variables take precedence over variables from .env
-    env.read_env(env_file=join(PROJECT_ROOT, '.env'))
+    env.read_env(env_file=Path(PROJECT_ROOT) / ".env")
 
 # Absolute filesystem path to the django repo directory:
-DJANGO_ROOT = dirname(PROJECT_ROOT)
+DJANGO_ROOT = Path(PROJECT_ROOT).parent
 
 # Project name:
-PROJECT_NAME = basename(PROJECT_ROOT).capitalize()
+PROJECT_NAME = Path(PROJECT_ROOT).name.capitalize()
 
 # Project folder:
-PROJECT_FOLDER = basename(PROJECT_ROOT)
+PROJECT_FOLDER = Path(PROJECT_ROOT).name
 
 # Project domain:
-PROJECT_DOMAIN = "%s.com" % PROJECT_NAME.lower()
+PROJECT_DOMAIN = f"{PROJECT_NAME.lower()}.com"
 
 # Add our project to our pythonpath, this way we don"t need to type our project
 # name in our dotted import paths:
 path.append(CONFIG_ROOT)
-########## END PATH CONFIGURATION
+# END PATH CONFIGURATION
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/1.9/howto/deployment/checklist/
 
-########## DEBUG CONFIGURATION
+# DEBUG CONFIGURATION
 # https://docs.djangoproject.com/en/dev/ref/settings/#debug
 DEBUG = STAGING = env.bool("DJANGO_DEBUG", False)
-########## END DEBUG CONFIGURATION
+# END DEBUG CONFIGURATION
 
 ADMINS = (
     ("""{{cookiecutter.author_name}}""", "{{cookiecutter.email}}"),
@@ -57,7 +58,7 @@ MANAGERS = ADMINS
 ADMIN_URL = env.str("DJANGO_ADMIN_URL", "admin")
 
 DATABASES = {
-    'default': env.db("DATABASE_URL", default="mysql://root:root@localhost:3306/{{ cookiecutter.project_name.lower() }}")
+    'default': env.db("DATABASE_URL", default="mysql://root:root@127.0.0.1:3306/{{ cookiecutter.project_name.lower() }}"),  # noqa: E501
 }
 DATABASES['default']['ATOMIC_REQUESTS'] = True
 DATABASES["default"]["CONN_MAX_AGE"] = env.int("CONN_MAX_AGE", default=60)
@@ -67,7 +68,7 @@ DATABASES["default"]["OPTIONS"] = {
     "use_unicode": True,
 }
 
-EMAIL_BACKEND = env.str("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+EMAIL_BACKEND = env.str("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend",)
 EMAIL_HOST = env.str("EMAIL_HOST", "")
 EMAIL_HOST_USER = env.str("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = env.str("EMAIL_HOST_PASSWORD", "")
@@ -103,8 +104,8 @@ USE_L10N = True
 USE_TZ = True
 
 # Absolute filesystem path to the directory that will hold user-uploaded files.
-# Example: "/var/www/example.com/media/"
-MEDIA_ROOT = normpath(join(PROJECT_ROOT, "media"))
+# Example: "/var/www/example.com/media/"  # noqa: ERA001
+MEDIA_ROOT = normpath(Path(PROJECT_ROOT / "media"))
 
 # URL that handles the media served from MEDIA_ROOT. Make sure to use a
 # trailing slash.
@@ -114,8 +115,8 @@ MEDIA_URL = "/media/"
 # Absolute path to the directory static files should be collected to.
 # Don"t put anything in this directory yourself; store your static files
 # in apps" "static/" subdirectories and in STATICFILES_DIRS.
-# Example: "/var/www/example.com/static/"
-STATIC_ROOT = normpath(join(PROJECT_ROOT, "assets"))
+# Example: "/var/www/example.com/static/"  # noqa: ERA001
+STATIC_ROOT = normpath(Path(PROJECT_ROOT / "assets"))
 
 # URL prefix for static files.
 # Example: "http://example.com/static/", "http://static.example.com/"
@@ -126,7 +127,7 @@ STATICFILES_DIRS = (
     # Put strings here, like "/home/html/static" or "C:/www/django/static".
     # Always use forward slashes, even on Windows.
     # Don"t forget to use absolute paths, not relative paths.
-    normpath(join(PROJECT_ROOT, "static")),
+    normpath(Path(PROJECT_ROOT / "static")),
 )
 
 # List of finder classes that know how to find static files in
@@ -144,7 +145,7 @@ SECRET_KEY = env('DJANGO_SECRET_KEY', default="")
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": (normpath(join(PROJECT_ROOT, "templates")),),
+        "DIRS": (normpath(Path(PROJECT_ROOT / "templates")),),
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -164,7 +165,7 @@ TEMPLATES = [
                 {% if cookiecutter.cms_package == "django-cms" %}
                 "cms.context_processors.cms_settings"
                 {% endif %}
-            ]
+            ],
         },
     },
 ]
@@ -195,8 +196,6 @@ MIDDLEWARE = [
     {% if cookiecutter.cms_package == "wagtail" %}
     "wagtail.contrib.redirects.middleware.RedirectMiddleware",
     {% endif %}
-
-    "kn_defaults.logging.middlewares.KnLogging",
 ]
 
 ROOT_URLCONF = "{{ cookiecutter.project_name }}.urls"
@@ -225,7 +224,7 @@ INSTALLED_APPS = [
     "wagtail.images",
     "wagtail.search",
     "wagtail.admin",
-    "wagtail.core",
+    "wagtail",
 
     "modelcluster",
     "taggit",
@@ -239,7 +238,6 @@ INSTALLED_APPS = [
     "django.contrib.sitemaps",
     "django.contrib.staticfiles",
     "django.contrib.messages",
-    "kn_defaults.logging",
 
     "rest_framework",
     "rest_framework.authtoken",
@@ -275,7 +273,7 @@ LOGIN_REDIRECT_URL = "user:redirect"
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",  # noqa: E501
     },
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
@@ -293,17 +291,23 @@ AUTH_PASSWORD_VALIDATORS = [
 # the site admins on every HTTP 500 error when DEBUG=False.
 # See http://docs.djangoproject.com/en/dev/topics/logging for
 # more details on how to customize your logging configuration.
-KN_LOG_FILE_PATH = join(DJANGO_ROOT, "logs/log.log")
+if env.bool("ENABLE_KN_DEFAULTS", False):
+    INSTALLED_APPS += ["kn_defaults.logging"]
+    MIDDLEWARE += ["kn_defaults.logging.middlewares.KnLogging"]
+    KN_LOG_FILE_PATH = Path(DJANGO_ROOT / "logs/log.log")
 
-from kn_defaults.logging.defaults import get_base_logging
-LOGGING = get_base_logging(logstash=False)
+    from kn_defaults.logging.defaults import get_base_logging
 
-KN_LOGGING_URL_PATTERNS = []
+    LOGGING = get_base_logging(logstash=False)
 
-LOCALE_PATHS = (normpath(join(PROJECT_ROOT, "locale")),)
+    KN_LOGGING_URL_PATTERNS = []
+
+LOCALE_PATHS = (normpath(Path(PROJECT_ROOT / "locale")),)
 
 # Dummy gettext function
-gettext = lambda s: s
+def gettext(s):
+    return s
+
 
 LANGUAGES = [
     {% for language in cookiecutter.languages.strip().split(",") -%}
@@ -349,7 +353,7 @@ WAGTAIL_SITE_NAME = PROJECT_NAME
 
 # Base URL to use when referring to full URLs within the Wagtail admin backend -
 # e.g. in notification emails. Don"t include "/admin" or a trailing slash
-BASE_URL = "http://%s" % PROJECT_DOMAIN
+BASE_URL = f"http://{PROJECT_DOMAIN}"
 {% endif %}
 
 {% if cookiecutter.django_filer == "y" or cookiecutter.django_filer == "Y" %}
@@ -373,7 +377,7 @@ CACHE_ENGINES = {
     {% endif %}
     "dummy": {
         "BACKEND": "django.core.cache.backends.dummy.DummyCache",
-    }
+    },
 }
 
 CACHES = {
