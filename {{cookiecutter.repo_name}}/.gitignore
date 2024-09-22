@@ -37,3 +37,4 @@ togit.sh
 htmlcov/
 .env
 .vscode/*
+.venv

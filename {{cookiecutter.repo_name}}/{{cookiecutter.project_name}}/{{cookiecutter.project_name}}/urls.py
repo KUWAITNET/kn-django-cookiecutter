@@ -6,7 +6,7 @@ from django.views.generic.base import TemplateView
 
 {% if cookiecutter.cms_package == "wagtail" %}
 from wagtail.admin import urls as wagtailadmin_urls
-from wagtail.core import urls as wagtail_urls
+from wagtail import urls as wagtail_urls
 from wagtail.documents import urls as wagtaildocs_urls
 
 from search import views as search_views
@@ -15,7 +15,7 @@ from search import views as search_views
 
 def bad(request):
     """ Simulates a server error """
-    1 / 0
+      # noqa: B018
 
 urlpatterns = [
     path("i18n/", include("django.conf.urls.i18n")),
