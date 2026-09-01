@@ -26,6 +26,9 @@ FORMS_SUITE = "{{ cookiecutter.forms_suite }}"
 NOTIFICATIONS = "{{ cookiecutter.notifications_app }}"
 DOMAIN_NAME = "{{ cookiecutter.domain_name }}"
 PYTHON_VERSION = "{{ cookiecutter.python_version }}"
+MEDIA_STORAGE = "{{ cookiecutter.media_storage }}"
+STATIC_STORAGE = "{{ cookiecutter.static_storage }}"
+ASSET_PIPELINE = "{{ cookiecutter.asset_pipeline }}"
 
 errors: list[str] = []
 warnings: list[str] = []
@@ -125,6 +128,26 @@ if DEPLOY_TARGET == "docker_compose" and DOCKER == "no":
     )
 
 
+# --- Storage coherence -------------------------------------------------------
+
+if STATIC_STORAGE == "cloud" and MEDIA_STORAGE == "filesystem":
+    errors.append(
+        "static_storage='cloud' requires a cloud media_storage.\n"
+        "    Static files are served from the same object store as media, under a publicly\n"
+        "    readable prefix. With media_storage='filesystem' there is no object store to put\n"
+        "    them in. Either pick media_storage='s3'/'gcs'/'azure', or keep\n"
+        "    static_storage='whitenoise'."
+    )
+
+if ASSET_PIPELINE == "compressor" and FRONTEND == "api_only":
+    errors.append(
+        "asset_pipeline='compressor' requires server-rendered templates.\n"
+        "    Offline compression works by finding {% raw %}{% compress %}{% endraw %} blocks in templates, and an\n"
+        "    API-only project has none - the build step would abort with\n"
+        "    OfflineGenerationError. Set asset_pipeline='none'."
+    )
+
+
 # --- Misc -------------------------------------------------------------------
 
 if not re.match(r"^[a-z0-9.\-]+\.[a-z]{2,}$", DOMAIN_NAME):
@@ -170,6 +193,23 @@ if API != "none" and CACHE == "locmem":
     warnings.append(
         "api != 'none' with cache='locmem': DRF throttle counters are also per-process.\n"
         "    Use cache='redis' in production."
+    )
+
+if ASSET_PIPELINE == "compressor":
+    warnings.append(
+        "asset_pipeline='compressor': COMPRESS_OFFLINE is on in production, so\n"
+        "    'manage.py compress --force' MUST run on every deploy, after collectstatic.\n"
+        "    It is wired into the Dockerfile and the deploy runbook; a deploy path that\n"
+        "    skips it ships a site with no CSS. See docs/14-decisions.md for when this\n"
+        "    option is worth its cost."
+    )
+
+if MEDIA_STORAGE != "filesystem":
+    warnings.append(
+        f"media_storage='{MEDIA_STORAGE}': the bucket must NOT be public-read. Personal\n"
+        "    data goes to a separate private storage and is streamed through a\n"
+        "    permission-checked view. 'backup' also changes meaning - see\n"
+        "    docs/08-backup-restore.md before go-live."
     )
 
 if NOTIFICATIONS == "no" and (FORMS_SUITE == "yes" or NEWSLETTER == "yes"):

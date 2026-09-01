@@ -50,18 +50,41 @@ ENV PATH="/app/.venv/bin:$PATH" \
 WORKDIR /app
 
 COPY --from=builder --chown=app:app /app /app
-
+{% if cookiecutter.static_storage == "cloud" %}
+# collectstatic is NOT run here: static files go to the bucket, and the build has
+# no cloud credentials (and must not be given any - they would end up in a layer).
+# It runs as a deploy step instead; see docs/07-deployment.md.
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+# "manage.py compress --force" is part of that same deploy step, after collectstatic.
+{%- endif %}
+{%- if cookiecutter.languages == "en_ar" %}
+RUN SECRET_KEY=build-only-not-a-secret \
+    ALLOWED_HOSTS=localhost \
+    python manage.py compilemessages --ignore=.venv
+{%- endif %}
+{%- else %}
 # Static and translations are built with the PRODUCTION settings module, so the
 # manifest matches what runs. Placeholder secrets are build-time only: they are
 # never baked into the image because settings read them at boot.
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+#
+# The compress step runs AFTER collectstatic, and it is not optional: production
+# has COMPRESS_OFFLINE on, so a page whose block was never compiled raises rather
+# than rendering. Skipping it ships a site with no CSS.
+{%- endif %}
 RUN SECRET_KEY=build-only-not-a-secret \
     ALLOWED_HOSTS=localhost \
     python manage.py collectstatic --noinput --clear \
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+    && SECRET_KEY=build-only-not-a-secret ALLOWED_HOSTS=localhost \
+       python manage.py compress --force \
+{%- endif %}
 {%- if cookiecutter.languages == "en_ar" %}
     && SECRET_KEY=build-only-not-a-secret ALLOWED_HOSTS=localhost \
        python manage.py compilemessages --ignore=.venv \
 {%- endif %}
     && chown -R app:app /app/staticfiles
+{%- endif %}
 
 USER app
 

@@ -25,9 +25,21 @@ RATELIMIT_ENABLE = False
 # post_office wraps locmem, so django.core.mail.outbox populates as normal.
 POST_OFFICE["BACKENDS"]["default"] = "django.core.mail.backends.locmem.EmailBackend"  # noqa: F405
 
-STORAGES["staticfiles"]["BACKEND"] = (  # noqa: F405
-    "django.contrib.staticfiles.storage.StaticFilesStorage"
-)
+# Rebinds rather than mutates, because a star import shares the dict with
+# settings/base.py: mutating it here would rewrite what the project ships, and
+# apps/core/tests/test_storage.py reads base to assert exactly that. Replacing the
+# whole entry rather than its BACKEND matters too - a cloud staticfiles entry
+# carries OPTIONS that the plain storage class would reject.
+STORAGES = {  # noqa: F405
+    **STORAGES,  # noqa: F405
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+
+# Compression is a build step, and rendering it per test would only measure rcssmin.
+COMPRESS_ENABLED = False
+COMPRESS_OFFLINE = False
+{%- endif %}
 
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 
@@ -41,3 +53,24 @@ DATABASES["default"] = env.db(  # noqa: F405
 
 MEDIA_ROOT = os.path.join(BASE_DIR, ".test-media")  # noqa: F405
 PRIVATE_MEDIA_ROOT = os.path.join(BASE_DIR, ".test-private-media")  # noqa: F405
+{%- if cookiecutter.media_storage != "filesystem" %}
+
+# The suite runs with no cloud credentials and no network - a test that needs a
+# real bucket is an integration test, not a unit test - so both media storages go
+# back to local directories here. The backend the project actually ships is
+# asserted against the base settings module in apps/core/tests/test_storage.py,
+# which is the only place that can check it without reaching the network.
+STORAGES = {  # noqa: F405
+    **STORAGES,  # noqa: F405
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {"location": MEDIA_ROOT, "base_url": MEDIA_URL},  # noqa: F405
+    },
+    # Not a plain FileSystemStorage: this one keeps the real private storage's
+    # refusal to build a URL, which is the behaviour the suite is there to guard.
+    "private_media": {
+        "BACKEND": "apps.core.storage.PrivateFileSystemStorage",
+        "OPTIONS": {"location": PRIVATE_MEDIA_ROOT},
+    },
+}
+{%- endif %}

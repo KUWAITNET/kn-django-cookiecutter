@@ -100,6 +100,13 @@ export DJANGO_SETTINGS_MODULE={{ cookiecutter.project_slug }}.settings.productio
 # 3. Static files{% if cookiecutter.languages == "en_ar" %} and translations{% endif %}, built under the production settings so the
 #    manifest matches what runs.{% if cookiecutter.languages == "en_ar" %} .mo files are built here, never trusted from git.{% endif %}
 uv run python manage.py collectstatic --noinput
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+# Offline compression. NOT optional and NOT reorderable: production has
+# COMPRESS_OFFLINE on, so a block that was never compiled raises on every page
+# that renders it. It runs after collectstatic because it resolves asset paths
+# through the manifest collectstatic has just written.
+uv run python manage.py compress --force
+{%- endif %}
 {%- if cookiecutter.languages == "en_ar" %}
 uv run python manage.py compilemessages
 {%- endif %}
@@ -113,7 +120,7 @@ sudo systemctl status {{ cookiecutter.project_slug }}-gunicorn --no-pager
 ```
 
 Numbered step titles, for the release ticket: 0 snapshot, 1 fetch the approved commit, 2
-dependencies from the lockfile, 3 static{% if cookiecutter.languages == "en_ar" %} and translations{% endif %}, 4 migrations, 5 restart, then verify.
+dependencies from the lockfile, 3 static{% if cookiecutter.asset_pipeline == "compressor" %}, compression{% endif %}{% if cookiecutter.languages == "en_ar" %} and translations{% endif %}, 4 migrations, 5 restart, then verify.
 
 Why each of those is written the way it is:
 
@@ -121,6 +128,16 @@ Why each of those is written the way it is:
   with the schema half-applied.
 - `collectstatic` sets `DJANGO_SETTINGS_MODULE` explicitly. Run under the wrong settings module it
   writes a manifest that does not match the running application, and every hashed asset 404s.
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+- `compress --force` is the step people leave out of a hand-rolled deploy script, and leaving it out
+  is the classic way to ship a site with no styling. `--force` recompiles rather than trusting a
+  cached manifest that may describe the previous release.
+{%- endif %}
+{%- if cookiecutter.static_storage == "cloud" %}
+- `collectstatic` writes to the object store, so the deploy account needs the bucket credentials.
+  This is also why the container image does not run it at build time: build-time credentials end up
+  in a layer.
+{%- endif %}
 - `uv sync --frozen` installs exactly what the lockfile pins. A bare `uv sync` may re-resolve and
   install something nobody tested.
 - The deploy account has no git push credentials and no database superuser rights.
@@ -138,10 +155,26 @@ cd /srv/{{ cookiecutter.project_slug }}
 git fetch --all --tags
 git checkout v1.4.0
 
-# 2. Build the image. Static files{% if cookiecutter.languages == "en_ar" %} and translations{% endif %} are built inside it, under the
-#    production settings, so the manifest matches what runs.
+{% if cookiecutter.static_storage == "cloud" -%}
+# 2. Build the image. Static files are NOT built inside it: they go to the object
+#    store, and giving the build bucket credentials would bake them into a layer.
 docker compose build web
 
+# 2b. Static files, into the bucket. A deploy step, so the credentials come from
+#     the environment and stay out of the image.
+docker compose run --rm web python manage.py collectstatic --noinput
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+# Offline compression. NOT optional and NOT reorderable: production has
+# COMPRESS_OFFLINE on, so a block that was never compiled raises on every page
+# that renders it. It runs after collectstatic because it resolves asset paths
+# through the manifest collectstatic has just written.
+docker compose run --rm web python manage.py compress --force
+{%- endif %}
+{% else -%}
+# 2. Build the image. Static files{% if cookiecutter.asset_pipeline == "compressor" %}, the compressed asset bundles{% endif %}{% if cookiecutter.languages == "en_ar" %} and translations{% endif %} are built
+#    inside it, under the production settings, so the manifest matches what runs.
+docker compose build web
+{% endif %}
 # 3. Migrations, BEFORE the new container serves traffic. They are deliberately not in
 #    the image CMD: two containers starting at once would race, and a failed migration
 #    must stop a deploy rather than crash-loop a container.
@@ -159,6 +192,14 @@ Why each of those is written the way it is:
   with the schema half-applied.
 - Migrations are a deploy step, not a container start step. Putting them in `CMD` means every
   restart re-runs them and a failure crash-loops instead of stopping the release.
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+- `compress --force` is the step people leave out of a hand-rolled deploy script, and leaving it out
+  is the classic way to ship a site with no styling. `--force` recompiles rather than trusting a
+  cached manifest that may describe the previous release.{% if cookiecutter.static_storage != "cloud" %} It is wired into the Dockerfile, so the
+  image cannot be built without it.{% else %} With static files in a bucket, `collectstatic` needs
+  credentials the build must not have, so both steps live in the deploy above rather than in the
+  image.{% endif %}
+{%- endif %}
 - The image is built from a tag, not from a working copy with local edits.
 - The deploy account has no git push credentials and no database superuser rights.
 {%- endif %}
@@ -194,6 +235,17 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://{{ cookiecutter.domain_name }}
 - [ ] `/api/v1/` responds and the schema UI is **not** exposed in production.
 {%- endif %}
 - [ ] Static assets load; the CSS hash changed if it should have.
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+- [ ] The page's stylesheet URL points at `/static/CACHE/css/...`. A page that renders at all proves
+      the offline manifest was built; a page whose CSS URL is the uncompressed source means
+      `COMPRESS_ENABLED` is off, not that compression succeeded.
+{%- endif %}
+{%- if cookiecutter.media_storage != "filesystem" %}
+- [ ] An image uploaded through the admin renders on the site, so writes to the bucket work under
+      the deployed credentials — not only under the ones on a laptop.
+- [ ] A private file still downloads through `/private-media/<path>` for a permitted account, and
+      403s for everyone else.
+{%- endif %}
 - [ ] Error rate and response time are back at pre-deploy levels after 30 minutes.
 - [ ] `CHANGELOG.md` matches what was actually deployed.
 
@@ -212,6 +264,9 @@ git checkout <previous-tag>
 uv sync --frozen --no-dev
 export DJANGO_SETTINGS_MODULE={{ cookiecutter.project_slug }}.settings.production
 uv run python manage.py collectstatic --noinput
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+uv run python manage.py compress --force
+{%- endif %}
 {%- if cookiecutter.languages == "en_ar" %}
 uv run python manage.py compilemessages
 {%- endif %}
@@ -222,6 +277,12 @@ sudo systemctl restart {{ cookiecutter.project_slug }}-gunicorn
 cd /srv/{{ cookiecutter.project_slug }}
 git checkout <previous-tag>
 docker compose build web
+{%- if cookiecutter.static_storage == "cloud" %}
+docker compose run --rm web python manage.py collectstatic --noinput
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+docker compose run --rm web python manage.py compress --force
+{%- endif %}
+{%- endif %}
 docker compose up -d web
 ```
 {%- endif %}

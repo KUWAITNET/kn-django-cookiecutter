@@ -48,13 +48,21 @@ def test_robots_advertises_the_sitemap_when_indexing_is_allowed(client, settings
 
 
 @pytest.fixture
-def private_file(settings, tmp_path):
-    """A real file under PRIVATE_MEDIA_ROOT, plus its relative path."""
-    settings.PRIVATE_MEDIA_ROOT = str(tmp_path)
-    target = tmp_path / "submissions"
-    target.mkdir()
-    (target / "cv.pdf").write_bytes(b"%PDF-1.4 confidential")
-    return "submissions/cv.pdf"
+def private_file():
+    """A real file in the private store, plus the name the view is given.
+
+    Written through the configured private storage rather than straight to disk,
+    so the fixture stays correct whichever backend the project selected - the
+    view reads it back through the same storage.
+    """
+    from django.core.files.base import ContentFile
+
+    from apps.core.storage import private_media_storage
+
+    storage = private_media_storage()
+    name = storage.save("submissions/cv.pdf", ContentFile(b"%PDF-1.4 confidential"))
+    yield name
+    storage.delete(name)
 
 
 def _grant_private_media(user):

@@ -1,12 +1,20 @@
 """Project-level views: operational endpoints, protected media and error pages."""
 
 import logging
+{%- if cookiecutter.media_storage == "filesystem" %}
 from pathlib import Path
+{%- else %}
+from pathlib import PurePosixPath
+{%- endif %}
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.db import DatabaseError, connections
+{%- if cookiecutter.media_storage == "filesystem" %}
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
+{%- else %}
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
+{%- endif %}
 from django.shortcuts import render
 from django.template import TemplateDoesNotExist
 {%- if cookiecutter.frontend != "api_only" %}
@@ -14,6 +22,10 @@ from django.urls import NoReverseMatch, reverse
 {%- endif %}
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_safe
+{%- if cookiecutter.media_storage != "filesystem" %}
+
+from apps.core.storage import private_media_storage
+{%- endif %}
 
 logger = logging.getLogger("{{ cookiecutter.project_slug }}")
 
@@ -80,6 +92,15 @@ def trigger_error(request):
 # --- Protected media ---------------------------------------------------------
 
 
+def _private_download_headers(response):
+    # Belt and braces with the site-wide setting: a private download must never be
+    # interpreted as HTML by a browser that disagrees with our Content-Type.
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+    return response
+{%- if cookiecutter.media_storage == "filesystem" %}
+
+
 @require_safe
 def serve_private_file(request, relative_path):
     """Serve a file from ``PRIVATE_MEDIA_ROOT`` after checking permission.
@@ -100,11 +121,50 @@ def serve_private_file(request, relative_path):
         raise Http404
 
     response = FileResponse(target.open("rb"), as_attachment=True, filename=target.name)
-    # Belt and braces with the site-wide setting: a private download must never be
-    # interpreted as HTML by a browser that disagrees with our Content-Type.
-    response["X-Content-Type-Options"] = "nosniff"
-    response["Cache-Control"] = "private, no-store"
-    return response
+    return _private_download_headers(response)
+{%- else %}
+
+
+@require_safe
+def serve_private_file(request, relative_path):
+    """Stream an object out of the private bucket after checking permission.
+
+    The object is streamed through this view rather than redirected to, so the
+    permission is re-checked on every request and no URL to the file exists that
+    could be forwarded, logged by a proxy or pasted into a ticket. It costs a
+    worker for the length of the download.
+
+    The alternative, behind ``PRIVATE_MEDIA_SIGNED_URLS``, is to redirect to a
+    short-lived signed URL: the bytes then go straight from the bucket, which is
+    much cheaper for large files. The trade-off is that a signed URL, once
+    issued, is valid for its whole lifetime to ANYONE holding it - it keeps
+    working after the user logs out and after the permission is revoked. Prefer
+    streaming; opt into signed URLs per project, for large files, with the expiry
+    set as low as the download will tolerate.
+    """
+    user = request.user
+    if not user.is_authenticated or not user.has_perm(PRIVATE_MEDIA_PERMISSION):
+        raise PermissionDenied
+
+    name = str(relative_path)
+    # Object keys are produced by the upload_to callable, which generates them; a
+    # traversal segment or a leading slash means the name did not come from us,
+    # and some S3-compatible stores normalise "../" server-side.
+    if name.startswith("/") or ".." in PurePosixPath(name).parts:
+        raise Http404
+
+    storage = private_media_storage()
+    if not storage.exists(name):
+        raise Http404
+
+    if settings.PRIVATE_MEDIA_SIGNED_URLS:
+        return _private_download_headers(HttpResponseRedirect(storage.url(name)))
+
+    response = FileResponse(
+        storage.open(name, "rb"), as_attachment=True, filename=PurePosixPath(name).name
+    )
+    return _private_download_headers(response)
+{%- endif %}
 {%- if cookiecutter.stack == "django" and cookiecutter.frontend != "api_only" %}
 
 

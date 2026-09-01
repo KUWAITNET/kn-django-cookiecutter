@@ -34,6 +34,7 @@ NOTIFICATIONS_APP = "{{ cookiecutter.notifications_app }}"
 NEWSLETTER = "{{ cookiecutter.newsletter }}"
 FORMS_SUITE = "{{ cookiecutter.forms_suite }}"
 ANALYTICS = "{{ cookiecutter.analytics }}"
+ASSET_PIPELINE = "{{ cookiecutter.asset_pipeline }}"
 DOCKER = "{{ cookiecutter.docker }}"
 CI = "{{ cookiecutter.ci }}"
 BOOTSTRAP = "{{ cookiecutter.bootstrap }}"
@@ -208,6 +209,19 @@ if IS_API_ONLY:
         for child in templates_dir.iterdir():
             if child.name != "emails":
                 remove(str(child.relative_to(PROJECT_ROOT)))
+
+# The asset pipeline ships as two variants of the same include rather than an
+# {% raw %}{% if %}{% endraw %} inside one: HTML is copied verbatim, never rendered by cookiecutter, so a
+# per-option difference in a template has to be a per-option FILE.
+INCLUDES = PKG / "templates" / "includes"
+for stem in ("styles", "scripts"):
+    plain = INCLUDES / f"{stem}.html"
+    compressed = INCLUDES / f"{stem}_compressed.html"
+    if ASSET_PIPELINE == "compressor" and (PROJECT_ROOT / compressed).exists():
+        remove(str(plain))
+        (PROJECT_ROOT / compressed).rename(PROJECT_ROOT / plain)
+    else:
+        remove(str(compressed))
 
 if HAS_TEMPLATES and ANALYTICS != "ga4_gtm":
     remove(

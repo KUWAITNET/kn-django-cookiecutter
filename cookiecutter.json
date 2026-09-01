@@ -24,6 +24,9 @@
   "api": ["none", "rest", "headless"],
   "sentry": ["yes", "no"],
   "analytics": ["ga4_gtm", "none"],
+  "media_storage": ["filesystem", "s3", "gcs", "azure"],
+  "static_storage": ["whitenoise", "cloud"],
+  "asset_pipeline": ["none", "compressor"],
   "database": "postgres",
   "cache": ["redis", "locmem"],
   "docker": ["yes", "no"],
@@ -118,6 +121,23 @@
       "__prompt__": "Analytics",
       "ga4_gtm": "Google Analytics 4 / Tag Manager hooks (IDs from env)",
       "none": "None"
+    },
+    "media_storage": {
+      "__prompt__": "Where uploaded media is stored (the private/public split is the same either way)",
+      "filesystem": "Local disk: MEDIA_ROOT and PRIVATE_MEDIA_ROOT on the application server",
+      "s3": "Amazon S3 or an S3-compatible store (MinIO, Spaces, Wasabi) via django-storages",
+      "gcs": "Google Cloud Storage via django-storages",
+      "azure": "Azure Blob Storage via django-storages"
+    },
+    "static_storage": {
+      "__prompt__": "Where collected static files are served from",
+      "whitenoise": "WhiteNoise from the application process (compressed, hashed filenames)",
+      "cloud": "The same object store as media, under a public 'static/' prefix (requires a cloud media_storage)"
+    },
+    "asset_pipeline": {
+      "__prompt__": "CSS/JS asset pipeline",
+      "none": "None: WhiteNoise already compresses and cache-busts, and there is no SASS/LESS to build",
+      "compressor": "django-compressor with offline compression (adds a compile step to every deploy)"
     },
     "cache": {
       "__prompt__": "Cache backend",

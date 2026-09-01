@@ -158,8 +158,10 @@ hold, and for how long?" — a question that will be asked.
 | TODO: | | | |
 
 Files that accompany these records — attachments, documents, anything a person uploaded about
-themselves — live under `PRIVATE_MEDIA_ROOT`, not `MEDIA_ROOT`. Deleting the database row does not
-delete the file; a retention job must delete both.
+themselves — live in the private store, never the public one{% if cookiecutter.media_storage != "filesystem" %}: the `private/` prefix of the object
+store, not `media/`{% endif %}. Deleting the database row does not delete the file; a retention job must delete
+both.{% if cookiecutter.media_storage != "filesystem" %} And with bucket versioning on, a delete leaves a noncurrent version behind, so a
+retention job that has to genuinely erase personal data must expire the versions as well.{% endif %}
 
 ## Squashing before handover
 

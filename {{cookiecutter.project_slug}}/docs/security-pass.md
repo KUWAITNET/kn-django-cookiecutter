@@ -80,6 +80,13 @@ Each line is initialled by the person who performed it. "It should be fine" is n
       traceback, no framework version and no internal hostname. `DEBUG` is demonstrably off.
 - [ ] **Sensitive paths are not served.** `/.env`, `/.git/config`, a directory listing of `/media/`,
       backup files, and source maps of administrative JavaScript all return 404 or 403.
+{%- if cookiecutter.media_storage != "filesystem" %}
+- [ ] **The media {% if cookiecutter.media_storage == "azure" %}container{% else %}bucket{% endif %} is not public.** Take a private object's key from the database and
+      request its object URL directly, with no signature: it must return 403. Then try to list the
+      {% if cookiecutter.media_storage == "azure" %}container{% else %}bucket{% endif %} anonymously and confirm that is refused too. `manage.py check` catches a
+      public ACL in the settings, but it cannot see a policy applied in the provider's console —
+      this is the check that does.
+{%- endif %}
 - [ ] **Session behaviour.** Cookies carry `Secure`, `HttpOnly` and `SameSite`. The session is
       invalidated on sign-out, and the session key is cycled on sign-in.
 - [ ] **CSRF.** A cross-origin POST to a state-changing endpoint is rejected. No view is

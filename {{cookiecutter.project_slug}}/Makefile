@@ -72,8 +72,17 @@ messages:  ## Extract translatable strings
 compile:  ## Compile translations (.mo files are NOT committed; build them here)
 	uv run python manage.py compilemessages --ignore=.venv
 {% endif %}
+{% if cookiecutter.asset_pipeline == "compressor" -%}
+# Production has COMPRESS_OFFLINE on, so a block that was never compiled raises
+# rather than rendering. Both steps live in one target, in order, so that no
+# deploy path can pick up the first without the second.
+static:  ## Collect static files, then compile the compress blocks
+	uv run python manage.py collectstatic --noinput
+	uv run python manage.py compress --force
+{%- else -%}
 static:  ## Collect static files
 	uv run python manage.py collectstatic --noinput
+{%- endif %}
 {% if cookiecutter.api != "none" %}
 schema:  ## Write the OpenAPI schema to disk
 	uv run python manage.py spectacular --file schema.yml --validate --fail-on-warn

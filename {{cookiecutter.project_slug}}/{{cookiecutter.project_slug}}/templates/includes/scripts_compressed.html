@@ -1,0 +1,22 @@
+{% load compress static %}{% comment %}
+Progressive enhancement only: every form works with JavaScript disabled.
+
+forms.js clears field errors as the visitor corrects them, using DELEGATED
+listeners on the form rather than one listener per field, so rows cloned into a
+formset later are covered without extra wiring. It also refreshes the CSRF token
+on every form before submit - the reference project shipped that helper but
+called it from a single page, so the stale-token 403 stayed live everywhere else.
+
+No nonce on this tag, unlike the uncompressed variant: compressor rewrites the
+tag from its own output template and only carries defer/async across, and an
+external same-origin script is allowed by 'self' in script-src anyway. An INLINE
+script still needs nonce="{{ request.csp_nonce }}" and must stay outside this
+block - the offline manifest is keyed on the rendered block, so a per-request
+value would never match the key that was built.
+
+COMPRESS_OFFLINE is on in production, so this block is compiled by
+"manage.py compress --force" during the build.
+{% endcomment %}
+{% compress js %}
+<script src="{% static 'js/forms.js' %}" defer></script>
+{% endcompress %}

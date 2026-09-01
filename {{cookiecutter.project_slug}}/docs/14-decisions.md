@@ -179,8 +179,8 @@ applicants' documents were enumerable by anyone who guessed the pattern.
 denylist); content sniffing so the file's real type must match its extension; server-side
 re-encoding of images, bounded against decompression bombs, with SVG never accepted on a public
 field; a **generated** stored filename, with the original kept in a separate column for display
-only; and storage under `PRIVATE_MEDIA_ROOT` for anything containing personal data, served only
-through a permission-checked view.
+only; and storage {% if cookiecutter.media_storage == "filesystem" %}under `PRIVATE_MEDIA_ROOT`{% else %}in the separate private storage{% endif %} for anything containing personal data, served
+only through a permission-checked view.
 **Alternatives considered.** Trusting the browser-supplied content type and filename. Both are
 attacker-controlled.
 **Consequences.** Adding an upload field is more work than `FileField()`, deliberately. A field that
@@ -358,20 +358,106 @@ TODO: add it, or record the acceptance of the gap.
 **Context.** A deploy runbook whose commands need a tool installed first is a runbook that fails on a
 fresh server at 22:00.
 **Decision.** `make` — present on every server and CI image. There is no Node.js build step: CSS and
-JavaScript are served as authored, with hashed filenames for cache busting.
+JavaScript are served as authored{% if cookiecutter.asset_pipeline == "compressor" %}, then concatenated and minified by django-compressor, which is
+Python and needs no toolchain{% endif %}, with hashed filenames for cache busting.
 **Consequences.** Every command in this documentation works over SSH with nothing to install. Adding
 a front-end build step later adds a toolchain to every server and every CI image; that is a decision
 to take deliberately, not a convenience to slip in.
 
-### Static files are hashed and served from the application; media is not committed
+### Static files are hashed and served from {% if cookiecutter.static_storage == "cloud" %}the object store{% else %}the application{% endif %}; media is not committed
 
 **Context.** Hand-stamped `?v=` query strings are forgotten, and committed media makes a repository
 that takes minutes to clone.
 **Decision.** Static files get content-hashed names through a manifest at `collectstatic` time and
-are served by WhiteNoise. Editorial images and documents go through the administration interface
-into the media directories and are never committed.
+are served by {% if cookiecutter.static_storage == "cloud" %}the object store, from a `static/` prefix that is the only publicly readable
+part of the bucket{% else %}WhiteNoise{% endif %}. Editorial images and documents go through the administration interface
+into the media {% if cookiecutter.media_storage == "filesystem" %}directories{% else %}store{% endif %} and are never committed.
 **Consequences.** `collectstatic` must run under the production settings module at deploy time, or
-the manifest will not match the running application and every asset 404s.
+the manifest will not match the running application and every asset 404s.{% if cookiecutter.static_storage == "cloud" %} It also needs the
+bucket credentials, which is why it is a deploy step rather than an image build step — build-time
+credentials end up in a layer.{% endif %}
+
+### Media is stored {% if cookiecutter.media_storage == "filesystem" %}on the application server's disk{% else %}in an object store, in two separate storages{% endif %}
+
+{% if cookiecutter.media_storage == "filesystem" -%}
+**Context.** Uploaded files have to live somewhere with a backup story, and personal data must never
+be reachable from a public URL.
+**Decision.** `MEDIA_ROOT` on local disk for editorial media, and a separate `PRIVATE_MEDIA_ROOT`
+that the web server never maps to a URL, served only through a permission-checked view.
+**Alternatives considered.** An object store (S3, GCS, Azure Blob), which the template also
+supports: it removes the media disk from the sizing conversation, survives losing the server, and
+scales without thought. It was not chosen here because it adds a cloud SDK, a set of credentials, a
+bucket policy that must be right, and per-GB egress on every private download — cost that only pays
+for itself once media volume or availability requirements justify it.
+**Consequences.** The media disk grows and must be watched ([03-infrastructure.md](03-infrastructure.md)),
+and the nightly media `rsync` in [08-backup-restore.md](08-backup-restore.md) is a real, separate
+backup job that has to be monitored. Moving to a bucket later is a settings change plus a one-off
+copy: `STORAGES` is the only place that names the backend, and no model or view knows the difference.
+{%- else -%}
+**Context.** Uploaded files have to live somewhere with a backup story, and personal data must never
+be reachable from a public URL. A media disk on the application server is one more thing to size,
+monitor and lose with the server.
+**Decision.** Media goes to {% if cookiecutter.media_storage == "s3" %}Amazon S3{% elif cookiecutter.media_storage == "gcs" %}Google Cloud Storage{% else %}Azure Blob Storage{% endif %} through `django-storages`, as **two storages,
+not one**: a public storage for editorial media, and a private storage for anything a visitor
+uploads about themselves. The bucket is not public-read; no public ACL is ever sent, and every URL
+the application builds is signed and expires. Private files are streamed through the
+permission-checked view by default, never redirected to.
+**Alternatives considered.**
+*One bucket, world-readable, "the URLs are unguessable".* This is the reference project's failure
+verbatim: applicant CVs sat under a public media root with the filenames their owners gave them.
+Unguessable is not a permission.
+*Signed URLs for private media by default.* Cheaper — the bytes never touch a worker — but a signed
+URL, once issued, is valid for its whole lifetime to anyone holding it: after logout, after the
+permission is revoked, after it is forwarded or logged by a proxy. It is available behind
+`PRIVATE_MEDIA_SIGNED_URLS` for projects serving large private files, as a per-project decision with
+the expiry set as low as the download tolerates.
+*Local disk.* Simpler, and the right answer for a small site; see the alternative branch of this
+decision in the template.
+**Consequences.** The server needs no media disk, and losing the server loses no files. In exchange:
+a cloud SDK and a credential to rotate; a bucket policy that is now the thing standing between
+private uploads and the internet, verified by hand and recorded in
+[03-infrastructure.md](03-infrastructure.md); and egress billed twice on every private download,
+because the permission check runs on every byte. **"Backup" also changes meaning** — from a nightly
+`rsync` to bucket versioning plus lifecycle rules, which live in the same account as the data and
+therefore protect against a mistake but not against losing the account. Read
+[08-backup-restore.md](08-backup-restore.md) before agreeing an RPO.
+{%- endif %}
+
+### {% if cookiecutter.asset_pipeline == "compressor" %}django-compressor, with offline compression{% else %}No asset pipeline: WhiteNoise is the whole story{% endif %}
+
+**Context.** `django-compressor` appears in 25 of 56 modern KUWAITNET projects, so the team knows it
+and reaches for it by habit. Habit is not a reason. What it actually buys has narrowed: WhiteNoise
+already gzips and brotlis every static file and gives it a content-hashed name, this template ships
+no SASS or LESS and no Node build step, and under HTTP/2 concatenating files to save round trips is
+worth far less than it was when the habit formed.
+{% if cookiecutter.asset_pipeline == "compressor" -%}
+**Decision.** `django-compressor` is enabled, with `COMPRESS_OFFLINE = True` in production. The
+compress blocks live in `templates/includes/styles.html` and `templates/includes/scripts.html`.
+**Alternatives considered.** No pipeline at all — the template's default, and the right answer for a
+site with a handful of hand-written stylesheets. A Node toolchain — more capable, and it puts npm on
+every server and every CI image for the rest of the project's life.
+**Consequences.** **`manage.py compress --force` must run on every deploy, after `collectstatic`.**
+With `COMPRESS_OFFLINE` on, a block that was never compiled raises rather than rendering, so a deploy
+path that skips the step ships a broken site — the classic and entirely avoidable footgun. It is
+wired into the Dockerfile and into the runbook in [07-deployment.md](07-deployment.md); any new
+deploy path must carry it too. Nothing inside a compress block may vary per request: the offline
+manifest is keyed on the rendered block, so an inline nonce or a per-user value would never match.
+Turn it **off** again if the SASS/LESS theme it was enabled for is dropped; keeping a compile step
+for two static files is pure deploy risk.
+{%- else -%}
+**Decision.** No asset pipeline. WhiteNoise's `CompressedManifestStaticFilesStorage` does the
+compression and the cache busting, and the CSS and JavaScript are served as authored.
+**Alternatives considered.** `django-compressor`, available in this template as
+`asset_pipeline=compressor`. Turn it on when the project grows a **SASS or LESS theme and no Node
+toolchain** — `COMPRESS_PRECOMPILERS` compiles it at deploy time in Python, which is exactly the gap
+WhiteNoise does not fill. Do **not** turn it on to minify two hand-written stylesheets, or to
+concatenate files that HTTP/2 already multiplexes: `COMPRESS_OFFLINE` then adds a mandatory
+`manage.py compress --force` to every deploy, and a deploy path that forgets it ships a site with no
+CSS.
+**Consequences.** One fewer build step, one fewer dependency and one fewer way for a deploy to
+half-work. If a theme with a preprocessor arrives later, enabling compressor is a settings change
+plus a template include plus a runbook line — record it here on the day it happens.
+{%- endif %}
 
 ### Tests run against PostgreSQL, with a coverage floor of 60 % on `apps/`
 
@@ -424,6 +510,20 @@ surprised.
 {%- else %}
 - **No country data.** Forms carry no country field, and a phone number must be typed with its
   country calling code.
+{%- endif %}
+{%- if cookiecutter.media_storage != "filesystem" %}
+- **Private downloads are proxied, so their bandwidth is billed twice** — bucket to application, then
+  application to visitor — and a large download holds a gunicorn worker for its duration. That is the
+  price of checking the permission on every byte. `PRIVATE_MEDIA_SIGNED_URLS` trades it away; read
+  the decision above before doing so.
+- **Media backup lives in the same cloud account as the media.** Bucket versioning protects against
+  a deletion or an overwrite, not against losing the account. See
+  [08-backup-restore.md](08-backup-restore.md).
+{%- endif %}
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+- **Every deploy path must run `manage.py compress --force`.** Offline compression means a page whose
+  block was never compiled raises instead of rendering. The Dockerfile and the runbook do it; a
+  hand-rolled deploy script is where this gets forgotten.
 {%- endif %}
 - **Log correlation.** Log lines carry no request identifier, so relating a user's report to a
   specific request is manual. See [09-monitoring.md](09-monitoring.md).

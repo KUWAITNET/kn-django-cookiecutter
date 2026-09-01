@@ -37,6 +37,26 @@ dependencies = [
     "Pillow>=11.0",
     "gunicorn>=23.0",
     "whitenoise>=6.7",
+{%- if cookiecutter.media_storage == "s3" %}
+    # Object storage. Only the selected backend's SDK is installed - the extra is
+    # what pulls boto3 in, so a filesystem project carries no cloud dependency.
+    "django-storages[s3]>=1.14",
+{%- elif cookiecutter.media_storage == "gcs" %}
+    # Object storage. Only the selected backend's SDK is installed - the extra is
+    # what pulls google-cloud-storage in, so a filesystem project carries no cloud
+    # dependency.
+    "django-storages[google]>=1.14",
+{%- elif cookiecutter.media_storage == "azure" %}
+    # Object storage. Only the selected backend's SDK is installed - the extra is
+    # what pulls azure-storage-blob in, so a filesystem project carries no cloud
+    # dependency.
+    "django-storages[azure]>=1.14",
+{%- endif %}
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+    # Asset pipeline. Offline compression only: COMPRESS_OFFLINE is on in
+    # production, so 'manage.py compress --force' is part of every deploy.
+    "django-compressor>=4.5",
+{%- endif %}
     # Admin skin: the KUWAITNET standard wherever django.contrib.admin is mounted.
     "django-unfold>=0.40",
     # Security baseline.
@@ -63,6 +83,10 @@ dependencies = [
 {%- endif %}
     # E-mail: post-office wraps the real transport so every send is logged and auditable.
     "django-post-office>=3.9",
+    # Field-level audit trail with attribution. Upstream, not the KUWAITNET fork:
+    # the fork exists to allow superusers to delete entries, which is in tension
+    # with what an audit log is for. Switch to it deliberately, not by default.
+    "django-auditlog>=3.4.1",
 {%- if cookiecutter.countries_app == "cities" %}
     # Country/region/city reference data. The concrete models live in apps/cities.
     "django-cities-light>=3.10",
@@ -106,6 +130,12 @@ dev = [
     "bandit[toml]>=1.8",
     "pre-commit>=4.0",
     "pip-audit>=2.7",
+    # Dev tooling ONLY - never a runtime dependency. runserver_plus ships the
+    # Werkzeug debugger, which is remote code execution if it is ever reachable.
+    # Never import from django_extensions.db: doing so would make this a runtime
+    # dependency and drag that debugger into production installs.
+    "django-extensions>=4.1",
+    "ipython>=8.30",
 ]
 
 [tool.uv]

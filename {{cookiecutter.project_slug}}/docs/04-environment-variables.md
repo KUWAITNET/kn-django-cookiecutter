@@ -89,10 +89,82 @@ development and would silently swallow production mail.
 
 | Variable | Purpose | Required | Example | Secret |
 |---|---|---|---|---|
+{%- if cookiecutter.media_storage == "filesystem" %}
 | `MEDIA_ROOT` | Where public uploads are written. | Yes in production | `/var/www/{{ cookiecutter.project_slug }}/media` | No |
 | `PRIVATE_MEDIA_ROOT` | Where uploads containing personal data are written. **Must not be reachable from the web server.** | Yes in production | `/var/www/{{ cookiecutter.project_slug }}/private-media` | No |
+{%- else %}
+| `MEDIA_ROOT` | Unused in production: media is in the object store. Kept so a local run without bucket credentials still has somewhere to write. | No | | No |
+| `PRIVATE_MEDIA_ROOT` | Unused in production for the same reason. The test settings point the private storage here so the suite runs with no cloud credentials. | No | | No |
+{%- endif %}
 | `UPLOAD_MAX_SIZE_MB` | Default per-field size cap in megabytes. Default 10. Individual fields may set a tighter cap. | No | `10` | No |
 | `UPLOAD_IMAGE_MAX_PIXELS` | Pixel-count ceiling that bounds decompression bombs. Default 50000000. | No | `50000000` | No |
+{%- if cookiecutter.media_storage != "filesystem" %}
+
+## Media storage
+
+Two storages, not one: editorial media under `MEDIA_LOCATION`, and anything a visitor uploads about
+themselves under `PRIVATE_MEDIA_LOCATION`, reachable only through the permission-checked view. The
+bucket is **not** public-read — see [03-infrastructure.md](03-infrastructure.md) for the policy that
+has to be applied to it.
+
+| Variable | Purpose | Required | Example | Secret |
+|---|---|---|---|---|
+| `MEDIA_LOCATION` | Key prefix for public editorial media. Default `media`. | No | `media` | No |
+| `PRIVATE_MEDIA_LOCATION` | Key prefix for personal data. Default `private`. | No | `private` | No |
+{%- if cookiecutter.static_storage == "cloud" %}
+| `STATIC_LOCATION` | Key prefix for collected static files. Default `static`. The only prefix granted public read. | No | `static` | No |
+{%- endif %}
+| `PRIVATE_MEDIA_SIGNED_URLS` | `False` (default) streams every private file through `/private-media/<path>`, so the permission is checked on each request and **no URL to the file exists at all**. `True` redirects to a short-lived signed URL instead: far cheaper for large files, but that URL then works for **anyone holding it** until it expires — after the user logs out, after the permission is revoked, after it is forwarded. Turn it on deliberately, per project, and keep the expiry as low as the download tolerates. | No | `False` | No |
+| `PRIVATE_MEDIA_URL_EXPIRE_SECONDS` | Lifetime of a private signed URL, in seconds. Default 300. Only used when the setting above is `True`. | No | `300` | No |
+{%- if cookiecutter.media_storage == "s3" %}
+| `AWS_STORAGE_BUCKET_NAME` | The bucket. | Yes in production | `{{ cookiecutter.project_slug }}-media` | No |
+| `AWS_PRIVATE_STORAGE_BUCKET_NAME` | A separate bucket for personal data, so a bucket policy rather than a key prefix separates public from private. Defaults to the bucket above. Recommended. | No | `{{ cookiecutter.project_slug }}-private` | No |
+| `AWS_S3_REGION_NAME` | Bucket region. Required unless an endpoint URL is given. | Yes in production | `me-south-1` | No |
+| `AWS_ACCESS_KEY_ID` | Leave unset when the host has an instance role or IRSA — preferred, because then there is no long-lived key to rotate or leak. | No | | **Yes** |
+| `AWS_SECRET_ACCESS_KEY` | As above. Setting one of the pair without the other is reported by `manage.py check`. | No | | **Yes** |
+| `AWS_S3_ENDPOINT_URL` | Only for an S3-compatible store (MinIO, DigitalOcean Spaces, Wasabi). | No | `https://fra1.digitaloceanspaces.com` | No |
+| `AWS_S3_CUSTOM_DOMAIN` | CDN in front of the **public** prefix. Never applied to private media: an edge cache is a copy of the file sitting outside every permission check. | No | `cdn.{{ cookiecutter.domain_name }}` | No |
+| `AWS_QUERYSTRING_EXPIRE` | Lifetime of a signed URL for public editorial media, in seconds. Default 3600. | No | `3600` | No |
+{%- if cookiecutter.static_storage == "cloud" %}
+| `AWS_STATIC_BUCKET_NAME` | Static files in a bucket of their own, keeping the public-read grant physically away from the private data. Defaults to the media bucket, where a policy scoped to `static/*` does the same job. | No | `{{ cookiecutter.project_slug }}-static` | No |
+{%- endif %}
+{%- elif cookiecutter.media_storage == "gcs" %}
+| `GS_BUCKET_NAME` | The bucket. | Yes in production | `{{ cookiecutter.project_slug }}-media` | No |
+| `GS_PRIVATE_BUCKET_NAME` | A separate bucket for personal data, so an IAM policy rather than a key prefix separates public from private. Defaults to the bucket above. Recommended. | No | `{{ cookiecutter.project_slug }}-private` | No |
+| `GS_PROJECT_ID` | Google Cloud project. | Yes in production | | No |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to a service-account key file. Leave unset when workload identity or the metadata server supplies credentials — preferred, because then there is no key file to rotate or leak. The file itself is a secret: mode `0600`, never committed. | No | `/etc/{{ cookiecutter.project_slug }}/gcs.json` | **Yes** |
+| `GS_EXPIRATION_SECONDS` | Lifetime of a signed URL for public editorial media, in seconds. Default 3600. | No | `3600` | No |
+| `GS_CUSTOM_ENDPOINT` | Only for an emulator or a private service endpoint. | No | | No |
+{%- if cookiecutter.static_storage == "cloud" %}
+| `GS_STATIC_BUCKET_NAME` | **Required in practice.** GCS IAM is per bucket and uniform bucket-level access disables object ACLs, so a public prefix inside a private bucket cannot be expressed: static files need a bucket of their own, granted `allUsers` `objectViewer`. Defaults to the media bucket, which would publish everything — set it. | Yes in production | `{{ cookiecutter.project_slug }}-static` | No |
+{%- endif %}
+{%- else %}
+| `AZURE_ACCOUNT_NAME` | Storage account. | Yes in production | `{{ cookiecutter.project_slug }}media` | No |
+| `AZURE_CONTAINER` | Container holding public editorial media{% if cookiecutter.static_storage == "cloud" %} and static files{% endif %}. | Yes in production | `media` | No |
+| `AZURE_PRIVATE_CONTAINER` | A separate container for personal data. Public access is a per-container setting in Azure, so this is what makes "private" structural rather than conventional. Defaults to the container above. Recommended. | No | `private` | No |
+| `AZURE_ACCOUNT_KEY` | Leave unset when a managed identity supplies credentials — preferred, because then there is no long-lived key to rotate or leak. | No | | **Yes** |
+| `AZURE_CONNECTION_STRING` | Alternative to account name plus key. It contains the key, so it is a secret in full. | No | | **Yes** |
+| `AZURE_CUSTOM_DOMAIN` | CDN in front of the **public** container. Never applied to private media: an edge cache is a copy of the file sitting outside every permission check. | No | `cdn.{{ cookiecutter.domain_name }}` | No |
+| `AZURE_URL_EXPIRATION_SECS` | Lifetime of the SAS on a public editorial media URL, in seconds. Default 3600. | No | `3600` | No |
+{%- if cookiecutter.static_storage == "cloud" %}
+| `AZURE_STATIC_CONTAINER` | **Required in practice.** Public access is a per-container setting in Azure with no per-object override, so static files need a container of their own — the one whose access level is "Blob". Defaults to the media container, which would publish everything — set it. | Yes in production | `static` | No |
+{%- endif %}
+{%- endif %}
+{%- endif %}
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+
+## Asset pipeline
+
+| Variable | Purpose | Required | Example | Secret |
+|---|---|---|---|---|
+| `COMPRESS_ENABLED` | Whether the compress blocks are compiled. Defaults to `not DEBUG`, so it is off in development and a CSS edit is visible on reload with no compile step. Production forces it on. | No | `False` | No |
+
+Production also sets `COMPRESS_OFFLINE = True`, which is deliberately **not** an environment
+variable: it is the point of the pipeline, and making it switchable would invite someone to move
+compilation into the request path to "fix" a deploy. It does mean **`manage.py compress --force`
+must run on every deploy, after `collectstatic`** — a deploy that skips it serves pages that raise
+instead of rendering. See [07-deployment.md](07-deployment.md).
+{%- endif %}
 {% if cookiecutter.api != "none" %}
 ## API
 
@@ -174,8 +246,10 @@ Rules that apply to all of them:
 - `.env` is never committed. A `.env` that reaches the repository means the credentials in it are
   compromised and must be rotated, not deleted from the history and forgotten.
 - Production secrets are not sent through chat, e-mail, ticket comments or spreadsheets.
-- `SECRET_KEY`, the database password, the SMTP credentials and every third-party key are **rotated
-  at handover** and whenever someone with access leaves. Do it inside a maintenance window.
+- `SECRET_KEY`, the database password, the SMTP credentials{% if cookiecutter.media_storage != "filesystem" %}, the object-store credentials{% endif %} and every
+  third-party key are **rotated at handover** and whenever someone with access leaves. Do it inside
+  a maintenance window.{% if cookiecutter.media_storage != "filesystem" %} An identity supplied by the platform — an instance role, workload
+  identity, a managed identity — has nothing to rotate, which is the strongest reason to prefer one.{% endif %}
 - `settings/local.py` is a development escape hatch. It is gitignored and it is **not** a production
   secret store; no deploy procedure may instruct anyone to create one on a production host.
 

@@ -27,6 +27,15 @@ CSRF_COOKIE_SECURE = True
 CSRF_TRUSTED_ORIGINS = env.list(  # noqa: F405
     "CSRF_TRUSTED_ORIGINS", default=["https://{{ cookiecutter.domain_name }}"]
 )
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+
+# Compression happens at build time, not per request: with this on, every
+# {% raw %}{% compress %}{% endraw %} block is looked up in the manifest written by
+# 'manage.py compress --force'. If that command did not run, every page raises -
+# which is the correct failure, and far louder than silently serving no CSS.
+COMPRESS_OFFLINE = True
+COMPRESS_ENABLED = True
+{%- endif %}
 {% if cookiecutter.api != "none" %}
 # The schema UI is available on staging and gated in production.
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=False)  # noqa: F405

@@ -10,7 +10,7 @@ fails loudly at boot rather than silently running with a development key.
 """
 
 import os
-{% if cookiecutter.api != "none" %}from datetime import timedelta
+{% if cookiecutter.api != "none" or cookiecutter.media_storage == "gcs" %}from datetime import timedelta
 {% endif %}
 import environ
 from csp.constants import NONCE
@@ -85,6 +85,10 @@ INSTALLED_APPS = [
     "axes",
 {%- endif %}
     "post_office",
+    "auditlog",
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+    "compressor",
+{%- endif %}
 {%- if cookiecutter.api != "none" %}
     "rest_framework",
     "rest_framework_simplejwt",
@@ -160,6 +164,9 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Must follow AuthenticationMiddleware: it reads request.user to attribute
+    # each change to a person. Without it entries are recorded with no actor.
+    "auditlog.middleware.AuditlogMiddleware",
 {%- if cookiecutter.use_2fa == "yes" %}
     # django-otp must follow AuthenticationMiddleware.
     "django_otp.middleware.OTPMiddleware",
@@ -347,6 +354,10 @@ USE_TZ = True
 STATICFILES_FINDERS = [
     "django.contrib.staticfiles.finders.FileSystemFinder",
     "django.contrib.staticfiles.finders.AppDirectoriesFinder",
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+    # Serves the compressed output back to collectstatic and to the dev server.
+    "compressor.finders.CompressorFinder",
+{%- endif %}
 ]
 {% if cookiecutter.frontend != "api_only" %}
 STATICFILES_DIRS = [os.path.join(PROJECT_DIR, "static")]
@@ -362,14 +373,338 @@ MEDIA_URL = "/media/"
 # Uploads containing personal data are served through a permission-checked view,
 # never from MEDIA_URL. See apps.core.storage and the security baseline.
 PRIVATE_MEDIA_ROOT = env("PRIVATE_MEDIA_ROOT", default=os.path.join(BASE_DIR, "private-media"))
+{%- if cookiecutter.media_storage == "filesystem" %}
 
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    # Personal data. A named entry rather than a bare instance so that the test
+    # settings - and a future migration to a bucket - can repoint it in one place.
+    "private_media": {"BACKEND": "apps.core.storage.PrivateMediaStorage"},
     "staticfiles": {
         # Hashed filenames: cache-busting without hand-stamped ?v= query strings.
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+{%- else %}
+
+
+# Object storage ---------------------------------------------------------------
+#
+# TWO media storages, never one. Editorial media (page images, brochures) is
+# public; anything a visitor uploads about themselves - a CV, an ID copy, a form
+# attachment - goes to the private storage and is reachable only through
+# apps.core.views.serve_private_file, which checks a permission first. That is the
+# same split the filesystem build makes with MEDIA_ROOT and PRIVATE_MEDIA_ROOT.
+#
+# The bucket is NOT public-read: no public ACL is ever sent, and the URLs the
+# storage builds are signed and expire. Making the bucket world-readable would
+# turn every private object into a public document the moment its key is guessed
+# or logged - which is exactly how applicant CVs leaked in the reference project.
+MEDIA_LOCATION = env("MEDIA_LOCATION", default="media")
+PRIVATE_MEDIA_LOCATION = env("PRIVATE_MEDIA_LOCATION", default="private")
+{%- if cookiecutter.static_storage == "cloud" %}
+STATIC_LOCATION = env("STATIC_LOCATION", default="static")
+{%- endif %}
+
+# How a private file reaches the browser.
+#
+# Default (False): the file is STREAMED through serve_private_file, so the
+# permission is checked on every single byte and no URL exists that could be
+# forwarded, logged by a proxy, or pasted into a ticket.
+#
+# True: the view redirects to a short-lived signed URL instead. That is cheaper -
+# the bytes go straight from the bucket, with no worker held open for a 200 MB
+# download - but the trade-off is real: once issued, a signed URL is valid for its
+# whole lifetime to ANYONE holding it. It keeps working after the user logs out,
+# after the permission is revoked, and after the link is forwarded. Turn it on
+# only for large files, and set the expiry as low as the download will tolerate.
+PRIVATE_MEDIA_SIGNED_URLS = env.bool("PRIVATE_MEDIA_SIGNED_URLS", default=False)
+PRIVATE_MEDIA_URL_EXPIRE_SECONDS = env.int("PRIVATE_MEDIA_URL_EXPIRE_SECONDS", default=300)
+{%- if cookiecutter.media_storage == "s3" %}
+
+AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME", default="")
+# Personal data in a bucket of its own is the strongest form of the split: a
+# bucket policy, not a key prefix, is what stands between public and private.
+# Defaults to the same bucket, where the prefixes do the separating.
+AWS_PRIVATE_STORAGE_BUCKET_NAME = env(
+    "AWS_PRIVATE_STORAGE_BUCKET_NAME", default=AWS_STORAGE_BUCKET_NAME
+)
+AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="")
+# Unset on a host with an instance role / IRSA, which is preferred: no long-lived
+# key to rotate, leak or commit.
+AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID", default="")
+AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY", default="")
+# Set only for an S3-compatible store (MinIO, DigitalOcean Spaces, Wasabi).
+AWS_S3_ENDPOINT_URL = env("AWS_S3_ENDPOINT_URL", default="") or None
+# A CDN in front of the PUBLIC prefix. Never used for private media.
+AWS_S3_CUSTOM_DOMAIN = env("AWS_S3_CUSTOM_DOMAIN", default="") or None
+AWS_QUERYSTRING_EXPIRE = env.int("AWS_QUERYSTRING_EXPIRE", default=3600)
+{%- if cookiecutter.static_storage == "cloud" %}
+# Static files are public; media is not. On S3 a prefix-scoped bucket policy can
+# express that inside one bucket, so this defaults to the media bucket - but a
+# separate bucket keeps the public grant physically away from the private data.
+AWS_STATIC_BUCKET_NAME = env("AWS_STATIC_BUCKET_NAME", default=AWS_STORAGE_BUCKET_NAME)
+{%- endif %}
+
+_S3_COMMON = {
+    "bucket_name": AWS_STORAGE_BUCKET_NAME,
+    "region_name": AWS_S3_REGION_NAME or None,
+    "access_key": AWS_ACCESS_KEY_ID or None,
+    "secret_key": AWS_SECRET_ACCESS_KEY or None,
+    "endpoint_url": AWS_S3_ENDPOINT_URL,
+    # Required in every region opened since 2014, and harmless in the older ones.
+    "signature_version": "s3v4",
+    # None means "send no ACL header at all" - never "public-read". Buckets created
+    # with object ownership set to "bucket owner enforced" reject any ACL, so a
+    # value here is both a security hole and a runtime error waiting to happen.
+    "default_acl": None,
+    # Upload names are generated UUIDs, so a collision means something is wrong:
+    # keep both files rather than silently destroy the first.
+    "file_overwrite": False,
+}
+
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            **_S3_COMMON,
+            "location": MEDIA_LOCATION,
+            # Signed URLs even for editorial media, because the bucket is not
+            # public-read. Put a CDN in front (AWS_S3_CUSTOM_DOMAIN) with origin
+            # access control if permanent, cacheable URLs are needed.
+            "querystring_auth": True,
+            "querystring_expire": AWS_QUERYSTRING_EXPIRE,
+            "custom_domain": AWS_S3_CUSTOM_DOMAIN,
+        },
+    },
+    "private_media": {
+        "BACKEND": "apps.core.storage.PrivateMediaStorage",
+        "OPTIONS": {
+            **_S3_COMMON,
+            "bucket_name": AWS_PRIVATE_STORAGE_BUCKET_NAME,
+            "location": PRIVATE_MEDIA_LOCATION,
+            "querystring_auth": True,
+            "querystring_expire": PRIVATE_MEDIA_URL_EXPIRE_SECONDS,
+            # Never a CDN for private media: an edge cache is a copy of the file
+            # sitting outside every permission check.
+            "custom_domain": None,
+        },
+    },
+{%- if cookiecutter.static_storage == "cloud" %}
+    "staticfiles": {
+        "BACKEND": "apps.core.storage.StaticCloudStorage",
+        "OPTIONS": {
+            **_S3_COMMON,
+            "bucket_name": AWS_STATIC_BUCKET_NAME,
+            "location": STATIC_LOCATION,
+            # The site's own CSS and JS: public by definition, and their URLs are
+            # baked into a manifest and into compiled CSS, so they must not expire.
+            # This prefix - and only this prefix - carries a public-read bucket
+            # policy, or sits behind a CDN.
+            "querystring_auth": False,
+            "custom_domain": AWS_S3_CUSTOM_DOMAIN,
+            # Content-hashed names, so overwriting is a no-op rather than a risk.
+            "file_overwrite": True,
+        },
+    },
+{%- else %}
+    "staticfiles": {
+        # Hashed filenames: cache-busting without hand-stamped ?v= query strings.
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+{%- endif %}
+}
+{%- elif cookiecutter.media_storage == "gcs" %}
+
+GS_BUCKET_NAME = env("GS_BUCKET_NAME", default="")
+# Personal data in a bucket of its own is the strongest form of the split: an IAM
+# policy, not a key prefix, is what stands between public and private. Defaults to
+# the same bucket, where the prefixes do the separating.
+GS_PRIVATE_BUCKET_NAME = env("GS_PRIVATE_BUCKET_NAME", default=GS_BUCKET_NAME)
+GS_PROJECT_ID = env("GS_PROJECT_ID", default="")
+# Path to a service-account key file. Unset on a host using workload identity or
+# the metadata server, which is preferred: no key file to rotate, leak or commit.
+# google-cloud-storage reads this variable itself; it is named here so the
+# deployment check in apps/core/checks.py can see whether credentials exist.
+GOOGLE_APPLICATION_CREDENTIALS = env("GOOGLE_APPLICATION_CREDENTIALS", default="")
+GS_EXPIRATION_SECONDS = env.int("GS_EXPIRATION_SECONDS", default=3600)
+# Set only for a GCS-compatible emulator or a private service endpoint.
+GS_CUSTOM_ENDPOINT = env("GS_CUSTOM_ENDPOINT", default="") or None
+{%- if cookiecutter.static_storage == "cloud" %}
+# Static files are public; media is not. GCS IAM is per bucket and uniform
+# bucket-level access disables object ACLs, so a public prefix inside a private
+# bucket is not expressible: static files need a bucket of their own.
+GS_STATIC_BUCKET_NAME = env("GS_STATIC_BUCKET_NAME", default=GS_BUCKET_NAME)
+{%- endif %}
+
+_GS_COMMON = {
+    "bucket_name": GS_BUCKET_NAME,
+    "project_id": GS_PROJECT_ID or None,
+    # None means "apply the bucket's own uniform access, send no ACL" - never
+    # "publicRead". Buckets with uniform bucket-level access reject object ACLs
+    # outright, so a value here is both a security hole and a runtime error.
+    "default_acl": None,
+    # Upload names are generated UUIDs, so a collision means something is wrong:
+    # keep both files rather than silently destroy the first.
+    "file_overwrite": False,
+    "custom_endpoint": GS_CUSTOM_ENDPOINT,
+}
+
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
+        "OPTIONS": {
+            **_GS_COMMON,
+            "location": MEDIA_LOCATION,
+            # Signed URLs even for editorial media, because the bucket is not
+            # public-read. Put Cloud CDN in front of it if permanent, cacheable
+            # URLs are needed.
+            "querystring_auth": True,
+            "expiration": timedelta(seconds=GS_EXPIRATION_SECONDS),
+        },
+    },
+    "private_media": {
+        "BACKEND": "apps.core.storage.PrivateMediaStorage",
+        "OPTIONS": {
+            **_GS_COMMON,
+            "bucket_name": GS_PRIVATE_BUCKET_NAME,
+            "location": PRIVATE_MEDIA_LOCATION,
+            "querystring_auth": True,
+            "expiration": timedelta(seconds=PRIVATE_MEDIA_URL_EXPIRE_SECONDS),
+        },
+    },
+{%- if cookiecutter.static_storage == "cloud" %}
+    "staticfiles": {
+        "BACKEND": "apps.core.storage.StaticCloudStorage",
+        "OPTIONS": {
+            **_GS_COMMON,
+            "bucket_name": GS_STATIC_BUCKET_NAME,
+            "location": STATIC_LOCATION,
+            # The site's own CSS and JS: public by definition, and their URLs are
+            # baked into a manifest and into compiled CSS, so they must not expire.
+            # This prefix - and only this prefix - is granted public read.
+            "querystring_auth": False,
+            # Content-hashed names, so overwriting is a no-op rather than a risk.
+            "file_overwrite": True,
+        },
+    },
+{%- else %}
+    "staticfiles": {
+        # Hashed filenames: cache-busting without hand-stamped ?v= query strings.
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+{%- endif %}
+}
+{%- else %}
+
+AZURE_ACCOUNT_NAME = env("AZURE_ACCOUNT_NAME", default="")
+# Unset on a host using a managed identity, which is preferred: no long-lived
+# key to rotate, leak or commit.
+AZURE_ACCOUNT_KEY = env("AZURE_ACCOUNT_KEY", default="")
+AZURE_CONNECTION_STRING = env("AZURE_CONNECTION_STRING", default="")
+AZURE_CONTAINER = env("AZURE_CONTAINER", default="")
+# Personal data in a container of its own is the strongest form of the split:
+# public access is a per-container setting in Azure, so a separate container is
+# what makes "private" structural rather than conventional.
+AZURE_PRIVATE_CONTAINER = env("AZURE_PRIVATE_CONTAINER", default=AZURE_CONTAINER)
+AZURE_URL_EXPIRATION_SECS = env.int("AZURE_URL_EXPIRATION_SECS", default=3600)
+# A CDN in front of the PUBLIC container. Never used for private media.
+AZURE_CUSTOM_DOMAIN = env("AZURE_CUSTOM_DOMAIN", default="") or None
+{%- if cookiecutter.static_storage == "cloud" %}
+# Static files are public; media is not. Public access is a per-container setting
+# in Azure, with no per-object override, so static files need a container of their
+# own - the one place anonymous blob read is switched on.
+AZURE_STATIC_CONTAINER = env("AZURE_STATIC_CONTAINER", default=AZURE_CONTAINER)
+{%- endif %}
+
+_AZURE_COMMON = {
+    "account_name": AZURE_ACCOUNT_NAME or None,
+    "account_key": AZURE_ACCOUNT_KEY or None,
+    "connection_string": AZURE_CONNECTION_STRING or None,
+    # Upload names are generated UUIDs, so a collision means something is wrong:
+    # keep both files rather than silently destroy the first.
+    "overwrite_files": False,
+}
+
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.azure_storage.AzureStorage",
+        "OPTIONS": {
+            **_AZURE_COMMON,
+            "azure_container": AZURE_CONTAINER,
+            "location": MEDIA_LOCATION,
+            # Azure has no per-object ACL: a container is public or it is not, and
+            # this one is not. expiration_secs is what makes every URL a
+            # short-lived SAS; leaving it None would emit a bare blob URL that only
+            # works if the container was opened to the world.
+            "expiration_secs": AZURE_URL_EXPIRATION_SECS,
+            "custom_domain": AZURE_CUSTOM_DOMAIN,
+        },
+    },
+    "private_media": {
+        "BACKEND": "apps.core.storage.PrivateMediaStorage",
+        "OPTIONS": {
+            **_AZURE_COMMON,
+            "azure_container": AZURE_PRIVATE_CONTAINER,
+            "location": PRIVATE_MEDIA_LOCATION,
+            "expiration_secs": PRIVATE_MEDIA_URL_EXPIRE_SECONDS,
+            # Never a CDN for private media: an edge cache is a copy of the file
+            # sitting outside every permission check.
+            "custom_domain": None,
+        },
+    },
+{%- if cookiecutter.static_storage == "cloud" %}
+    "staticfiles": {
+        "BACKEND": "apps.core.storage.StaticCloudStorage",
+        "OPTIONS": {
+            **_AZURE_COMMON,
+            "azure_container": AZURE_STATIC_CONTAINER,
+            "location": STATIC_LOCATION,
+            # The site's own CSS and JS: public by definition, and their URLs are
+            # baked into a manifest and into compiled CSS, so they must not expire.
+            # This container - and only this container - is opened for blob read.
+            "expiration_secs": None,
+            "custom_domain": AZURE_CUSTOM_DOMAIN,
+            # Content-hashed names, so overwriting is a no-op rather than a risk.
+            "overwrite_files": True,
+        },
+    },
+{%- else %}
+    "staticfiles": {
+        # Hashed filenames: cache-busting without hand-stamped ?v= query strings.
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+{%- endif %}
+}
+{%- endif %}
+{%- endif %}
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+
+
+# Asset pipeline (django-compressor) --------------------------------------------
+#
+# WhiteNoise already gzips, brotlis and cache-busts, so this exists for the case it
+# does not cover: a SASS/LESS theme compiled without a Node toolchain, via
+# COMPRESS_PRECOMPILERS. See docs/14-decisions.md.
+COMPRESS_ENABLED = env.bool("COMPRESS_ENABLED", default=not DEBUG)
+# Offline only in production, where the build step runs. Rendering with
+# COMPRESS_OFFLINE on and no manifest raises on every page, which is the right
+# failure - but it must not happen in development or in the test suite.
+COMPRESS_OFFLINE = False
+COMPRESS_FILTERS = {
+    "css": [
+        # Rewrites url() references to absolute paths before concatenation, which
+        # is the whole reason a naive "cat *.css" breaks background images.
+        "compressor.filters.css_default.CssAbsoluteFilter",
+        "compressor.filters.cssmin.rCSSMinFilter",
+    ],
+    "js": ["compressor.filters.jsmin.rJSMinFilter"],
+}
+{%- if cookiecutter.static_storage == "cloud" %}
+# Compressed output belongs next to the static files it references, in the bucket.
+COMPRESS_STORAGE = "apps.core.storage.StaticCloudStorage"
+{%- endif %}
+{%- endif %}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -718,6 +1053,45 @@ CITIES_LIGHT_INCLUDE_COUNTRIES = None
 {%- endif %}
 {%- endif %}
 
+
+# Audit trail ------------------------------------------------------------------
+# Who changed what, when - the questionnaire's "activity and audit logs for
+# administrator actions". This is an audit trail, NOT a revisions system: it
+# records field-level diffs, so a change can be reconstructed, but it does not
+# offer one-click rollback the way page revisions do.
+#
+# Models are listed explicitly rather than tracking everything: an audit log that
+# records every session and every rendition row is one nobody reads, and it grows
+# without limit. Add editorially-owned and personal-data models here.
+#
+# Retention is at least 12 months (security baseline). Prune older entries with a
+# scheduled job rather than letting the table grow forever.
+AUDITLOG_INCLUDE_TRACKING_MODELS = (
+{%- if cookiecutter.forms_suite == "yes" %}
+    # exclude_fields matters here: without it the audit table stores a second
+    # copy of the visitor's message and contact details, so a table created for
+    # accountability quietly becomes another place personal data has to be
+    # found, secured and erased. We record THAT a submission changed and who
+    # changed it, not the contents again.
+    {
+        "model": "contact.ContactSubmission",
+        "exclude_fields": ["message", "attachment", "phone", "email", "full_name"],
+    },
+{%- endif %}
+{%- if cookiecutter.newsletter == "yes" %}
+    {"model": "newsletter.Subscriber", "exclude_fields": ["unsubscribe_token"]},
+{%- endif %}
+{%- if cookiecutter.notifications_app == "yes" %}
+    # Editorial content, not personal data: track it in full, because "who
+    # changed the wording of the e-mail customers receive" is the question this
+    # log exists to answer.
+    "notifications.NotificationTemplate",
+    "notifications.NotificationRecipient",
+{%- endif %}
+{%- if cookiecutter.countries_app == "cities" %}
+    "cities.Country",
+{%- endif %}
+)
 
 # Admin ------------------------------------------------------------------------
 

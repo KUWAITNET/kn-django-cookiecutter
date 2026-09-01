@@ -67,7 +67,15 @@ change: see [14-decisions.md](14-decisions.md).
 {%- else %}
      +--> in-process cache    development only; per worker, not shared
 {%- endif %}
+{%- if cookiecutter.media_storage == "filesystem" %}
      +--> filesystem          MEDIA_ROOT (public) and PRIVATE_MEDIA_ROOT (personal data)
+{%- elif cookiecutter.media_storage == "s3" %}
+     +--> S3                  media/ prefix (public) and private/ prefix (personal data)
+{%- elif cookiecutter.media_storage == "gcs" %}
+     +--> Cloud Storage       media/ prefix (public) and private/ prefix (personal data)
+{%- else %}
+     +--> Blob Storage        media/ prefix (public) and private/ prefix (personal data)
+{%- endif %}
      +--> SMTP relay          all outgoing mail, every send logged
 ```
 
@@ -107,16 +115,22 @@ That boundary determines who can fix what.
 | Component | Holds | Personal data? | Backed up |
 |---|---|---|---|
 | PostgreSQL | All content, users, sessions, e-mail log{% if cookiecutter.newsletter == "yes" %}, newsletter subscribers{% endif %} | Yes | [08](08-backup-restore.md) |
+{%- if cookiecutter.media_storage == "filesystem" %}
 | `MEDIA_ROOT` | Public uploads (images, documents) | Normally no | [08](08-backup-restore.md) |
 | `PRIVATE_MEDIA_ROOT` | Uploads containing personal data | **Yes** | [08](08-backup-restore.md) |
+{%- else %}
+| Object store, `media/` prefix | Public uploads (images, documents) | Normally no | [08](08-backup-restore.md) — by bucket versioning, not by copying |
+| Object store, `private/` prefix | Uploads containing personal data | **Yes** | [08](08-backup-restore.md) — by bucket versioning, not by copying |
+{%- endif %}
 {%- if cookiecutter.cache == "redis" %}
 | Redis | Cache entries, rate-limit counters | No (must never hold personal data) | Not backed up; rebuilt on restart |
 {%- endif %}
 | Secrets store | `SECRET_KEY`, database and mail credentials | — | [08](08-backup-restore.md) |
 
-Files containing personal data are never served from `MEDIA_URL`. They live under
-`PRIVATE_MEDIA_ROOT` and are served only through the permission-checked private-media view mounted
-at `/private-media/<path>`.
+Files containing personal data are never served from a public URL. They live {% if cookiecutter.media_storage == "filesystem" %}under
+`PRIVATE_MEDIA_ROOT`{% else %}in a separate
+private storage, in a store that is not public-read,{% endif %} and are served only through the permission-checked
+private-media view mounted at `/private-media/<path>`.
 
 ## Environments
 

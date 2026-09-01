@@ -180,7 +180,12 @@ working".
 
 ```bash
 df -h
+{%- if cookiecutter.media_storage == "filesystem" %}
 du -sh /srv/{{ cookiecutter.project_slug }}/media /srv/{{ cookiecutter.project_slug }}/private-media
+{%- else %}
+# Media is in the object store, so it never fills this disk. Its size and growth
+# are tracked in the provider's console - see 03-infrastructure.md.
+{%- endif %}
 ```
 
 | Symptom | Most likely cause | First response |
@@ -188,7 +193,11 @@ du -sh /srv/{{ cookiecutter.project_slug }}/media /srv/{{ cookiecutter.project_s
 | **Every page shows an error page** after a release | A migration did not apply, a required configuration value is missing, or the release is faulty | Read the newest error for the exact exception. Confirm the migration state with `showmigrations`. If the cause is not obvious inside the agreed rollback window, roll back ([07-deployment.md](07-deployment.md)) and investigate on staging |
 | **The site is unreachable** — timeout or gateway error | The application service is not running, or the server is out of disk or memory | Check disk, then service status, then restart. Read the log from just before the failure: the reason is almost always the last few lines before the process stopped |
 | **Forms submit but no e-mail arrives** | Mail credentials changed, the message was rejected as spam, or the relay is refusing the sender | Open the e-mail log in the administration interface — every send is recorded there with its status, which distinguishes "never attempted" from "attempted and rejected". Then verify the credentials and the sending domain's mail authentication records. Check the recipient's spam folder before concluding the site is at fault |
+{%- if cookiecutter.media_storage == "filesystem" %}
 | **Uploaded images or documents do not appear**, or return a permission error | Ownership or permissions on the upload directory, a full disk, or a changed path after a server move | Confirm the file exists where the application expects it. Check ownership and permissions. Check disk space. Confirm the web server serves that directory — and confirm it does **not** serve `private-media` |
+{%- else %}
+| **Uploaded images or documents do not appear**, or return a permission error | Object-store credentials expired or were rotated, the identity lost a permission, or the bucket name changed | Run `manage.py check` — `core.W006` reports missing configuration. Then confirm the deployed identity can still read and write the bucket. An editorial image that 403s usually means a signed URL was cached past its expiry, not that the object is gone |
+{%- endif %}
 | **The browser warns the site is not secure** | Certificate renewal failed silently | Check expiry and issuer, run the renewal manually, reload the web server. Then fix the automation, and confirm the expiry alert fired — if it did not, that is a second fault to fix |
 
 Also specific to this project:

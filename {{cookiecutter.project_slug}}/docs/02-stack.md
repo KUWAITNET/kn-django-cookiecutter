@@ -27,6 +27,13 @@ uv run python -c "import django; print(django.get_version())"
 | Wagtail (content management system) | 7.4 LTS | November 2027 | Long-term support release. `wagtail>=7.4,<7.5` |
 {%- endif %}
 | PostgreSQL | 17 | November 2029 | The only supported database for this project |
+{%- if cookiecutter.media_storage == "s3" %}
+| Object storage | Amazon S3 (or an S3-compatible store) | — | Uploaded media{% if cookiecutter.static_storage == "cloud" %} and collected static files{% endif %}. Not public-read — see [03-infrastructure.md](03-infrastructure.md) |
+{%- elif cookiecutter.media_storage == "gcs" %}
+| Object storage | Google Cloud Storage | — | Uploaded media{% if cookiecutter.static_storage == "cloud" %} and collected static files{% endif %}. Not public-read — see [03-infrastructure.md](03-infrastructure.md) |
+{%- elif cookiecutter.media_storage == "azure" %}
+| Object storage | Azure Blob Storage | — | Uploaded media{% if cookiecutter.static_storage == "cloud" %} and collected static files{% endif %}. Not public-read — see [03-infrastructure.md](03-infrastructure.md) |
+{%- endif %}
 {%- if cookiecutter.cache == "redis" %}
 | Redis | 7 | TODO: confirm with the hosting provider | Cache, rate-limit and throttle counters |
 {%- endif %}
@@ -37,7 +44,7 @@ uv run python -c "import django; print(django.get_version())"
 {%- endif %}
 | Application server | gunicorn 23.x | — | WSGI, 3 workers by default |
 | Operating system | TODO: e.g. Ubuntu 24.04 LTS | TODO: | See [03-infrastructure.md](03-infrastructure.md) |
-| Node.js | Not used | — | There is no JavaScript build step; no Node at runtime or build time |
+| Node.js | Not used | — | There is no JavaScript build step; no Node at runtime or build time{% if cookiecutter.asset_pipeline == "compressor" %}. `django-compressor` runs in Python and is what keeps it that way{% endif %} |
 
 The two dates that matter most are Django's and{% if cookiecutter.stack == "wagtail" %} the content management system's{% else %} Python's{% endif %}. Put them in a calendar. An upgrade planned six
 months out is a sprint; the same upgrade started after support ends is an incident.
@@ -64,7 +71,17 @@ decoration; each has a job.
 | `django-environ` | Reads configuration from the environment (12-factor) |
 | `Pillow` | Image handling and server-side re-encoding of uploads |
 | `gunicorn` | WSGI application server |
-| `whitenoise` | Serves hashed static files from the application process |
+| `whitenoise` | Serves hashed static files from the application process{% if cookiecutter.static_storage == "cloud" %} — still installed, but static files are served from the object store, so it handles nothing in production{% endif %} |
+{%- if cookiecutter.media_storage == "s3" %}
+| `django-storages[s3]` | Media in Amazon S3 (or an S3-compatible store). The `[s3]` extra is what pulls in `boto3`; no other cloud SDK is installed |
+{%- elif cookiecutter.media_storage == "gcs" %}
+| `django-storages[google]` | Media in Google Cloud Storage. The `[google]` extra is what pulls in `google-cloud-storage`; no other cloud SDK is installed |
+{%- elif cookiecutter.media_storage == "azure" %}
+| `django-storages[azure]` | Media in Azure Blob Storage. The `[azure]` extra is what pulls in `azure-storage-blob`; no other cloud SDK is installed |
+{%- endif %}
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+| `django-compressor` | Concatenates and minifies CSS/JS at build time. **Offline compression: `manage.py compress --force` must run on every deploy** — see [07-deployment.md](07-deployment.md) |
+{%- endif %}
 | `django-unfold` | Administration interface skin — the KUWAITNET standard wherever `django.contrib.admin` is mounted |
 | `django-csp` | Content-Security-Policy with a per-request nonce |
 | `django-permissions-policy` | `Permissions-Policy` response header |
