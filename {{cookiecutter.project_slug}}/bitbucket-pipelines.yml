@@ -76,7 +76,7 @@ pipelines:
           - step: *tests
           - step: *deploy_checks
 
-# Before go-live, run the OWASP ZAP baseline scan against staging as part of the
+# Before go-live, run the ZAP baseline scan against staging as part of the
 # security pass (security-baseline.md section 18):
 #   docker run --rm -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
 #     -t https://staging.{{ cookiecutter.domain_name }} -r zap-report.html

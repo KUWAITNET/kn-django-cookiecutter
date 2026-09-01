@@ -63,10 +63,20 @@ dependencies = [
 {%- endif %}
     # E-mail: post-office wraps the real transport so every send is logged and auditable.
     "django-post-office>=3.9",
-{%- if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app == "cities" %}
+    # Country/region/city reference data. The concrete models live in apps/cities.
     "django-cities-light>=3.10",
+{%- elif cookiecutter.countries_app == "django_countries" %}
+    # The KUWAITNET fork of django-countries, one commit ahead of upstream 9.0.0:
+    # the country-list policy is applied to the shipped DATA, so no queryset can
+    # reintroduce what it removes. The ref is a branch, but uv pins the exact
+    # commit in uv.lock - do not "fix" that by loosening the lock. Because it is a
+    # fork, upstream updates are a named maintenance task; see docs/14-decisions.md.
+    "django-countries @ git+https://github.com/KUWAITNET/django-countries.git@main",
 {%- endif %}
-{%- if cookiecutter.countries_app == "yes" or cookiecutter.forms_suite == "yes" %}
+{%- if cookiecutter.countries_app != "none" or cookiecutter.forms_suite == "yes" %}
+    # Also the source of the dial codes when the countries backend has no table of
+    # its own: apps/core/countries.py reads country_code_for_region() from it.
     "django-phonenumber-field[phonenumbers]>=8.0",
 {%- endif %}
 {%- if cookiecutter.api != "none" %}

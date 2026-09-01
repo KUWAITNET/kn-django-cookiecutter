@@ -17,7 +17,7 @@
   "use_2fa": ["yes", "no"],
   "spam_protection": ["turnstile_honeypot", "honeypot", "none"],
   "rate_limiting": ["yes", "no"],
-  "countries_app": ["yes", "no"],
+  "countries_app": ["django_countries", "cities", "none"],
   "notifications_app": ["yes", "no"],
   "newsletter": ["yes", "no"],
   "forms_suite": ["yes", "no"],
@@ -83,9 +83,10 @@
       "no": "No (requires a documented exception)"
     },
     "countries_app": {
-      "__prompt__": "Include the countries/cities app (editor-toggleable country list, phone codes, nationalities)?",
-      "yes": "Yes",
-      "no": "No"
+      "__prompt__": "Country data backend (apps/core/countries.py is the same contract either way)",
+      "django_countries": "KUWAITNET django-countries fork: a country field and choices, working immediately - no tables, no import, and the country-list policy lives in the data",
+      "cities": "apps/cities on django-cities-light: editor-toggleable countries, dial codes, nationalities, translated names, regions and cities - empty until 'manage.py cities_light' imports the GeoNames data",
+      "none": "No country data: forms carry no country field, and one international phone input instead of a dial-code select"
     },
     "notifications_app": {
       "__prompt__": "Include the notifications app (admin-editable e-mail templates, per-language sending, e-mail log)?",

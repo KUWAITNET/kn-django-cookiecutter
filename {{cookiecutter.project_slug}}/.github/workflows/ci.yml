@@ -75,5 +75,5 @@ jobs:
           SECRET_KEY: ci-only-not-a-secret
           ALLOWED_HOSTS: {{ cookiecutter.domain_name }}
 
-# Before go-live, run the OWASP ZAP baseline scan against staging as part of the
+# Before go-live, run the ZAP baseline scan against staging as part of the
 # security pass (security-baseline.md section 18).

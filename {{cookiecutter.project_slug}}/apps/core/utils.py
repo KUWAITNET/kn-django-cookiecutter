@@ -163,10 +163,11 @@ def language_alternatives(request, page=None) -> list[dict]:
             name = name_local = str(label)
             bidi = False
         path = url_in_language(request, code, page=page)
-        if path and request is not None:
-            url = request.build_absolute_uri(path)
-        else:
-            url = absolute_url(path) if path else ""
+        # Built from BASE_URL, never from the request host. rel=canonical and
+        # og:url are absolute against BASE_URL, and an hreflang set that pointed at
+        # a different origin would contradict them - two conflicting signals about
+        # which URL is authoritative, which is worse than emitting neither.
+        url = absolute_url(path) if path else ""
         alternatives.append(
             {
                 "code": code,

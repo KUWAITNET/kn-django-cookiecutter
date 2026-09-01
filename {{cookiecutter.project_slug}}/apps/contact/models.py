@@ -26,6 +26,9 @@ from wagtail.admin.panels import FieldPanel, MultiFieldPanel
 from wagtail.fields import RichTextField
 from wagtail.rich_text import expand_db_html
 
+{%- if cookiecutter.countries_app != "none" %}
+from apps.core.countries import country_display, country_model_field
+{%- endif %}
 from apps.core.models import BasePage{% if cookiecutter.multisite == "multi" %}, SiteScopedModel{% endif %}
 from apps.core.validators import SecureFileField
 {%- else %}
@@ -34,6 +37,9 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from phonenumber_field.modelfields import PhoneNumberField
 
+{%- if cookiecutter.countries_app != "none" %}
+from apps.core.countries import country_display, country_model_field
+{%- endif %}
 from apps.core.validators import SecureFileField
 {%- endif %}
 

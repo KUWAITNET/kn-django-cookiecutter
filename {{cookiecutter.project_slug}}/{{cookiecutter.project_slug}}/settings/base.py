@@ -65,10 +65,12 @@ INSTALLED_APPS = [
     "unfold.contrib.filters",
     "unfold.contrib.forms",
     # Third party
-{%- if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app == "cities" %}
     "cities_light",
+{%- elif cookiecutter.countries_app == "django_countries" %}
+    "django_countries",
 {%- endif %}
-{%- if cookiecutter.countries_app == "yes" or cookiecutter.forms_suite == "yes" %}
+{%- if cookiecutter.countries_app != "none" or cookiecutter.forms_suite == "yes" %}
     "phonenumber_field",
 {%- endif %}
 {%- if cookiecutter.use_2fa == "yes" %}
@@ -105,7 +107,7 @@ INSTALLED_APPS = [
 {%- endif %}
     # Project
     "apps.core",
-{%- if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app == "cities" %}
     "apps.cities",
 {%- endif %}
 {%- if cookiecutter.notifications_app == "yes" %}
@@ -679,15 +681,27 @@ CORS_PREFLIGHT_MAX_AGE = 3600
 # The schema UI is served on staging and gated in production (see production.py).
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=True)
 {%- endif %}
-{% if cookiecutter.countries_app == "yes" %}
+{% if cookiecutter.countries_app != "none" %}
 
 # Countries -----------------------------------------------------------------------
+# Whichever backend is selected, apps.core.countries is the only module the rest of
+# the project talks to, so a form or a serializer never learns which one this is.
+{%- if cookiecutter.countries_app == "cities" %}
 CITIES_LIGHT_APP_NAME = "cities"
+{%- endif %}
 
 # Countries withheld from public choice lists, as ISO 3166-1 alpha-2 codes.
 # Env-driven so the policy is configuration rather than a literal buried in a
+{%- if cookiecutter.countries_app == "cities" %}
 # queryset: Country.objects.selectable() is the only reader.
+{%- else %}
+# queryset. Normally empty on this backend: the KUWAITNET django-countries fork
+# already applies the country-list policy to the data it ships, so there is
+# nothing left for a runtime filter to remove. It stays available for the
+# per-client exclusions a commercial decision produces later.
+{%- endif %}
 COUNTRY_EXCLUDED_CODES = env.list("COUNTRY_EXCLUDED_CODES", default=[])
+{%- if cookiecutter.countries_app == "cities" %}
 
 # The concrete country/region/city models live in apps.cities, so cities_light's
 # own migrations must not run: they would try to alter models that no longer
@@ -701,6 +715,7 @@ CITIES_LIGHT_TRANSLATION_LANGUAGES = ["ar", "en"]
 CITIES_LIGHT_TRANSLATION_LANGUAGES = ["en"]
 {%- endif %}
 CITIES_LIGHT_INCLUDE_COUNTRIES = None
+{%- endif %}
 {%- endif %}
 
 
