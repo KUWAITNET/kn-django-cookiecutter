@@ -96,7 +96,12 @@ def merge_template_variant() -> None:
 merge_template_variant()
 
 # Optional applications.
-if COUNTRIES_APP != "yes":
+# apps/cities is the reference-data backend only. On the django-countries backend
+# the country list comes from the package, and on "none" there is none at all;
+# either way this app would be four unused models and a migration to maintain.
+# apps/core/countries.py stays in every case - it is the contract the rest of the
+# project imports, and it renders a real implementation for all three values.
+if COUNTRIES_APP != "cities":
     remove(str(APPS / "cities"))
 
 if NOTIFICATIONS_APP != "yes":
@@ -185,6 +190,11 @@ if IS_WAGTAIL or IS_API_ONLY:
     remove(str(APPS / "contact" / "urls.py"))
 if IS_API_ONLY:
     remove(str(APPS / "contact" / "tests" / "test_views.py"))
+
+# contact/translation.py is guarded on the CMS stack AND bilingual, so it renders
+# empty for a plain-Django project.
+if not IS_WAGTAIL:
+    remove(str(APPS / "contact" / "translation.py"))
 
 # API-only projects have no server-rendered surface at all.
 if IS_API_ONLY:

@@ -58,7 +58,7 @@ actual value; an empty one makes the whole set look like a form nobody filled in
   reversible (revision history, soft deletion, or an audit trail), so an accidental edit is not a
   restore-from-backup event.
 {%- endif %}
-{%- if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app == "cities" %}
 - **Country and city reference data** is imported, not authored. Rows carry an active flag so
   editors can control which countries appear in selection lists without deleting reference data
   that existing records point at. Never delete a country row; deactivate it.

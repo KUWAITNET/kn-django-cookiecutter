@@ -6,8 +6,15 @@ documented cities-light "customising models" path: ``CITIES_LIGHT_APP_NAME`` in
 settings names this app's *label* (``cities``), and cities-light then looks here
 for all four concrete models instead of creating its own.
 
-django-countries is deliberately not used: it ships a frozen, code-only list with
-no dial codes, no per-project activation and no place to hang a demonym.
+This backend was chosen over the KUWAITNET django-countries fork - the default,
+which needs no tables and no import - because this project needs at least one of:
+editor-toggleable countries, dial codes, nationalities, translated names, or
+regions and cities. The fork ships a frozen, code-only list with none of those.
+See docs/14-decisions.md.
+
+Nothing outside this app imports these models directly. ``apps.core.countries`` is
+the contract every form, admin and serializer goes through, so which backend a
+project has is a fact about one module rather than about every consumer.
 
 Rows come from GeoNames via ``manage.py cities_light``. Everything except
 ``is_active`` and ``display_name`` is imported data and must not be hand-edited.

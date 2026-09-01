@@ -115,7 +115,7 @@ Answer the prompts, or accept the defaults — the defaults are the KUWAITNET st
 | `use_2fa` | `yes` | `yes`, `no` | `wagtail-2fa` or `django-otp`, enforced for every administrative account |
 | `spam_protection` | `turnstile_honeypot` | `turnstile_honeypot`, `honeypot`, `none` | Cloudflare Turnstile plus a honeypot, degrading to honeypot-only with no key |
 | `rate_limiting` | `yes` | `yes`, `no` | `django-axes` lockout plus `django-ratelimit` on public POST endpoints |
-| `countries_app` | `yes` | `yes`, `no` | Countries and cities with an editor-toggleable active list, phone codes and nationalities |
+| `countries_app` | `django_countries` | `django_countries`, `cities`, `none` | Which country backend `apps/core/countries.py` implements. `django_countries` = the KUWAITNET fork, installed from git: a country field and choices with no tables and no import, and the country-list policy applied in the data. `cities` = `django-cities-light` in `apps/cities`: editor-toggleable countries, dial codes, nationalities, translated names, regions and cities — empty until the GeoNames import has run |
 | `notifications_app` | `yes` | `yes`, `no` | Admin-editable e-mail templates, per-language sending, and an e-mail log |
 | `newsletter` | `yes` | `yes`, `no` | Subscribers, unsubscribe tokens, an admin composer |
 | `forms_suite` | `yes` | `yes`, `no` | An example contact form: validated, rate-limited, spam-protected, with secure uploads |

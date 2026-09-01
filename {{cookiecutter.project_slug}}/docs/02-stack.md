@@ -82,11 +82,13 @@ decoration; each has a job.
 | `requests` | Server-side verification of the Turnstile token |
 {%- endif %}
 | `django-post-office` | Wraps the real mail transport so every send is logged and auditable |
-{%- if cookiecutter.countries_app == "yes" %}
-| `django-cities-light` | Country and city reference data |
+{%- if cookiecutter.countries_app == "cities" %}
+| `django-cities-light` | Country, region and city reference data, imported from GeoNames into `apps/cities` |
+{%- elif cookiecutter.countries_app == "django_countries" %}
+| `django-countries` (**KUWAITNET fork**) | The country list and the country field. Installed from `git+https://github.com/KUWAITNET/django-countries.git@main`, **not from PyPI** — see [14-decisions.md](14-decisions.md) |
 {%- endif %}
-{%- if cookiecutter.countries_app == "yes" or cookiecutter.forms_suite == "yes" %}
-| `django-phonenumber-field[phonenumbers]` | Validated, normalised telephone numbers |
+{%- if cookiecutter.countries_app != "none" or cookiecutter.forms_suite == "yes" %}
+| `django-phonenumber-field[phonenumbers]` | Validated, normalised telephone numbers{% if cookiecutter.countries_app == "django_countries" %}, and the source of the dial codes offered on public forms{% endif %} |
 {%- endif %}
 {%- if cookiecutter.languages == "en_ar" %}
 {%- if cookiecutter.stack == "wagtail" %}

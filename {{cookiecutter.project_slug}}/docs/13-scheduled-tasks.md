@@ -131,7 +131,7 @@ The trade-off is that a slow or unreachable mail relay slows the request that tr
 That is the accepted cost; see [14-decisions.md](14-decisions.md). If this project later sends bulk
 mail, that decision has to be revisited rather than worked around.
 
-{% if cookiecutter.countries_app == "yes" -%}
+{% if cookiecutter.countries_app == "cities" -%}
 ## One-off imports
 
 Country and city reference data is imported once, and re-run only when the source data changes. It

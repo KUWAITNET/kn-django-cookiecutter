@@ -11,7 +11,7 @@ from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from wagtail import hooks
 from wagtail.admin.panels import FieldPanel, MultiFieldPanel, Panel
-from wagtail.admin.ui.tables import DateColumn
+from wagtail.admin.ui.tables import {% if cookiecutter.countries_app != "none" %}Column, {% endif %}DateColumn
 
 from apps.contact.models import ContactSubmission
 from apps.core.viewsets import NoAddModelViewSet
@@ -72,8 +72,10 @@ class ContactSubmissionViewSet(NoAddModelViewSet):
     list_display = [
         "full_name",
         "email",
-{%- if cookiecutter.countries_app == "yes" %}
-        "country",
+{%- if cookiecutter.countries_app != "none" %}
+        # The readable name, not the stored value: what a country is stored as
+        # differs per backend and no admin surface should have to know.
+        Column("country_name", label=_("Country")),
 {%- endif %}
         "enquiry_type",
         "subject",
@@ -84,7 +86,7 @@ class ContactSubmissionViewSet(NoAddModelViewSet):
     ]
     list_filter = [
         "enquiry_type",
-{%- if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app != "none" %}
         "country",
 {%- endif %}
 {%- if cookiecutter.multisite == "multi" %}
@@ -97,8 +99,8 @@ class ContactSubmissionViewSet(NoAddModelViewSet):
         "company_name",
         "email",
         "phone",
-{%- if cookiecutter.countries_app == "yes" %}
-        "country",
+{%- if cookiecutter.countries_app != "none" %}
+        "country_name",
 {%- endif %}
         "enquiry_type",
         "subject",
@@ -118,7 +120,7 @@ class ContactSubmissionViewSet(NoAddModelViewSet):
         ),
         MultiFieldPanel(
             [
-{%- if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app != "none" %}
                 FieldPanel("country", read_only=True),
 {%- endif %}
                 FieldPanel("enquiry_type", read_only=True),

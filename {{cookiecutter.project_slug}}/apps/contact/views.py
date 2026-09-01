@@ -170,8 +170,8 @@ def notification_context(submission) -> dict:
         # Isolated so a "+965..." number does not get reordered by the
         # bidirectional algorithm inside an Arabic paragraph.
         "phone": ltr_isolate(str(submission.phone)) if submission.phone else "",
-{%- if cookiecutter.countries_app == "yes" %}
-        "country": submission.country.localized_name,
+{%- if cookiecutter.countries_app != "none" %}
+        "country": submission.country_name,
 {%- endif %}
         "type": submission.get_enquiry_type_display(),
         "subject": submission.subject,
@@ -193,7 +193,7 @@ def _built_in_notification(submission):
         (_("Company"), context["company"]),
         (_("E-mail"), context["email"]),
         (_("Phone"), context["phone"]),
-{%- if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app != "none" %}
         (_("Country"), context["country"]),
 {%- endif %}
         (_("Type"), context["type"]),

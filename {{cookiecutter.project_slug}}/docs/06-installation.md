@@ -122,7 +122,7 @@ suite runs against a realistic content set rather than an empty database.
 
 **Never run it against production.** It is for development and test databases.
 
-{% if cookiecutter.countries_app == "yes" -%}
+{% if cookiecutter.countries_app == "cities" -%}
 The country and city reference data is imported separately and takes a few minutes:
 
 ```bash

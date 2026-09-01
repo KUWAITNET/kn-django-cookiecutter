@@ -126,8 +126,8 @@ Everything is a `make` target. `make` with no argument lists them.
 {%- if cookiecutter.stack == "wagtail" %}
 | `publish_scheduled` | — | Publishes and expires pages at their set times; runs on cron |
 {%- endif %}
-{%- if cookiecutter.countries_app == "yes" %}
-| `cities_light` | — | One-off import of country and city reference data |
+{%- if cookiecutter.countries_app == "cities" %}
+| `cities_light` | — | One-off import of country and city reference data. **The country list is empty until this has run** |
 {%- endif %}
 
 TODO: add every project-specific management command here, with the arguments an operator needs.
@@ -138,8 +138,8 @@ Scheduled ones also belong in [`docs/13-scheduled-tasks.md`](docs/13-scheduled-t
 ```text
 apps/                       every first-party app; a Django app never sits at the repo root
   core/                     shared, project-wide code: validators, storage, context, views
-{%- if cookiecutter.countries_app == "yes" %}
-  cities/                   country and city reference data
+{%- if cookiecutter.countries_app == "cities" %}
+  cities/                   country and city reference data (apps/core/countries.py is the contract)
 {%- endif %}
 {%- if cookiecutter.notifications_app == "yes" %}
   notifications/            admin-editable e-mail templates and the send log

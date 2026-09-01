@@ -230,6 +230,63 @@ Serializers declare explicit fields: `fields = "__all__"` silently publishes eve
 the model later.
 {%- endif %}
 
+{% if cookiecutter.countries_app == "django_countries" -%}
+### Countries come from the KUWAITNET fork of `django-countries`
+
+**Context.** Every project needs a country field, and the country list a KUWAITNET site offers is
+subject to a company policy. A policy expressed as a runtime filter is one forgotten `.exclude()`
+away from not applying — which is what happened in the project this template came from, where the
+same filter was copy-pasted into five forms and one copy had already lost a clause.
+**Decision.** `django-countries` is installed from
+`git+https://github.com/KUWAITNET/django-countries.git@main` — a public fork of
+`SmileyChris/django-countries`, one commit ahead of upstream 9.0.0. The policy is applied to the
+shipped **data**, so no queryset can reintroduce what it removes. `uv.lock` records the exact commit
+even though the ref is a branch, so builds stay reproducible. There is no table and no import step:
+the list works the moment `uv sync` finishes.
+**Alternatives considered.** The PyPI package plus a runtime exclusion (the policy becomes a filter
+someone can forget); the `cities_light` app (four models and a GeoNames import, for a project that
+needs only a country field); a hand-written choices list (drifts, and nobody owns it).
+**Consequences.** `COUNTRY_EXCLUDED_CODES` still exists and is normally **empty** — it is for
+per-client exclusions on top of the shipped list, not for the company policy. Because this is a
+fork, upstream security and data updates do not arrive automatically: rebasing it onto a new
+upstream release is a named maintenance task, and the fork is a row in the project's third-party
+register. Do not "fix" the `@main` ref by loosening the lock file. Every consumer goes through
+`apps/core/countries.py`, so moving to the `cities` backend later is a change to that one module
+plus a migration, not a change to every form.
+{%- elif cookiecutter.countries_app == "cities" -%}
+### Countries come from `cities_light`, with the selection policy in one queryset
+
+**Context.** This project needs more than a country name: editor-toggleable countries, dial codes,
+nationalities, translated names, or regions and cities.
+**Decision.** `django-cities-light` with the concrete models moved into `apps/cities`
+(`CITIES_LIGHT_APP_NAME = "cities"`), so the country table can carry an `is_active` flag and an
+editor override for the name. The selection policy lives in exactly one place,
+`Country.objects.selectable()`, and `apps/core/countries.py` is the only module the rest of the
+project reaches it through.
+**Alternatives considered.** The KUWAITNET fork of `django-countries` — no tables, no import step,
+and the country-list policy already applied in the data, but no dial codes, no per-project
+activation and nowhere to hang a demonym. That is the default for projects needing only a country
+field.
+**Consequences.** The country list is **empty until `manage.py cities_light` has imported the
+GeoNames data**, which is a step on every environment, and four concrete models exist whether or not
+the project ever imports a city. Nothing may re-implement the `selectable()` filter: anything that
+needs "the countries a visitor may pick" calls the manager. The imported columns belong to the
+importer, and a hand-edited value is overwritten by the next run.
+{%- else -%}
+### No country data — a deliberate omission
+
+**Context.** This project was generated without a countries backend.
+**Decision.** No form carries a country field, and the phone field is a single international input
+validated with `phonenumbers` rather than a dial-code select plus a national number.
+**Alternatives considered.** The KUWAITNET fork of `django-countries` (the default: a country field
+and choices, with no tables and no import step); the `cities_light` app (for dial codes,
+nationalities, translated names and regions).
+**Consequences.** Adding countries later means choosing a backend and implementing
+`apps/core/countries.py` for it — that one module is what would change, because nothing else imports
+a country library directly. Until then a visitor must type the country calling code themselves, and
+a submission records no country.
+{%- endif %}
+
 ### Migrations are generated at bootstrap, not shipped by the template
 
 **Context.** The model set depends on which options the project was generated with, so a shipped
@@ -357,6 +414,16 @@ surprised.
 {%- endif %}
 {%- if cookiecutter.rate_limiting != "yes" %}
 - **No login lockout and no rate limits.**
+{%- endif %}
+{%- if cookiecutter.countries_app == "cities" %}
+- **The country list is empty until the GeoNames import has run** on that environment. A fresh
+  database renders an empty country dropdown, which reads as a bug and is not one.
+{%- elif cookiecutter.countries_app == "django_countries" %}
+- **The country list comes from a fork**, so upstream data and security updates arrive only when
+  somebody rebases it. See the decision above.
+{%- else %}
+- **No country data.** Forms carry no country field, and a phone number must be typed with its
+  country calling code.
 {%- endif %}
 - **Log correlation.** Log lines carry no request identifier, so relating a user's report to a
   specific request is manual. See [09-monitoring.md](09-monitoring.md).

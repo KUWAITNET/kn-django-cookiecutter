@@ -40,7 +40,7 @@ database sees failures that are not real.
 {{ cookiecutter.project_slug }}/
 ├── apps/                       every first-party app; a Django app never sits at the repo root
 │   ├── core/                   shared, project-wide code
-{%- if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app == "cities" %}
 │   ├── cities/                 country and city reference data
 {%- endif %}
 {%- if cookiecutter.notifications_app == "yes" %}

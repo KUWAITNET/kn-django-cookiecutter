@@ -128,6 +128,18 @@ development and would silently swallow production mail.
 | `SENTRY_TRACES_SAMPLE_RATE` | Performance tracing. Default `0.0`. Raise to `0.05`–`0.1` for a bounded investigation and **turn it back down** — a rate left at `1.0` exhausts the quota within days, after which errors stop being delivered. | No | `0.0` | No |
 | `SENTRY_SEND_DEFAULT_PII` | Attaches request bodies, cookies, user e-mail and client IP to events. Default `False` and stays false unless the client agrees in writing. | No | `False` | No |
 {% endif %}
+{%- if cookiecutter.countries_app != "none" %}
+## Countries
+
+| Variable | Purpose | Required | Example | Secret |
+|---|---|---|---|---|
+{%- if cookiecutter.countries_app == "cities" %}
+| `COUNTRY_EXCLUDED_CODES` | ISO 3166-1 alpha-2 codes withheld from every public country list. Read only by `Country.objects.selectable()`, which every country and dial-code list on the site goes through. | No | `AA,BB` | No |
+{%- else %}
+| `COUNTRY_EXCLUDED_CODES` | ISO 3166-1 alpha-2 codes withheld from every public country list. **Normally empty**: the KUWAITNET `django-countries` fork applies the country-list policy to the data it ships, so this is only for a per-client exclusion on top of that. | No | `AA,BB` | No |
+{%- endif %}
+
+{% endif %}
 ## Production transport security
 
 These have safe defaults in `settings/production.py`. Override only with a reason recorded in

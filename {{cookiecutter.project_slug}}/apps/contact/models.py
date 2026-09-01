@@ -26,9 +26,9 @@ from wagtail.admin.panels import FieldPanel, MultiFieldPanel
 from wagtail.fields import RichTextField
 from wagtail.rich_text import expand_db_html
 
-{%- if cookiecutter.countries_app != "none" %}
+{% if cookiecutter.countries_app != "none" -%}
 from apps.core.countries import country_display, country_model_field
-{%- endif %}
+{% endif -%}
 from apps.core.models import BasePage{% if cookiecutter.multisite == "multi" %}, SiteScopedModel{% endif %}
 from apps.core.validators import SecureFileField
 {%- else %}
@@ -37,9 +37,9 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from phonenumber_field.modelfields import PhoneNumberField
 
-{%- if cookiecutter.countries_app != "none" %}
+{% if cookiecutter.countries_app != "none" -%}
 from apps.core.countries import country_display, country_model_field
-{%- endif %}
+{% endif -%}
 from apps.core.validators import SecureFileField
 {%- endif %}
 
@@ -96,17 +96,10 @@ class ContactSubmission({% if cookiecutter.stack == "wagtail" and cookiecutter.m
     # Stored in E.164. The form builds it from a country-code select plus a
     # national number and validates it with phonenumbers; see forms.py.
     phone = PhoneNumberField(_("phone"), blank=True)
-{%- if cookiecutter.countries_app == "yes" %}
-    country = models.ForeignKey(
-        "cities.Country",
-        # A submission must never lose its country because a reference row was
-        # deleted; the country admin deactivates rather than deletes for the same
-        # reason.
-        on_delete=models.PROTECT,
-        # Nothing ever walks back from a country to its enquiries.
-        related_name="+",
-        verbose_name=_("country"),
-    )
+{%- if cookiecutter.countries_app != "none" %}
+    # The factory decides what a country actually is on this project's backend, so
+    # this model - and any model you copy it into - never learns which one it got.
+    country = country_model_field()
 {%- endif %}
     enquiry_type = models.CharField(
         _("type of enquiry"),
@@ -144,6 +137,18 @@ class ContactSubmission({% if cookiecutter.stack == "wagtail" and cookiecutter.m
     def __str__(self):
         when = f"{self.submitted_at:%Y-%m-%d}" if self.submitted_at else "-"
         return f"{self.full_name} - {self.get_enquiry_type_display()} ({when})"
+{%- if cookiecutter.countries_app != "none" %}
+
+    @property
+    def country_name(self) -> str:
+        """The country as a person reads it, for admin columns, exports and mail.
+
+        A property rather than each consumer formatting the stored value, because
+        what is stored differs per backend and nothing outside
+        ``apps.core.countries`` should know that.
+        """
+        return country_display(self.country)
+{%- endif %}
 
     @property
     def attachment_download_url(self) -> str:

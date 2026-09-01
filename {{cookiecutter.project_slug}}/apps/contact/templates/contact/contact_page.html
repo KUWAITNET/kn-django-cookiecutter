@@ -64,7 +64,8 @@ browser would otherwise perform itself.
             {% for error in form.email.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
         </div>
 
-        {# Split phone: a country-code select plus a national number. The server recombines them and validates the result as one E.164 number. #}
+        {# Phone. With a countries backend this is a split field - a dial-code select plus a national number - which the server recombines and validates as one E.164 number. Without one there is no dial-code list to offer, so it is a single international input, validated the same way. The form decides; this template only asks whether the field exists. #}
+        {% if form.country_code %}
         <div class="form-group{% if form.country_code.errors or form.mobile_no.errors %} has-error{% endif %}">
             <label for="{{ form.mobile_no.id_for_label }}">{% translate "Phone" %}</label>
             <div class="field-row">
@@ -74,6 +75,14 @@ browser would otherwise perform itself.
             {% for error in form.country_code.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
             {% for error in form.mobile_no.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
         </div>
+        {% else %}
+        <div class="form-group{% if form.mobile_no.errors %} has-error{% endif %}">
+            <label for="{{ form.mobile_no.id_for_label }}">{% translate "Phone" %}</label>
+            {{ form.mobile_no }}
+            <span class="form-group__hint">{% translate "Include the country code, for example +965 2234 5678." %}</span>
+            {% for error in form.mobile_no.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+        </div>
+        {% endif %}
 
         {% if form.country %}
         <div class="form-group{% if form.country.errors %} has-error{% endif %}">

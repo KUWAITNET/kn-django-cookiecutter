@@ -25,8 +25,8 @@ class ContactSubmissionAdmin(ModelAdmin):
     list_display = [
         "full_name",
         "email",
-{%- if cookiecutter.countries_app == "yes" %}
-        "country",
+{%- if cookiecutter.countries_app != "none" %}
+        "country_display_name",
 {%- endif %}
         "enquiry_type",
         "subject",
@@ -35,7 +35,7 @@ class ContactSubmissionAdmin(ModelAdmin):
     list_filter = [
         "enquiry_type",
         "submitted_at",
-{%- if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app != "none" %}
         "country",
 {%- endif %}
 {%- if cookiecutter.stack == "wagtail" and cookiecutter.multisite == "multi" %}
@@ -55,7 +55,7 @@ class ContactSubmissionAdmin(ModelAdmin):
             _("Enquiry"),
             {
                 "fields": [
-{%- if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app != "none" %}
                     "country",
 {%- endif %}
                     "enquiry_type",
@@ -70,6 +70,18 @@ class ContactSubmissionAdmin(ModelAdmin):
             },
         ),
     ]
+
+{%- if cookiecutter.countries_app != "none" %}
+
+    @admin.display(description=_("Country"), ordering="country")
+    def country_display_name(self, obj):
+        """The country as a person reads it, whatever the backend stores.
+
+        ``ordering`` still points at the real column, so the header stays
+        sortable - by stored value, which is the only thing the database can sort.
+        """
+        return obj.country_name or "-"
+{%- endif %}
 
     @admin.display(description=_("Attachment"))
     def attachment_link(self, obj):

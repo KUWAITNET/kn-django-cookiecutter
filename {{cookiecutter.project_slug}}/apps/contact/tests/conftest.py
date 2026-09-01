@@ -1,11 +1,12 @@
 """Fixtures shared by the contact-form tests."""
 
 import pytest
-{%- if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app == "cities" %}
 
 from apps.cities.models import Country
 {%- endif %}
 
+#: The national part, for the split phone field.
 VALID_KUWAIT_NUMBER = "22345678"
 VALID_KUWAIT_E164 = "+96522345678"
 
@@ -14,11 +15,12 @@ VALID_KUWAIT_E164 = "+96522345678"
 def pdf_bytes():
     """A real, minimal PDF. The attachment is validated by content, so a fake fails."""
     return b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n"
-{%- if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app == "cities" %}
 
 
 @pytest.fixture
 def country(db):
+    """One imported country. The table is empty until cities_light has run."""
     return Country.objects.create(
         name="Kuwait",
         code2="KW",
@@ -31,17 +33,26 @@ def country(db):
 
 
 @pytest.fixture
-def form_data({% if cookiecutter.countries_app == "yes" %}country{% endif %}):
+def form_data({% if cookiecutter.countries_app == "cities" %}country{% endif %}):
     """A submission that must always be accepted. Tests break one field at a time."""
     return {
         "full_name": "Aisha Al-Salem",
         "company_name": "Example Trading",
         "email": "aisha@example.com",
-{%- if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app == "cities" %}
         "country": str(country.pk),
-{%- endif %}
         "country_code": "+965",
         "mobile_no": VALID_KUWAIT_NUMBER,
+{%- elif cookiecutter.countries_app == "django_countries" %}
+        # The stored value is the alpha-2 code itself: there is no row to point at.
+        "country": "KW",
+        "country_code": "+965",
+        "mobile_no": VALID_KUWAIT_NUMBER,
+{%- else %}
+        # No countries backend, so no country field and no dial-code select: the
+        # visitor types one international number.
+        "mobile_no": VALID_KUWAIT_E164,
+{%- endif %}
         "enquiry_type": "sales",
         "subject": "Cable specification",
         "message": "Please send the datasheet for the 11 kV range.",

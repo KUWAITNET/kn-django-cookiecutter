@@ -85,7 +85,7 @@ External services the application talks to:
 {%- if cookiecutter.analytics == "ga4_gtm" %}
 | Google Analytics 4 / Tag Manager | Traffic measurement | Client-side only; no effect on the site if blocked | TODO: |
 {%- endif %}
-{%- if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app == "cities" %}
 | Country/city reference data | Populating the country list (one-off import, not a runtime call) | Import is re-runnable | KUWAITNET |
 {%- endif %}
 
