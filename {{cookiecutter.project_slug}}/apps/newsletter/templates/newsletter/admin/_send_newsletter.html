@@ -1,0 +1,22 @@
+{% load i18n static %}
+
+<p>
+  {% translate "Composing and sending happen in the same step. There is no draft and no undo." %}
+</p>
+
+{# Counts for every audience option, so the number below updates without a #}
+{# round-trip. json_script escapes it safely; no inline handlers anywhere. #}
+{{ counts|json_script:"newsletter-recipient-counts" }}
+
+<p>
+  {% translate "Recipients:" %}
+  <strong data-newsletter-count data-counts-id="newsletter-recipient-counts">{{ selected_count }}</strong>
+</p>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  {{ form.as_div }}
+  <button type="submit" class="button">{% translate "Send newsletter" %}</button>
+</form>
+
+<script src="{% static 'newsletter/newsletter_admin.js' %}" defer></script>

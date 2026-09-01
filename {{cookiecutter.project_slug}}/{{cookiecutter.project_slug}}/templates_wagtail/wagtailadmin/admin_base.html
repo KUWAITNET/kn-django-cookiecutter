@@ -1,0 +1,13 @@
+{% extends "wagtailadmin/admin_base.html" %}
+{% load wagtailadmin_tags wagtailimages_tags %}
+
+{# Falls back to Wagtail's own favicon, which is guaranteed to be collected, so a
+   project that has not uploaded one yet still renders. #}
+{% block branding_favicon %}
+    {% if settings.navigation.BrandingSettings.favicon %}
+        {% image settings.navigation.BrandingSettings.favicon fill-32x32 as admin_favicon %}
+        <link rel="shortcut icon" href="{{ admin_favicon.url }}" />
+    {% else %}
+        <link rel="shortcut icon" href="{% versioned_static 'wagtailadmin/images/favicon.ico' %}" />
+    {% endif %}
+{% endblock %}

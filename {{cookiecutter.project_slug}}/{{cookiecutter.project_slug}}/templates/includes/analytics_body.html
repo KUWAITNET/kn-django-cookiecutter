@@ -1,0 +1,9 @@
+{% comment %}
+The GTM no-script fallback. It belongs immediately after <body> opens, and only
+when a container id is configured.
+
+CSP note: this iframe needs https://www.googletagmanager.com in frame-src. If the
+project keeps frame-src at 'self' the iframe is blocked - which costs only the
+no-script minority, and is a deliberate choice, not an accident. Widening
+script-src with 'unsafe-inline' to make any tag work is never the answer.
+{% endcomment %}{% if GTM_CONTAINER_ID %}<noscript><iframe src="https://www.googletagmanager.com/ns.html?id={{ GTM_CONTAINER_ID|urlencode }}" height="0" width="0" style="display:none;visibility:hidden" title="Google Tag Manager"></iframe></noscript>{% endif %}

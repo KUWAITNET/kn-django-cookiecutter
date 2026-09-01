@@ -1,0 +1,578 @@
+/* ---------------------------------------------------------------------------
+ * Base stylesheet.
+ *
+ * A starting point, not a design system: tokens, typography, forms and the few
+ * components the shell ships. Everything project-specific belongs in its own
+ * file loaded from the page_css or extra_css block.
+ *
+ * Two rules make this file worth keeping:
+ *
+ * 1. LOGICAL PROPERTIES ONLY. margin-inline-start, padding-inline, inset-inline,
+ *    border-start-start-radius, text-align: start. The browser flips them from
+ *    the dir attribute, so Arabic pages are correct without a mirrored copy of
+ *    every rule. rtl.css then only carries what logical properties genuinely
+ *    cannot express. The reference project hand-mirrored dozens of utility
+ *    classes with !important; none of that is needed here.
+ *
+ * 2. NO @import AND NO REMOTE URL. The CSP has no CDN entry, a remote font is a
+ *    third-party connection on the critical path, and an @import serialises the
+ *    download. Self-hosted is both the faster and the permitted option.
+ *
+ * Webfonts: add the @font-face rules at the top of this file, with the woff2
+ * files in static/fonts/, a unicode-range per script so an English page never
+ * downloads the Arabic face, and font-display: swap. Then point --font-sans at
+ * the family. Until then the system stack below is used - it costs nothing and
+ * renders instantly in both scripts. See static/README.md.
+ * ------------------------------------------------------------------------- */
+
+:root {
+    color-scheme: light dark;
+
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-arabic: "Noto Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    --step--1: clamp(0.83rem, 0.8rem + 0.15vw, 0.9rem);
+    --step-0: clamp(1rem, 0.96rem + 0.2vw, 1.06rem);
+    --step-1: clamp(1.2rem, 1.12rem + 0.4vw, 1.4rem);
+    --step-2: clamp(1.45rem, 1.3rem + 0.75vw, 1.85rem);
+    --step-3: clamp(1.75rem, 1.5rem + 1.25vw, 2.45rem);
+
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.5rem;
+    --space-6: 2rem;
+    --space-7: 3rem;
+    --space-8: 4rem;
+
+    --radius: 0.375rem;
+    --radius-lg: 0.75rem;
+    --container: 72rem;
+    --measure: 68ch;
+
+    --bg: #ffffff;
+    --bg-subtle: #f5f7fa;
+    --bg-raised: #ffffff;
+    --fg: #1b1f24;
+    --fg-muted: #5b6570;
+    --border: #dfe3e8;
+    --accent: #0f62fe;
+    --accent-contrast: #ffffff;
+    --accent-hover: #0043ce;
+    --focus: #0f62fe;
+    --success: #0e6245;
+    --success-bg: #e6f4ef;
+    --warning: #7a4d05;
+    --warning-bg: #fdf3e3;
+    --danger: #a01b1b;
+    --danger-bg: #fdecec;
+
+    --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #12161b;
+        --bg-subtle: #171c22;
+        --bg-raised: #1b2129;
+        --fg: #e8ecf1;
+        --fg-muted: #9aa5b1;
+        --border: #2b333d;
+        --accent: #78a9ff;
+        --accent-contrast: #0b1017;
+        --accent-hover: #a6c8ff;
+        --focus: #78a9ff;
+        --success: #6fdcbf;
+        --success-bg: #10231d;
+        --warning: #f0c98a;
+        --warning-bg: #241c0e;
+        --danger: #ff8389;
+        --danger-bg: #2a1214;
+
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+    }
+}
+
+/* Reset ------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+}
+
+body {
+    margin: 0;
+    min-block-size: 100vh;
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: var(--step-0);
+    line-height: 1.6;
+    text-align: start;
+    -webkit-font-smoothing: antialiased;
+}
+
+:lang(ar) {
+    font-family: var(--font-arabic);
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+    display: block;
+    max-inline-size: 100%;
+    block-size: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Typography -------------------------------------------------------------- */
+
+h1,
+h2,
+h3,
+h4 {
+    margin-block: 0 var(--space-3);
+    line-height: 1.25;
+    font-weight: 600;
+    text-wrap: balance;
+}
+
+h1 { font-size: var(--step-3); }
+h2 { font-size: var(--step-2); }
+h3 { font-size: var(--step-1); }
+
+p,
+ul,
+ol,
+dl,
+figure,
+table {
+    margin-block: 0 var(--space-4);
+}
+
+p,
+li {
+    max-inline-size: var(--measure);
+}
+
+small { font-size: var(--step--1); }
+
+code,
+pre,
+kbd {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+}
+
+a {
+    color: var(--accent);
+    text-underline-offset: 0.15em;
+}
+
+a:hover {
+    color: var(--accent-hover);
+}
+
+hr {
+    border: 0;
+    border-block-start: 1px solid var(--border);
+    margin-block: var(--space-6);
+}
+
+/* Focus ------------------------------------------------------------------- */
+
+/* One visible ring for every interactive element. :focus-visible keeps it off
+ * mouse clicks; removing the outline without replacing it is an accessibility
+ * defect, so there is no `outline: none` anywhere in this file. */
+:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+/* Layout ------------------------------------------------------------------ */
+
+.container {
+    inline-size: 100%;
+    max-inline-size: var(--container);
+    margin-inline: auto;
+    padding-inline: var(--space-5);
+}
+
+.section {
+    padding-block: var(--space-7);
+}
+
+/* Skip link --------------------------------------------------------------- */
+
+.skip-link {
+    position: absolute;
+    inset-block-start: var(--space-2);
+    inset-inline-start: var(--space-2);
+    z-index: 100;
+    padding: var(--space-2) var(--space-4);
+    background-color: var(--bg-raised);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transform: translateY(-200%);
+}
+
+.skip-link:focus {
+    transform: translateY(0);
+}
+
+main:focus {
+    outline: none;
+}
+
+/* Header, footer, navigation ---------------------------------------------- */
+
+.site-header {
+    border-block-end: 1px solid var(--border);
+    background-color: var(--bg-raised);
+}
+
+.site-header__inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+    padding-block: var(--space-4);
+}
+
+.site-header__brand {
+    font-weight: 700;
+    color: var(--fg);
+    text-decoration: none;
+    margin-inline-end: auto;
+}
+
+.site-nav__list,
+.language-switcher__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.site-nav__link {
+    color: var(--fg-muted);
+    text-decoration: none;
+}
+
+.site-nav__link:hover,
+.site-nav__link.is-active {
+    color: var(--fg);
+}
+
+.site-nav__link.is-active {
+    font-weight: 600;
+}
+
+.language-switcher__list {
+    gap: var(--space-3);
+}
+
+.language-switcher__current {
+    font-weight: 600;
+}
+
+.language-switcher__unavailable {
+    color: var(--fg-muted);
+    opacity: 0.6;
+}
+
+.site-footer {
+    margin-block-start: var(--space-8);
+    padding-block: var(--space-5);
+    border-block-start: 1px solid var(--border);
+    background-color: var(--bg-subtle);
+    color: var(--fg-muted);
+    font-size: var(--step--1);
+}
+
+.site-footer p {
+    margin: 0;
+}
+
+/* Hero and simple content ------------------------------------------------- */
+
+.hero {
+    padding-block: var(--space-8);
+    background-color: var(--bg-subtle);
+}
+
+.hero__lead {
+    font-size: var(--step-1);
+    color: var(--fg-muted);
+}
+
+.checklist {
+    padding-inline-start: var(--space-5);
+}
+
+.checklist li {
+    margin-block-end: var(--space-2);
+}
+
+/* Buttons ----------------------------------------------------------------- */
+
+.button,
+button,
+input[type="submit"] {
+    display: inline-block;
+    padding: var(--space-3) var(--space-5);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    background-color: var(--accent);
+    color: var(--accent-contrast);
+    font: inherit;
+    font-weight: 600;
+    line-height: 1.2;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.button:hover,
+button:hover,
+input[type="submit"]:hover {
+    background-color: var(--accent-hover);
+    color: var(--accent-contrast);
+}
+
+.button:disabled,
+button:disabled,
+button[aria-disabled="true"] {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.button--secondary {
+    background-color: transparent;
+    border-color: var(--border);
+    color: var(--fg);
+}
+
+/* Forms ------------------------------------------------------------------- */
+
+.form-group {
+    margin-block-end: var(--space-5);
+}
+
+label {
+    display: block;
+    margin-block-end: var(--space-2);
+    font-weight: 600;
+}
+
+.form-group__hint {
+    display: block;
+    margin-block-end: var(--space-2);
+    color: var(--fg-muted);
+    font-size: var(--step--1);
+}
+
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="url"],
+input[type="number"],
+input[type="password"],
+input[type="search"],
+input[type="date"],
+input[type="file"],
+select,
+textarea {
+    inline-size: 100%;
+    max-inline-size: 36rem;
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background-color: var(--bg-raised);
+    color: var(--fg);
+    font: inherit;
+    /* Inherit the page direction so an Arabic form is not typed backwards, but
+     * leave the value itself alone: a phone number or an e-mail address inside an
+     * RTL field is wrapped by the BiDi helpers, not by a global override. */
+    text-align: start;
+}
+
+textarea {
+    min-block-size: 8rem;
+    resize: vertical;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--fg-muted);
+    opacity: 1;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    border-color: var(--focus);
+}
+
+/* Error state. forms.js removes .form-error and clears aria-invalid as soon as
+ * the visitor edits the field, so the message does not sit there contradicting
+ * what they just typed. */
+.form-group.has-error input,
+.form-group.has-error select,
+.form-group.has-error textarea,
+[aria-invalid="true"] {
+    border-color: var(--danger);
+}
+
+.form-error {
+    display: block;
+    margin-block-start: var(--space-2);
+    color: var(--danger);
+    font-size: var(--step--1);
+}
+
+/* The honeypot field: hidden from people, reachable by a bot. Never display:none
+ * and never type="hidden" - both are trivially skipped. aria-hidden and
+ * tabindex="-1" belong on the input itself, in the form definition. */
+.honeypot-field {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+fieldset {
+    margin: 0 0 var(--space-5);
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+legend {
+    padding-inline: var(--space-2);
+    font-weight: 600;
+}
+
+.turnstile {
+    margin-block: var(--space-4);
+}
+
+/* Messages ---------------------------------------------------------------- */
+
+.messages {
+    margin-block: var(--space-4);
+}
+
+.message {
+    margin-block-end: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid transparent;
+    /* Coloured on the start edge, which flips with the writing direction. */
+    border-inline-start-width: 4px;
+    border-radius: var(--radius);
+    background-color: var(--bg-subtle);
+}
+
+.message--success {
+    border-color: var(--success);
+    background-color: var(--success-bg);
+    color: var(--success);
+}
+
+.message--warning {
+    border-color: var(--warning);
+    background-color: var(--warning-bg);
+    color: var(--warning);
+}
+
+.message--error {
+    border-color: var(--danger);
+    background-color: var(--danger-bg);
+    color: var(--danger);
+}
+
+/* Error pages ------------------------------------------------------------- */
+
+.error-page {
+    max-inline-size: 34rem;
+    margin-inline: auto;
+    padding: var(--space-8) var(--space-5);
+    text-align: center;
+}
+
+.error-page p {
+    max-inline-size: none;
+}
+
+.error-page__code {
+    margin: 0;
+    font-size: var(--step-3);
+    font-weight: 700;
+    color: var(--fg-muted);
+}
+
+.error-page__text {
+    color: var(--fg-muted);
+}
+
+/* Utilities --------------------------------------------------------------- */
+
+/* Visible to assistive technology, invisible on screen. Not display:none, which
+ * removes it from the accessibility tree as well. */
+.visually-hidden:not(:focus):not(:active) {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+.text-muted { color: var(--fg-muted); }
+.flow > * + * { margin-block-start: var(--space-4); }
+
+/* A wide table or code block scrolls inside its own box; the page body never
+ * scrolls sideways. */
+.scroll-x {
+    overflow-x: auto;
+    max-inline-size: 100%;
+}
+
+@media print {
+    .skip-link,
+    .site-nav,
+    .language-switcher {
+        display: none;
+    }
+}

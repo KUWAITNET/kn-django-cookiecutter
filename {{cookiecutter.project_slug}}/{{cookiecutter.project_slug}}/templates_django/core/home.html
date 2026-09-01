@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% comment %}
+The landing page. It exists to prove the stack works end to end on a fresh
+generation - shell, i18n, direction, metadata, structured data, messages and the
+stylesheet - and it is meant to be replaced by the project's real homepage.
+
+It carries no images on purpose: an image here would have to be a tracked binary
+in static/, and the performance standard keeps those out of the repository. When
+you add the hero, render it through includes/picture.html with eager=True and add
+its preload hint to the extra_head block.
+{% endcomment %}
+
+{% block body_class %}page-home{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div class="container">
+        <h1 class="hero__title">{{ SITE_NAME }}</h1>
+        <p class="hero__lead">{% blocktranslate %}This project was generated from the KUWAITNET web template. Replace this page with the real homepage.{% endblocktranslate %}</p>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2>{% translate "What is already wired up" %}</h2>
+        <ul class="checklist">
+            <li>{% translate "Per-page title, description, canonical URL, Open Graph and Twitter/X card tags." %}</li>
+            <li>{% translate "Organization and WebSite structured data on every page, breadcrumbs where a view supplies them." %}</li>
+            <li>{% translate "An environment-aware robots.txt and a sitemap that lists every language." %}</li>
+            <li>{% translate "Right-to-left support driven by the active language, with no second set of templates." %}</li>
+            <li>{% translate "A Content-Security-Policy with no inline-script exemption, and analytics that stay off until an ID is configured." %}</li>
+        </ul>
+    </div>
+</section>
+{% endblock %}

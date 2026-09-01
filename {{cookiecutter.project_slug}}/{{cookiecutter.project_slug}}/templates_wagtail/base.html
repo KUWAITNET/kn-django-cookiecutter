@@ -1,0 +1,79 @@
+{% load static i18n wagtailcore_tags wagtailuserbar %}{% get_current_language as LANGUAGE_CODE %}{% get_current_language_bidi as LANGUAGE_BIDI %}<!DOCTYPE html>
+{% comment %}
+The site shell.
+
+Direction is derived from Django's own LANGUAGES_BIDI list, so any RTL locale
+(ar, he, fa, ur, ...) works with no project configuration. It is the ONLY thing
+that switches the site into RTL - there is no second page tree and no second set
+of templates.
+
+Stylesheet order is a contract, not an accident:
+
+    main.css -> block page_css -> block extra_css -> rtl.css
+
+rtl.css is loaded LAST, after every per-page override. The reference project
+loaded it in the middle and a later "last word wins" override file silently
+clobbered RTL rules on Arabic pages; putting it at the end makes that
+impossible. main.css uses logical properties (margin-inline-start and friends),
+so rtl.css only carries what logical properties genuinely cannot express.
+{% endcomment %}
+<html lang="{{ LANGUAGE_CODE }}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+
+    {# The container script goes as early as possible in head, and renders only when an id is configured. #}
+    {% include "includes/analytics_head.html" %}
+
+    {% block head_meta %}{% include "includes/meta.html" %}{% endblock %}
+    {% block structured_data %}{% include "includes/json_ld.html" %}{% endblock %}
+
+    <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
+
+    <link rel="stylesheet" href="{% static 'css/main.css' %}">
+    {% block page_css %}{% endblock %}
+    {% block extra_css %}{% endblock %}
+    {% if LANGUAGE_BIDI %}<link rel="stylesheet" href="{% static 'css/rtl.css' %}">{% endif %}
+
+    {# Per-page tags: the preload hint for the LCP image belongs here. #}
+    {% block extra_head %}{% endblock %}
+
+    {% if request.in_preview_panel %}<base target="_blank">{% endif %}
+</head>
+
+<body id="top" class="{% block body_class %}{% endblock %}">
+    {% include "includes/analytics_body.html" %}
+
+    {# First focusable element on the page, so a keyboard user is not walked through the whole navigation on every page. #}
+    <a class="skip-link" href="#main-content">{% translate "Skip to main content" %}</a>
+
+    {% wagtailuserbar %}
+
+    {% block header %}{% include "navigation/header.html" %}{% endblock %}
+
+    <main id="main-content" tabindex="-1">
+        {% block messages %}{% include "includes/messages.html" %}{% endblock %}
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block footer %}{% include "navigation/footer.html" %}{% endblock %}
+
+    {% comment %}
+    Progressive enhancement only: every form works with JavaScript disabled.
+
+    forms.js clears field errors as the visitor corrects them, using DELEGATED
+    listeners on the form rather than one listener per field, so rows cloned into
+    a formset later are covered without extra wiring. It also refreshes the CSRF
+    token on every form before submit - the reference project shipped that helper
+    but called it from a single page, so the stale-token 403 stayed live
+    everywhere else.
+
+    The nonce is carried here so the pattern is copied correctly the day a page
+    genuinely needs an inline script: there is no 'unsafe-inline' in script-src,
+    and a nonce-less inline script is dropped silently.
+    {% endcomment %}
+    <script src="{% static 'js/forms.js' %}" defer nonce="{{ request.csp_nonce }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

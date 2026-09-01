@@ -1,0 +1,204 @@
+"""Wagtail admin for recipients, e-mail copy and the delivery log.
+
+All three sit in one "E-mail" menu group so the client has a single place to
+answer "who gets told, what does it say, and did it actually go out?".
+
+The log is django-post-office's own ``Email`` model registered read-only. There
+is no custom logging table: post-office already records every send, failure
+included, and a second table would only be able to disagree with it.
+"""
+
+from django import forms
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import path, reverse
+from django.utils.translation import gettext_lazy as _
+from django.views import View
+from post_office.models import Email
+from wagtail import hooks
+from wagtail.admin import messages
+from wagtail.admin.panels import FieldPanel, MultiFieldPanel, ObjectList
+from wagtail.admin.ui.tables import Column, TitleColumn
+from wagtail.admin.views.generic.base import WagtailAdminTemplateMixin
+from wagtail.admin.views.generic.permissions import PermissionCheckedMixin
+from wagtail.admin.viewsets.base import ViewSetGroup
+from wagtail.admin.viewsets.model import ModelViewSet
+from wagtail.permission_policies import ModelPermissionPolicy
+
+from apps.notifications.forms import (
+    BODY_WIDGET_ATTRS,
+    TEMPLATE_ADMIN_NAME,
+    NotificationTemplateForm,
+)
+from apps.notifications.models import (
+    RESETTABLE_FIELDS,
+    NotificationRecipient,
+    NotificationTemplate,
+)
+
+
+class NoAddModelViewSet(ModelViewSet):
+    """A listing for rows nobody creates by hand.
+
+    Recipient lists and template rows are provisioned by ``seed_notifications``
+    and the log is written by post-office; an "Add" button on any of them only
+    offers a way to create a row the code will never look up.
+    """
+
+    add_to_admin_menu = False
+    copy_view_enabled = False
+    list_per_page = 50
+
+    def get_urlpatterns(self):
+        return [p for p in super().get_urlpatterns() if getattr(p, "name", "") != "add"]
+
+    def get_common_view_kwargs(self, **kwargs):
+        return super().get_common_view_kwargs(add_url_name=None, **kwargs)
+
+
+class ResetTemplateFieldView(PermissionCheckedMixin, WagtailAdminTemplateMixin, View):
+    """Confirm, then restore one field of one template to its built-in value."""
+
+    template_name = "notifications/admin/confirm_reset_field.html"
+    permission_policy = ModelPermissionPolicy(NotificationTemplate)
+    permission_required = "change"
+    page_title = _("Reset to default")
+    header_icon = "mail"
+
+    def setup(self, request, *args, **kwargs):
+        super().setup(request, *args, **kwargs)
+        self.field_name = kwargs["field_name"]
+        # The field name arrives from the URL, so it is checked against an
+        # allowlist before it is ever passed to setattr.
+        if self.field_name not in RESETTABLE_FIELDS:
+            raise Http404
+        self.object = get_object_or_404(NotificationTemplate, pk=kwargs["pk"])
+
+    def get_edit_url(self):
+        return reverse(f"{TEMPLATE_ADMIN_NAME}:edit", args=[self.object.pk])
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            base_template="wagtailadmin/generic/base.html",
+            object=self.object,
+            field_label=NotificationTemplate._meta.get_field(self.field_name).verbose_name,
+            edit_url=self.get_edit_url(),
+        )
+        return context
+
+    def get(self, request, *args, **kwargs):
+        return self.render_to_response(self.get_context_data())
+
+    def post(self, request, *args, **kwargs):
+        self.object.reset_field(self.field_name)
+        messages.success(request, _("Reset to default."))
+        return redirect(self.get_edit_url())
+
+
+class NotificationRecipientViewSet(NoAddModelViewSet):
+    model = NotificationRecipient
+    name = "notification-recipients"
+    icon = "mail"
+    menu_label = "Recipients"
+    list_display = [
+        # A plain field name would be auto-wrapped as the row link, but
+        # get_trigger_display is a method, so the link column is built here.
+        TitleColumn(
+            "get_trigger_display",
+            label="Notification",
+            url_name="notification-recipients:edit",
+            sort_key="trigger",
+        ),
+        "recipients",
+    ]
+    list_filter = ["trigger"]
+    panels = [
+        FieldPanel("trigger", read_only=True),
+        FieldPanel("recipients"),
+    ]
+
+
+class NotificationTemplateViewSet(NoAddModelViewSet):
+    model = NotificationTemplate
+    name = TEMPLATE_ADMIN_NAME
+    icon = "mail"
+    menu_label = "E-mail templates"
+    list_display = [
+        TitleColumn(
+            "get_trigger_display",
+            label="Trigger",
+            url_name=f"{TEMPLATE_ADMIN_NAME}:edit",
+            sort_key="trigger",
+        ),
+        Column("language", label="Language", sort_key="language"),
+        "subject",
+        "updated_at",
+    ]
+    list_filter = ["trigger", "language"]
+    search_fields = ["subject", "body"]
+    edit_handler = ObjectList(
+        [
+            MultiFieldPanel(
+                [
+                    FieldPanel("trigger", read_only=True),
+                    FieldPanel("language", read_only=True),
+                ],
+                heading="Template",
+            ),
+            FieldPanel("subject"),
+            FieldPanel("body", widget=forms.Textarea(attrs=BODY_WIDGET_ATTRS)),
+        ],
+        base_form_class=NotificationTemplateForm,
+    )
+
+    def get_urlpatterns(self):
+        return super().get_urlpatterns() + [
+            path(
+                "reset/<int:pk>/<str:field_name>/",
+                ResetTemplateFieldView.as_view(),
+                name="reset-field",
+            ),
+        ]
+
+
+class EmailLogViewSet(NoAddModelViewSet):
+    """Read-only delivery log: everything post-office recorded, queued or failed."""
+
+    model = Email
+    name = "notification-log"
+    icon = "mail"
+    menu_label = "E-mail log"
+    list_display = [
+        "to",
+        "subject",
+        Column("get_status_display", label="Status"),
+        "last_updated",
+    ]
+    list_filter = ["status"]
+    search_fields = ["to", "subject"]
+    panels = [
+        MultiFieldPanel(
+            [
+                FieldPanel("to", read_only=True),
+                FieldPanel("from_email", read_only=True),
+                FieldPanel("subject", read_only=True),
+                FieldPanel("status", read_only=True),
+                FieldPanel("last_updated", read_only=True),
+            ],
+            heading="Delivery",
+        ),
+        FieldPanel("message", read_only=True),
+    ]
+
+
+class NotificationsAdminGroup(ViewSetGroup):
+    menu_label = "E-mail"
+    menu_icon = "mail"
+    menu_order = 250
+    items = (NotificationRecipientViewSet, NotificationTemplateViewSet, EmailLogViewSet)
+
+
+@hooks.register("register_admin_viewset")
+def register_notifications_admin():
+    return NotificationsAdminGroup()

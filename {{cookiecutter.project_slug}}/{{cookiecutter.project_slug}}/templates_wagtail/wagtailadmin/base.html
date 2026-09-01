@@ -1,0 +1,13 @@
+{% extends "wagtailadmin/base.html" %}
+{% load wagtailimages_tags %}
+
+{# Sidebar brand mark. Extending the same path resolves to Wagtail's own template,
+   so this file stays a single block and survives CMS upgrades untouched. The logo
+   comes from Branding settings, so there is no static file to ship or to break. #}
+{% block branding_logo %}
+    {% if settings.navigation.BrandingSettings.logo %}
+        {% image settings.navigation.BrandingSettings.logo height-32 alt=CLIENT_NAME class="admin-brand-logo" %}
+    {% else %}
+        <span class="admin-brand-logo admin-brand-logo--text">{{ CLIENT_NAME }}</span>
+    {% endif %}
+{% endblock %}

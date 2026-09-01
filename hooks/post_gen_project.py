@@ -110,6 +110,12 @@ if FORMS_SUITE != "yes":
 
 if API == "none":
     remove(str(APPS / "api"), "docs/12-api.md")
+elif API != "headless":
+    # Rendered empty for a non-headless project; delete rather than ship a stub.
+    remove(
+        str(APPS / "api" / "wagtail_api.py"),
+        str(APPS / "api" / "tests" / "test_content_api.py"),
+    )
 
 # Stack layer: Wagtail-only modules and templates.
 if not IS_WAGTAIL:

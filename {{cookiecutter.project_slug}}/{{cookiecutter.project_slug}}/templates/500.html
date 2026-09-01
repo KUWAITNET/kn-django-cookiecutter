@@ -1,0 +1,64 @@
+{% load i18n %}{% get_current_language as LANGUAGE_CODE %}{% get_current_language_bidi as LANGUAGE_BIDI %}<!DOCTYPE html>
+{% comment %}
+Deliberately self-contained.
+
+This template renders when something is already broken, so it must not depend on
+anything that can also be broken: no base.html, no context processors (Django's
+server_error renders with an empty context - SITE_NAME and request are NOT
+available here), no static file lookups (a manifest miss would raise a second
+exception inside the handler for the first), and no database access.
+
+Everything it needs is inline, including the styles. Logical properties are used
+so the layout is correct in both directions without a second stylesheet.
+
+It discloses nothing: no framework name, no traceback, no error id the visitor
+cannot act on. The detail belongs in the logs and in Sentry.
+{% endcomment %}
+<html lang="{{ LANGUAGE_CODE|default:'en' }}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>{% translate "Something went wrong" %}</title>
+<style>
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #1b1f24; --muted: #5b6570; --accent: #0f62fe; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #12161b; --fg: #e8ecf1; --muted: #9aa5b1; --accent: #78a9ff; }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-block-size: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans Arabic", sans-serif;
+  line-height: 1.6;
+}
+main { max-inline-size: 34rem; text-align: center; }
+p.code { margin: 0; font-size: 3.5rem; font-weight: 700; color: var(--muted); letter-spacing: 0.05em; }
+h1 { margin: 0.5rem 0 0.75rem; font-size: 1.5rem; font-weight: 600; }
+p.text { margin: 0 0 1.5rem; color: var(--muted); }
+a {
+  display: inline-block;
+  padding: 0.65rem 1.25rem;
+  border-radius: 0.375rem;
+  background: var(--accent);
+  color: var(--bg);
+  text-decoration: none;
+  font-weight: 600;
+}
+a:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+<p class="code" aria-hidden="true">500</p>
+<h1>{% translate "Something went wrong" %}</h1>
+<p class="text">{% translate "We have been notified and are looking into it. Please try again in a few minutes." %}</p>
+<a href="/">{% translate "Go to the homepage" %}</a>
+</main>
+</body>
+</html>

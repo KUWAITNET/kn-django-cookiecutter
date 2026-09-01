@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% comment %}
+Error pages replace the whole head_meta block rather than including meta.html: an
+error response has no canonical url, no share image and no hreflang alternates,
+and emitting them would invite the page into the index.
+{% endcomment %}
+
+{% block head_meta %}<title>{% translate "Page not found" %} | {{ SITE_NAME }}</title>
+<meta name="robots" content="noindex, nofollow">{% endblock %}
+
+{% block body_class %}page-error page-error--404{% endblock %}
+
+{% block content %}
+<section class="error-page">
+    <p class="error-page__code" aria-hidden="true">404</p>
+    <h1 class="error-page__title">{% translate "This page could not be found" %}</h1>
+    <p class="error-page__text">{% translate "The address may be mistyped, or the page may have been moved or removed." %}</p>
+    <p class="error-page__actions"><a class="button" href="/">{% translate "Go to the homepage" %}</a></p>
+</section>
+{% endblock %}

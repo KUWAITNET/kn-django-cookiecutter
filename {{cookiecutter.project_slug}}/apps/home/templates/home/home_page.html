@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% load wagtailcore_tags wagtailimages_tags %}
+
+{% block body_class %}template-home-page{% endblock %}
+
+{% block content %}
+    {% if page.show_inner_banner and page.hero_image %}
+        <section class="page-hero">
+            {# LCP candidate: eager and high priority, never lazy. #}
+            {% image page.hero_image fill-1920x640 decoding="async" fetchpriority="high" alt=page.title class="page-hero__image" %}
+            <div class="page-hero__text">
+                <h1 class="page-hero__title">{{ page.title }}</h1>
+                {% if page.hero_subtitle %}<p class="page-hero__subtitle">{{ page.hero_subtitle }}</p>{% endif %}
+            </div>
+        </section>
+    {% else %}
+        <h1 class="visually-hidden">{{ page.title }}</h1>
+    {% endif %}
+
+    {% if page.introduction %}
+        <div class="page-introduction">
+            <p>{{ page.introduction }}</p>
+        </div>
+    {% endif %}
+
+    <div class="page-body">
+        {% for block in page.body %}
+            {% include_block block %}
+        {% endfor %}
+    </div>
+{% endblock %}

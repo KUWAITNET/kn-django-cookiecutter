@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block head_meta %}<title>{% translate "Access denied" %} | {{ SITE_NAME }}</title>
+<meta name="robots" content="noindex, nofollow">{% endblock %}
+
+{% block body_class %}page-error page-error--403{% endblock %}
+
+{% block content %}
+<section class="error-page">
+    <p class="error-page__code" aria-hidden="true">403</p>
+    <h1 class="error-page__title">{% translate "You do not have access to this page" %}</h1>
+    {% comment %}
+    Deliberately vague: telling an unauthorised visitor whether the resource
+    exists, and what would be needed to reach it, is itself a disclosure.
+    {% endcomment %}
+    <p class="error-page__text">{% translate "If you believe you should have access, please sign in with an account that has permission, or contact us." %}</p>
+    <p class="error-page__actions"><a class="button" href="/">{% translate "Go to the homepage" %}</a></p>
+</section>
+{% endblock %}

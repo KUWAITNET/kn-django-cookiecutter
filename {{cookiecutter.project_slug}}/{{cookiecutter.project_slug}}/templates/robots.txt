@@ -1,0 +1,27 @@
+{% comment %}
+Served by apps.core.views.robots_txt, never as a static file: a static file cannot
+vary by environment, and the entire point is that staging and production must
+answer differently.
+
+The view passes robots_disallow_all=True for every environment that is not
+production (it is driven by a setting that defaults to closed, so a newly
+provisioned environment is shut to crawlers until someone deliberately opens it).
+
+robots.txt is a crawling directive, not an indexing one: a blocked url can still
+be indexed from an external link. Non-production environments therefore also send
+X-Robots-Tag: noindex, nofollow and sit behind auth at the infra layer.
+
+The admin prefix is deliberately NOT listed here. Naming it in a world-readable
+file hands a scanner the one thing the renamed prefix was meant to cost it.
+{% endcomment %}{% if robots_disallow_all %}User-agent: *
+Disallow: /
+{% else %}User-agent: *
+Allow: /
+Disallow: /search/
+Disallow: /*/search/
+Disallow: /*?utm_
+Disallow: /*?gclid=
+Disallow: /*?fbclid=
+
+Sitemap: {{ BASE_URL }}/sitemap.xml
+{% endif %}

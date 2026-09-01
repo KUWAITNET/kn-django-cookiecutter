@@ -1,0 +1,37 @@
+{% load i18n wagtailimages_tags %}
+{# Include this on a contact page. The map is built from the validated coordinates
+   in Contact settings, never from an editor-supplied embed snippet - a settings
+   field holding raw HTML rendered with |safe is stored XSS.
+
+   The live frame is off by default. Turning it on also requires adding the map
+   host to CONTENT_SECURITY_POLICY frame-src in settings, otherwise the browser
+   blocks it and the visitor sees an empty box. #}
+{% with contact=settings.navigation.ContactSettings %}
+{% if contact.has_map or contact.map_image %}
+    <div class="site-map">
+        {% if contact.use_live_map and contact.has_map %}
+            <iframe class="site-map__frame"
+                    src="{{ contact.map_embed_url }}"
+                    title="{% translate 'Map of our location' %}"
+                    width="1200" height="450"
+                    loading="lazy"
+                    referrerpolicy="no-referrer"></iframe>
+        {% elif contact.map_image %}
+            {% if contact.has_map %}
+                <a class="site-map__static" href="{{ contact.map_link_url }}" target="_blank" rel="noopener noreferrer">
+                    {% image contact.map_image width-1200 loading="lazy" decoding="async" alt=contact.map_label class="site-map__image" %}
+                </a>
+            {% else %}
+                {% image contact.map_image width-1200 loading="lazy" decoding="async" alt=contact.map_label class="site-map__image" %}
+            {% endif %}
+        {% endif %}
+
+        {% if contact.has_map %}
+            <p class="site-map__caption">
+                {% if contact.map_label %}<strong>{{ contact.map_label }}</strong>{% endif %}
+                <a class="site-map__link" href="{{ contact.map_link_url }}" target="_blank" rel="noopener noreferrer">{% translate "Open in maps" %}</a>
+            </p>
+        {% endif %}
+    </div>
+{% endif %}
+{% endwith %}

@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% comment %}
+The reference public form.
+
+One template for both stacks: it uses no CMS tag library, so `intro_html` and
+`thank_you_html` arrive pre-rendered from the view or the page model. Copy this
+file for the next form.
+
+Contracts the JavaScript at the bottom depends on, and that a redesign must keep:
+
+  * every control sits inside a `.form-group`, which is where an error message is
+    appended and where `.has-error` is set;
+  * error messages carry `.form-error`, and the ones this script adds also carry
+    `.js-error`, so a server-rendered message from the non-AJAX path survives
+    being cleared;
+  * fields are found by `[name="..."]`, which is the key the server sends back in
+    `errors`, so no field-name mapping exists anywhere.
+
+The form works with JavaScript disabled: the script only intercepts a submit the
+browser would otherwise perform itself.
+{% endcomment %}
+
+{% block content %}
+{% translate "Contact us" as default_title %}
+<div class="container section">
+    <h1>{{ page.title|default:default_title }}</h1>
+
+    {% if intro_html %}<div class="flow">{{ intro_html }}</div>{% endif %}
+
+    <div id="contact-success" class="message message--success" role="status"{% if not submitted %} hidden{% endif %}>
+        {% if thank_you_html %}{{ thank_you_html }}{% else %}
+        <p>{% translate "Thank you. Your message has been sent and we will reply shortly." %}</p>
+        {% endif %}
+    </div>
+
+    {# The form posts to its own URL: no separate endpoint, so a rejected submission re-renders in place with the visitor's input. #}
+    <form id="contact-form" class="contact-form" method="post" enctype="multipart/form-data" novalidate
+          data-transport-error="{% translate 'Your message could not be sent just now. Please try again in a moment.' %}">
+        {% csrf_token %}
+
+        {# novalidate above: every message comes from the server, so the visitor never sees two different wordings for the same problem, and every message is translated by Django. #}
+        <div id="contact-form-errors" class="form-errors" role="alert"{% if not form.non_field_errors %} hidden{% endif %}>
+            {% for error in form.non_field_errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+        </div>
+
+        <div class="form-group{% if form.full_name.errors %} has-error{% endif %}">
+            <label for="{{ form.full_name.id_for_label }}">{% translate "Full name" %} <span aria-hidden="true">*</span></label>
+            {{ form.full_name }}
+            {% for error in form.full_name.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+        </div>
+
+        <div class="form-group{% if form.company_name.errors %} has-error{% endif %}">
+            <label for="{{ form.company_name.id_for_label }}">{% translate "Company" %}</label>
+            {{ form.company_name }}
+            {% for error in form.company_name.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+        </div>
+
+        <div class="form-group{% if form.email.errors %} has-error{% endif %}">
+            <label for="{{ form.email.id_for_label }}">{% translate "E-mail" %} <span aria-hidden="true">*</span></label>
+            {{ form.email }}
+            {% for error in form.email.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+        </div>
+
+        {# Split phone: a country-code select plus a national number. The server recombines them and validates the result as one E.164 number. #}
+        <div class="form-group{% if form.country_code.errors or form.mobile_no.errors %} has-error{% endif %}">
+            <label for="{{ form.mobile_no.id_for_label }}">{% translate "Phone" %}</label>
+            <div class="field-row">
+                {{ form.country_code }}
+                {{ form.mobile_no }}
+            </div>
+            {% for error in form.country_code.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+            {% for error in form.mobile_no.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+        </div>
+
+        {% if form.country %}
+        <div class="form-group{% if form.country.errors %} has-error{% endif %}">
+            <label for="{{ form.country.id_for_label }}">{% translate "Country" %} <span aria-hidden="true">*</span></label>
+            {{ form.country }}
+            {% for error in form.country.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="form-group{% if form.enquiry_type.errors %} has-error{% endif %}">
+            <label for="{{ form.enquiry_type.id_for_label }}">{% translate "Type of enquiry" %} <span aria-hidden="true">*</span></label>
+            {{ form.enquiry_type }}
+            {% for error in form.enquiry_type.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+        </div>
+
+        <div class="form-group{% if form.subject.errors %} has-error{% endif %}">
+            <label for="{{ form.subject.id_for_label }}">{% translate "Subject" %} <span aria-hidden="true">*</span></label>
+            {{ form.subject }}
+            {% for error in form.subject.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+        </div>
+
+        <div class="form-group{% if form.message.errors %} has-error{% endif %}">
+            <label for="{{ form.message.id_for_label }}">{% translate "Message" %} <span aria-hidden="true">*</span></label>
+            {{ form.message }}
+            {% for error in form.message.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+        </div>
+
+        <div class="form-group{% if form.attachment.errors %} has-error{% endif %}">
+            <label for="{{ form.attachment.id_for_label }}">{% translate "Attachment" %}</label>
+            {# accept= is a file-picker convenience. The extension, the size and the file's real content are all checked on the server. #}
+            <input type="file" name="{{ form.attachment.html_name }}" id="{{ form.attachment.id_for_label }}" accept=".pdf,.doc,.docx">
+            <span class="form-group__hint">{% translate "PDF or Word document, up to 5 MB." %}</span>
+            {% for error in form.attachment.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+        </div>
+
+        {# Bot protection. Rendered by iterating the form so no template ever hard-codes the honeypot's name - renaming it per project is a free improvement and must not break a template. #}
+        <div class="honeypot-field" aria-hidden="true">
+            {% for field in form.protection_fields %}{{ field }}{% endfor %}
+        </div>
+        {% if SPAM_PROTECTION == "turnstile_honeypot" %}{% include "includes/turnstile.html" %}{% endif %}
+
+        <button type="submit" class="button">{% translate "Send message" %}</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ request.csp_nonce }}">
+(function () {
+    "use strict";
+
+    var form = document.getElementById("contact-form");
+    if (!form || !window.fetch) {
+        /* No fetch: the browser posts the form itself and the server re-renders
+         * the page. Every path here is an enhancement of that. */
+        return;
+    }
+
+    var success = document.getElementById("contact-success");
+    var summary = document.getElementById("contact-form-errors");
+
+    function clearErrors() {
+        /* Only .js-error: a message rendered by the server on the non-AJAX path
+         * is not ours to remove. */
+        form.querySelectorAll(".form-error.js-error").forEach(function (node) {
+            node.remove();
+        });
+        form.querySelectorAll(".has-error").forEach(function (node) {
+            node.classList.remove("has-error");
+        });
+        form.querySelectorAll("[aria-invalid]").forEach(function (node) {
+            node.removeAttribute("aria-invalid");
+        });
+        if (summary) {
+            summary.textContent = "";
+            summary.hidden = true;
+        }
+    }
+
+    function addMessage(container, message) {
+        var paragraph = document.createElement("p");
+        paragraph.className = "form-error js-error";
+        paragraph.textContent = message;
+        container.appendChild(paragraph);
+    }
+
+    function showErrors(errors) {
+        Object.keys(errors || {}).forEach(function (name) {
+            var field = form.querySelector('[name="' + name + '"]');
+            var group = field ? field.closest(".form-group") : null;
+            errors[name].forEach(function (message) {
+                if (group) {
+                    addMessage(group, message);
+                } else if (summary) {
+                    /* Form-wide errors, and anything keyed to a field this
+                     * template does not render (the honeypot). */
+                    addMessage(summary, message);
+                    summary.hidden = false;
+                }
+            });
+            if (group) {
+                group.classList.add("has-error");
+            }
+            if (field) {
+                field.setAttribute("aria-invalid", "true");
+            }
+        });
+        var first = form.querySelector(".has-error, .form-error.js-error");
+        if (first) {
+            first.scrollIntoView({ block: "center" });
+        }
+    }
+
+    function showTransportError() {
+        if (!summary) {
+            return;
+        }
+        addMessage(summary, form.dataset.transportError);
+        summary.hidden = false;
+    }
+
+    form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        clearErrors();
+
+        var button = form.querySelector('[type="submit"]');
+        if (button) {
+            button.disabled = true;
+        }
+
+        fetch(form.action || window.location.href, {
+            method: "POST",
+            body: new FormData(form),
+            headers: { "X-Requested-With": "XMLHttpRequest" },
+            credentials: "same-origin"
+        })
+            .then(function (response) {
+                return response.json();
+            })
+            .then(function (data) {
+                if (data.ok) {
+                    form.reset();
+                    if (success) {
+                        success.hidden = false;
+                        success.scrollIntoView({ block: "center" });
+                    }
+                } else {
+                    showErrors(data.errors);
+                }
+            })
+            .catch(function () {
+                /* The response was not JSON - an outage, or a proxy error page.
+                 * Deliberately NOT form.submit(): re-posting here is how a
+                 * visitor ends up filing the same enquiry twice when the first
+                 * one was in fact stored. */
+                showTransportError();
+            })
+            .then(function () {
+                if (button) {
+                    button.disabled = false;
+                }
+            });
+    });
+})();
+</script>
+{% endblock %}

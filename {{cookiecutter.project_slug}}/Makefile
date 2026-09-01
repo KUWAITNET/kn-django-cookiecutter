@@ -75,10 +75,10 @@ static:  ## Collect static files
 	uv run python manage.py collectstatic --noinput
 {% if cookiecutter.api != "none" %}
 schema:  ## Write the OpenAPI schema to disk
-	uv run python manage.py spectacular --file schema.yml --validate
+	uv run python manage.py spectacular --file schema.yml --validate --fail-on-warn
 
 schema-check:  ## Fail when the committed schema no longer matches the code
-	uv run python manage.py spectacular --file /tmp/schema.yml --validate
+	uv run python manage.py spectacular --file /tmp/schema.yml --validate --fail-on-warn
 	diff -u schema.yml /tmp/schema.yml
 {% endif %}
 clean:  ## Remove caches and build artefacts

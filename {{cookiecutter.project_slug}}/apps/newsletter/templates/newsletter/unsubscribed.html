@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block content %}
+  <h1>{% translate "Unsubscribed" %}</h1>
+  <p>
+    {% blocktranslate trimmed with email=subscriber.email %}
+      {{ email }} has been removed from the newsletter. We will not send you
+      anything else.
+    {% endblocktranslate %}
+  </p>
+{% endblock %}

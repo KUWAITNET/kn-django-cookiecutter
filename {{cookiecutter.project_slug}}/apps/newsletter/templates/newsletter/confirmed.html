@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block content %}
+  <h1>{% translate "Subscription confirmed" %}</h1>
+  <p>
+    {% blocktranslate trimmed with email=subscriber.email %}
+      {{ email }} is now subscribed. Every message we send carries a one-click
+      unsubscribe link.
+    {% endblocktranslate %}
+  </p>
+{% endblock %}

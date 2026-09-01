@@ -591,7 +591,39 @@ REST_FRAMEWORK = {
     "DEFAULT_VERSION": "v1",
     "ALLOWED_VERSIONS": ["v1"],
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
+    # JSON only. DRF's default list includes the browsable API, which would
+    # otherwise be live in production.
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+        "rest_framework.parsers.MultiPartParser",
+    ],
 }
+
+if DEBUG:
+    REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = [
+        *REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"],
+        "rest_framework.renderers.BrowsableAPIRenderer",
+    ]
+
+# Base URI for the "type" member of RFC 9457 problem documents.
+API_PROBLEM_BASE_URL = env("API_PROBLEM_BASE_URL", default=f"{BASE_URL}/api/problems")
+
+# Outbound integration (apps/api/services.py). Absent settings make the client
+# refuse to construct with a clear error rather than failing at call time.
+INTEGRATION_BASE_URL = env("INTEGRATION_BASE_URL", default="")
+INTEGRATION_USERNAME = env("INTEGRATION_USERNAME", default="")
+INTEGRATION_PASSWORD = env("INTEGRATION_PASSWORD", default="")
+INTEGRATION_TIMEOUT_CONNECT = env.float("INTEGRATION_TIMEOUT_CONNECT", default=5.0)
+INTEGRATION_TIMEOUT_READ = env.float("INTEGRATION_TIMEOUT_READ", default=20.0)
+INTEGRATION_FORCE_TLS12 = env.bool("INTEGRATION_FORCE_TLS12", default=False)
+{%- if cookiecutter.api == "headless" %}
+
+# Page/image/document API. Cap the page size: an uncapped list endpoint is the
+# "unrestricted resource consumption" item of the OWASP API Top 10.
+WAGTAILAPI_LIMIT_MAX = 100
+WAGTAILAPI_SEARCH_ENABLED = True
+{%- endif %}
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "{{ cookiecutter.project_name }} API",

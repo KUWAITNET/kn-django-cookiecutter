@@ -1,0 +1,72 @@
+/*
+ * Wagtail admin branding for {{ cookiecutter.project_name }}.
+ *
+ * Injected on every admin page - including the login and error pages - by the
+ * insert_global_admin_css hook in apps/core/wagtail_hooks.py, so no template
+ * override is needed to restyle the admin globally.
+ *
+ * Rebrand by editing the custom properties below and nothing else. Colours are
+ * deliberately not repeated further down the file: the reference project scattered
+ * them and the sidebar drifted a shade away from the login screen.
+ */
+
+:root {
+    --admin-brand-colour: #0b3d5c;
+    --admin-brand-contrast: #ffffff;
+    --admin-brand-logo-height: 32px;
+    --admin-brand-login-logo-height: 48px;
+    --admin-brand-wordmark-size: 1rem;
+    --admin-brand-wordmark-weight: 700;
+    --admin-brand-wordmark-spacing: 0.04em;
+}
+
+/* Logo, from Branding settings. Sized here rather than in the template so the
+ * same markup works in the sidebar and on the login screen. */
+.admin-brand-logo {
+    display: block;
+    max-height: var(--admin-brand-logo-height);
+    width: auto;
+}
+
+.admin-brand-logo--text {
+    color: var(--admin-brand-contrast);
+    font-size: var(--admin-brand-wordmark-size);
+    font-weight: var(--admin-brand-wordmark-weight);
+    letter-spacing: var(--admin-brand-wordmark-spacing);
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.login-logo .admin-brand-logo {
+    margin: 2rem auto 0;
+    max-height: var(--admin-brand-login-logo-height);
+}
+
+.login-logo .admin-brand-logo--text {
+    color: var(--admin-brand-colour);
+    text-align: center;
+}
+
+/* Wagtail's own bird mark. The branding_logo block already replaces the sidebar
+ * contents; this hides the decorative wrapper that would otherwise sit behind it. */
+.sidebar-wagtail-branding__icon {
+    display: none;
+}
+
+/* The "Wagtail <version>" line at the foot of the sidebar sub-menu. Version
+ * disclosure with no editorial value, on every page of the client's admin. */
+.sidebar-sub-menu-panel__footer {
+    display: none;
+}
+{%- if cookiecutter.languages == "en_ar" %}
+
+/* wagtail-modeltranslation's locale picker falls back to a bare ".content form"
+ * selector when it looks for somewhere to inject its "edit fields for" bar. In
+ * Wagtail 7 that also matches the hidden editing-sessions form in the slim
+ * header, so a second, non-functional copy is cloned into the header's cramped
+ * flex row. The working copy still renders above the edit form; this hides the
+ * stray clone. Remove it once the upstream selector is fixed. */
+.w-editing-sessions .locale-picker {
+    display: none;
+}
+{%- endif %}

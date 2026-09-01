@@ -66,7 +66,9 @@ urlpatterns = [
     path("api/", include("apps.api.urls")),
 {%- endif %}
 {%- if cookiecutter.api == "headless" %}
-    path("api/v2/", api_router.urls),
+    # Namespaced away from our own versioned API so a future /api/v2/ of the
+    # application cannot collide with the CMS content API.
+    path("api/cms/v2/", api_router.urls),
 {%- endif %}
 {%- if cookiecutter.newsletter == "yes" %}
     path("newsletter/", include("apps.newsletter.urls")),

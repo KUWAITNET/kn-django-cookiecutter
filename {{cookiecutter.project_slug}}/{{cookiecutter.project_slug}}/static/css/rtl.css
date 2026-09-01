@@ -1,0 +1,90 @@
+/* ---------------------------------------------------------------------------
+ * RTL overrides.
+ *
+ * Loaded LAST, and only when the active language is right-to-left
+ * (Django's LANGUAGES_BIDI drives the dir attribute on <html>). Last, because
+ * the reference project loaded it in the middle of the cascade and a later
+ * override file silently clobbered its RTL rules on Arabic pages.
+ *
+ * This file is deliberately tiny. main.css uses logical properties, so padding,
+ * margins, borders, radii and text alignment already flip on their own. What
+ * follows is only the set of things CSS logical properties genuinely cannot
+ * express - each rule says why it has to exist. If you find yourself
+ * hand-mirroring a margin here, fix the rule in main.css instead.
+ *
+ * The dir attribute is on <html>, not <body>: a selector written as
+ * body[dir="rtl"] never matches and is the kind of dead rule that survives for
+ * years because nobody notices it doing nothing.
+ * ------------------------------------------------------------------------- */
+
+/* 1. Typeface. The Latin stack has no Arabic coverage, so every Arabic page
+ *    would otherwise fall through to whatever the OS picks - usually a face with
+ *    the wrong weight and a different x-height from the rest of the design.
+ *    Replace this with the project's self-hosted Arabic family once the woff2
+ *    files are in static/fonts/ and the @font-face rules are in main.css. */
+[dir="rtl"] body {
+    font-family: var(--font-arabic);
+}
+
+/* 2. Letter-spacing must be zero in Arabic. The script is cursive: adding
+ *    tracking pulls the letters apart and breaks the joins, which reads as a
+ *    rendering bug rather than as a typographic choice. Any tracking applied for
+ *    the Latin design has to be undone here. */
+[dir="rtl"] h1,
+[dir="rtl"] h2,
+[dir="rtl"] h3,
+[dir="rtl"] h4,
+[dir="rtl"] .button,
+[dir="rtl"] button {
+    letter-spacing: 0;
+}
+
+/* 3. Directional glyphs. An arrow that means "forward" points the other way in
+ *    an RTL layout. There is no logical property for the contents of an icon, so
+ *    it is mirrored geometrically. Mark only genuinely directional icons with
+ *    this class - mirroring a logo, a clock or a play button is wrong. */
+[dir="rtl"] .icon--directional {
+    transform: scaleX(-1);
+}
+
+/* 4. Background position. background-position has no inline/block logical form,
+ *    so a decorative image anchored to the left edge stays on the left in RTL
+ *    unless it is restated. Same for any background whose gradient has a
+ *    direction. */
+[dir="rtl"] .bg-start {
+    background-position: right center;
+}
+
+[dir="rtl"] .bg-end {
+    background-position: left center;
+}
+
+/* 5. Shadows and transforms take physical offsets only. A shadow cast to the
+ *    right, or a panel that slides in from the left, has to be restated. */
+[dir="rtl"] .offset-shadow {
+    box-shadow: -2px 2px 6px rgba(16, 24, 40, 0.12);
+}
+
+/* 6. LTR runs inside RTL text. Phone numbers, e-mail addresses, URLs, version
+ *    strings and code are strong-LTR content sitting in an RTL paragraph; the
+ *    bidirectional algorithm will otherwise move neutral characters - the "+" of
+ *    a country code, a trailing bracket, a hyphen between two times - to the
+ *    wrong end. isolate scopes the run so the surrounding paragraph is not
+ *    reordered by it. The Python-side equivalent for e-mail bodies is
+ *    apps.core.utils.ltr_isolate. */
+[dir="rtl"] .ltr,
+[dir="rtl"] code,
+[dir="rtl"] kbd,
+[dir="rtl"] samp {
+    direction: ltr;
+    unicode-bidi: isolate;
+    text-align: start;
+}
+
+/* 7. Numeric tables. Figures stay LTR while their headings flip, so a column of
+ *    numbers reads correctly next to Arabic labels. */
+[dir="rtl"] .table-numeric td {
+    direction: ltr;
+    unicode-bidi: isolate;
+    text-align: end;
+}

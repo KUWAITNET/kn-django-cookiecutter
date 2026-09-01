@@ -1,0 +1,14 @@
+{% load i18n %}
+
+<p>
+  {% blocktranslate trimmed with field=field_label trigger=object.get_trigger_display language=object.language %}
+    Reset "{{ field }}" for {{ trigger }} ({{ language }}) back to the text this project
+    shipped with? Any changes made to that field are lost. Other fields are left alone.
+  {% endblocktranslate %}
+</p>
+
+<form action="" method="post" novalidate>
+  {% csrf_token %}
+  <button type="submit" class="button">{% translate "Yes, reset it" %}</button>
+  <a href="{{ edit_url }}" class="button button-secondary">{% translate "No, cancel" %}</a>
+</form>

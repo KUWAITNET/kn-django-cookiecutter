@@ -1,0 +1,89 @@
+{% load i18n wagtailcore_tags wagtailimages_tags navigation_tags %}
+{% get_current_language as LANGUAGE_CODE %}
+{% wagtail_site as current_site %}
+{% url 'search:search' as search_url %}
+{% with branding=settings.navigation.BrandingSettings nav=settings.navigation.NavigationSettings %}
+<a class="skip-link" href="#main">{% translate "Skip to content" %}</a>
+
+<header class="site-header">
+    <div class="site-header__inner">
+        <a class="site-header__brand" href="{{ current_site.root_page.url|default:'/' }}">
+            {% if branding.logo %}
+                {% image branding.logo height-56 decoding="async" alt=SITE_NAME class="site-header__logo" %}
+            {% else %}
+                <span class="site-header__wordmark">{{ SITE_NAME }}</span>
+            {% endif %}
+        </a>
+
+        <nav class="site-nav" aria-label="{% translate 'Main menu' %}">
+            <ul class="site-nav__list">
+                {% for block in nav.primary_menu %}
+                    {% with item=block.value %}
+                        {% nav_item_active item as item_active %}
+                        {% nav_branch_active item as branch_active %}
+                        <li class="site-nav__item{% if item.children %} site-nav__item--has-children{% endif %}{% if branch_active %} is-active{% endif %}">
+                            <a href="{{ item|nav_href }}"
+                               class="site-nav__link{% if branch_active %} is-active{% endif %}"
+                               {% if item.children %}aria-haspopup="true"{% endif %}
+                               {% if item_active %}aria-current="page"{% endif %}>{{ item.label }}</a>
+                            {% if item.children %}
+                                <ul class="site-nav__dropdown">
+                                    {% for child in item.children %}
+                                        {% nav_item_active child as child_active %}
+                                        {% nav_branch_active child as child_branch_active %}
+                                        <li class="site-nav__dropdown-item{% if child.children %} site-nav__dropdown-item--has-children{% endif %}{% if child_branch_active %} is-active{% endif %}">
+                                            <a href="{{ child|nav_href }}"
+                                               class="site-nav__dropdown-link{% if child_active or child_branch_active %} is-active{% endif %}"
+                                               {% if child.children %}aria-haspopup="true"{% endif %}
+                                               {% if child_active %}aria-current="page"{% endif %}>{{ child.label }}</a>
+                                            {% if child.children %}
+                                                <ul class="site-nav__submenu">
+                                                    {% for grandchild in child.children %}
+                                                        {% nav_item_active grandchild as grandchild_active %}
+                                                        <li class="site-nav__submenu-item">
+                                                            <a href="{{ grandchild|nav_href }}"
+                                                               class="site-nav__submenu-link{% if grandchild_active %} is-active{% endif %}"
+                                                               {% if grandchild_active %}aria-current="page"{% endif %}>{{ grandchild.label }}</a>
+                                                        </li>
+                                                    {% endfor %}
+                                                </ul>
+                                            {% endif %}
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </li>
+                    {% endwith %}
+                {% endfor %}
+            </ul>
+        </nav>
+
+        <div class="site-header__utilities">
+            {% if search_url %}
+                <form class="site-search" action="{{ search_url }}" method="get" role="search">
+                    <label class="site-search__label" for="site-search-input">{% translate "Search" %}</label>
+                    <input id="site-search-input" class="site-search__input" type="search" name="q" value="{{ search_query|default:'' }}" autocomplete="off">
+                    <button class="site-search__submit" type="submit">{% translate "Search" %}</button>
+                </form>
+            {% endif %}
+
+            {# One implementation of "this page in another language", shared with the
+               hreflang alternates in includes/meta.html. #}
+            {% include "includes/language_switcher.html" %}
+
+            {# available_sites is injected by apps.navigation.context_processors on multi-site projects only; undefined and falsy everywhere else. #}
+            {% if available_sites|length > 1 %}
+                <ul class="site-switch" aria-label="{% translate 'Sites' %}">
+                    {% for entry in available_sites %}
+                        <li class="site-switch__item">
+                            <a class="site-switch__link{% if entry.is_current %} is-active{% endif %}"
+                               href="{{ entry.url }}"
+                               {% if entry.is_current %}aria-current="true"{% endif %}>{{ entry.label }}</a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    </div>
+</header>
+{% endwith %}

@@ -56,7 +56,9 @@ dependencies = [
     "django-ratelimit>=4.1",
 {%- endif %}
 {%- endif %}
-{%- if cookiecutter.spam_protection == "turnstile_honeypot" %}
+{%- if cookiecutter.spam_protection == "turnstile_honeypot" or cookiecutter.api != "none" %}
+    # Outbound HTTP: Turnstile verification and the outbound-integration client
+    # in apps/api/services.py both import this at module level.
     "requests>=2.32",
 {%- endif %}
     # E-mail: post-office wraps the real transport so every send is logged and auditable.

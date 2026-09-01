@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block head_meta %}<title>{% translate "Bad request" %} | {{ SITE_NAME }}</title>
+<meta name="robots" content="noindex, nofollow">{% endblock %}
+
+{% block body_class %}page-error page-error--400{% endblock %}
+
+{% block content %}
+<section class="error-page">
+    <p class="error-page__code" aria-hidden="true">400</p>
+    <h1 class="error-page__title">{% translate "That request could not be processed" %}</h1>
+    <p class="error-page__text">{% translate "Something about the request was not valid. Please try again from the site." %}</p>
+    <p class="error-page__actions"><a class="button" href="/">{% translate "Go to the homepage" %}</a></p>
+</section>
+{% endblock %}
