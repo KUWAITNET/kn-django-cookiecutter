@@ -127,7 +127,9 @@ class ProblemDetailSerializer(serializers.Serializer):
     """RFC 9457 error envelope - documents the one error shape in the schema.
 
     See ``apps.api.exceptions``; this class only describes the contract, it does
-    not produce it.
+    not produce it. It is named in ``DRF_STANDARDIZED_ERRORS["ERROR_SCHEMAS"]``,
+    which is what makes drf-spectacular attach an error response to *every*
+    operation instead of only the ones somebody remembered to annotate.
     """
 
     type = serializers.URLField(read_only=True)
@@ -136,6 +138,26 @@ class ProblemDetailSerializer(serializers.Serializer):
     detail = serializers.CharField(read_only=True)
     instance = serializers.CharField(read_only=True)
     request_id = serializers.CharField(read_only=True)
+
+
+class ProblemFieldErrorSerializer(serializers.Serializer):
+    """One entry of the ``errors`` array. ``field`` is null for a non-field error."""
+
+    field = serializers.CharField(read_only=True, allow_null=True)
+    code = serializers.CharField(read_only=True)
+    detail = serializers.CharField(read_only=True)
+
+
+class ValidationProblemDetailSerializer(ProblemDetailSerializer):
+    """The 400 envelope: the base members plus the per-field ``errors`` array."""
+
+    errors = ProblemFieldErrorSerializer(many=True, read_only=True)
+
+
+class ThrottledProblemDetailSerializer(ProblemDetailSerializer):
+    """The 429 envelope. ``retry_after`` repeats the ``Retry-After`` header."""
+
+    retry_after = serializers.IntegerField(read_only=True)
 
 
 class APIStatusSerializer(serializers.Serializer):

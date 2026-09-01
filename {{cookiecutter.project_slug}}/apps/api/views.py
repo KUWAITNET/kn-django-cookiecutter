@@ -64,17 +64,15 @@ logger = logging.getLogger("{{ cookiecutter.project_slug }}.api")
         description="Paginated, filterable and orderable. Only the caller's own notes.",
     ),
     retrieve=extend_schema(summary="Retrieve one of the requesting user's notes"),
-    create=extend_schema(
-        summary="Create a note",
-        responses={201: NoteReadSerializer, 400: ProblemDetailSerializer},
-    ),
-    update=extend_schema(
-        summary="Replace a note",
-        responses={200: NoteReadSerializer, 400: ProblemDetailSerializer},
-    ),
+    # No error responses are annotated here on purpose: drf-standardized-errors
+    # attaches the RFC 9457 envelope to every operation it can raise one for, and
+    # an explicit entry would *replace* the generated one - losing, on a 400, the
+    # per-field ``errors`` array.
+    create=extend_schema(summary="Create a note", responses={201: NoteReadSerializer}),
+    update=extend_schema(summary="Replace a note", responses={200: NoteReadSerializer}),
     partial_update=extend_schema(
         summary="Update part of a note",
-        responses={200: NoteReadSerializer, 400: ProblemDetailSerializer},
+        responses={200: NoteReadSerializer},
     ),
     destroy=extend_schema(summary="Delete a note"),
 )
@@ -154,7 +152,7 @@ class NoteViewSet(viewsets.ModelViewSet):
         summary="Publish a note",
         description="Server-owned status transition. The status is never writable from a body.",
         request=None,
-        responses={200: NoteReadSerializer, 404: ProblemDetailSerializer},
+        responses={200: NoteReadSerializer},
     )
     @action(
         detail=True,
@@ -247,7 +245,6 @@ class IntegrationDiagnosticView(APIView):
         ),
         responses={
             200: IntegrationDiagnosticSerializer,
-            403: ProblemDetailSerializer,
             503: OpenApiResponse(
                 response=IntegrationDiagnosticSerializer,
                 description="The integration is unconfigured or the upstream is unavailable.",
@@ -287,14 +284,14 @@ class IntegrationDiagnosticView(APIView):
         return Response(IntegrationDiagnosticSerializer(payload).data)
 
 
+# The token endpoints declare auth=[] - they take credentials rather than a
+# token - and the schema generator infers a 401 from a view's authentication
+# classes, so on these four it has nothing to infer from and the 401 is written
+# out by hand. Every other error response on them is generated.
 @extend_schema(
     summary="Obtain an access and refresh token pair",
     auth=[],
-    responses={
-        200: TokenPairResponseSerializer,
-        401: ProblemDetailSerializer,
-        429: ProblemDetailSerializer,
-    },
+    responses={200: TokenPairResponseSerializer, 401: ProblemDetailSerializer},
 )
 class ThrottledTokenObtainPairView(TokenObtainPairView):
     """Token obtain, on the tightest scope in the API.

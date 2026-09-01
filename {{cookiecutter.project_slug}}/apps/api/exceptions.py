@@ -3,17 +3,28 @@
 DRF ships three different error bodies depending on which exception was raised:
 ``{"detail": "..."}`` for most of them, ``{"field": ["message"]}`` for validation,
 and a bare list for a non-field validation error. A client then needs three
-parsers, and in practice one of them is always missing. This module collapses all
-of them into a single envelope, per api-standard.md A9.
+parsers, and in practice one of them is always missing. The API answers with a
+single envelope instead, per api-standard.md A9.
+
+Collapsing them is ``drf-standardized-errors``' job, not ours: it is the
+KUWAITNET house standard, it already covers every DRF exception path (including
+the unhandled ones, which it re-signals so Sentry still sees them), and its
+drf-spectacular integration documents an error response on every operation. What
+stays ours is the *wire format*: the package's own shape is
+``{"type": "validation_error", "errors": [{"code", "detail", "attr"}]}``, so this
+module plugs an ``ExceptionFormatter`` into it that emits RFC 9457 instead.
 
 Every error response carries ``type``, ``title``, ``status``, ``detail``,
 ``instance`` and ``request_id``. Validation failures add ``errors``; a throttled
-request adds ``retry_after``.
+request adds ``retry_after`` and the matching ``Retry-After`` header.
 
-Wired up in settings as ``REST_FRAMEWORK["EXCEPTION_HANDLER"]``. The
-``problem_json_response`` helper is exported so that Django-level error handlers
-(``handler400``/``handler403``/``handler404``/``handler500``) can return the same
-envelope for requests under ``/api/`` that never reach a DRF view.
+Wired up in settings as ``REST_FRAMEWORK["EXCEPTION_HANDLER"]`` pointing at the
+package's own handler function - the schema generator checks for exactly that
+function to decide whether it may document the error responses - with this
+module's handler and formatter classes named in ``DRF_STANDARDIZED_ERRORS``.
+The ``problem_json_response`` helper is exported so that Django-level error
+handlers (``handler400``/``handler403``/``handler404``/``handler500``) can return
+the same envelope for requests under ``/api/`` that never reach a DRF view.
 """
 
 from __future__ import annotations
@@ -23,12 +34,14 @@ import uuid
 from typing import Any
 
 from django.conf import settings
-from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
-from django.core.signals import got_request_exception
-from django.http import Http404, JsonResponse
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.http import JsonResponse
+from drf_standardized_errors.formatter import ExceptionFormatter
+from drf_standardized_errors.handler import ExceptionHandler
 from rest_framework import exceptions
 from rest_framework.response import Response
-from rest_framework.views import exception_handler as drf_exception_handler
+from rest_framework.serializers import as_serializer_error
+from rest_framework.status import is_server_error
 
 logger = logging.getLogger("{{ cookiecutter.project_slug }}.api")
 
@@ -107,6 +120,10 @@ def _iter_field_errors(detail, path: str = ""):
     ``detail`` is an arbitrarily nested mix of dicts, lists and ``ErrorDetail``
     strings. Nested paths are dotted, list items carry an index, and errors that
     belong to no single field have ``field: null``.
+
+    The package ships its own flattener, but it names the member ``attr``, uses a
+    different notation for list indices and has no null for a non-field error -
+    so using it would change a contract clients are already parsing.
     """
     if isinstance(detail, dict):
         for key, value in detail.items():
@@ -155,6 +172,16 @@ def _safe_detail(exc, status_code: int) -> str:
     return str(detail)
 
 
+def _retry_after(exc) -> int | None:
+    """Seconds a throttled client must wait, rounded up.
+
+    The package truncates; a client that retries at exactly the truncated second
+    is still early, and is throttled a second time for it.
+    """
+    wait = getattr(exc, "wait", None)
+    return None if wait is None else int(wait) + 1
+
+
 def _problem(status_code: int, detail: str, request) -> dict[str, Any]:
     return {
         "type": problem_type_uri(status_code),
@@ -183,74 +210,78 @@ def problem_json_response(request, status_code: int, detail: str | None = None) 
     )
 
 
-def _unhandled_exception_response(exc, request) -> Response:
-    """Anything DRF could not classify: a bug, not a client error.
+class ProblemDetailExceptionFormatter(ExceptionFormatter):
+    """Renders the package's classified exception as an RFC 9457 problem document.
 
-    Returning a response here means Django's ``handler500`` never runs, so the
-    exception is re-emitted on ``got_request_exception`` to keep Sentry and
-    Django's own error reporting intact. The body is fixed and says nothing
-    whatsoever about the exception; the traceback goes to the log.
+    ``format_error_response`` is the package's documented extension point. The
+    ``error_response`` it is handed is the package's own dataclass, in the
+    package's own shape; we ignore it and read ``self.exc``, which is the
+    exception after the handler has converted Django's exceptions and collapsed
+    anything unclassified into a 500.
     """
-    logger.exception(
-        "api.unhandled_exception",
-        extra={"api_path": getattr(request, "path", ""), "api_exception": type(exc).__name__},
-    )
-    got_request_exception.send(sender=None, request=request)
-    return Response(
-        _problem(500, GENERIC_5XX_DETAIL, request),
-        status=500,
-        content_type=PROBLEM_CONTENT_TYPE,
-    )
+
+    def format_error_response(self, error_response) -> dict[str, Any]:  # noqa: ARG002
+        exc = self.exc
+        status_code = exc.status_code
+        request = self.context.get("request")
+
+        problem = _problem(status_code, _safe_detail(exc, status_code), request)
+
+        if isinstance(exc, exceptions.ValidationError):
+            problem["errors"] = list(_iter_field_errors(exc.detail))
+
+        retry_after = _retry_after(exc)
+        if retry_after is not None:
+            problem["retry_after"] = retry_after
+
+        return problem
 
 
-def problem_detail_handler(exc, context):
-    """DRF ``EXCEPTION_HANDLER``: one error shape for the whole API.
+class ProblemDetailExceptionHandler(ExceptionHandler):
+    """The package's handler, taught the four things this envelope needs.
 
-    Handles validation (400), authentication (401), permission (403), not-found
-    (404), method-not-allowed (405), throttling (429 with ``Retry-After``) and
-    anything unclassified (500, with no internal detail). A DRF default error
-    body never reaches a client.
+    Everything else - converting ``Http404`` and Django's ``PermissionDenied``,
+    the 500 fallback for anything unclassified, ``set_rollback``, and re-sending
+    ``got_request_exception`` so Sentry and ``django.request`` still see the
+    error - is inherited.
     """
-    request = context.get("request") if context else None
 
-    # Django's own exceptions arrive here on their way through a DRF view;
-    # normalising them first means one code path produces every envelope.
-    if isinstance(exc, Http404):
-        exc = exceptions.NotFound()
-    elif isinstance(exc, DjangoPermissionDenied):
-        exc = exceptions.PermissionDenied()
+    def convert_known_exceptions(self, exc: Exception) -> Exception:
+        """Django's ``ValidationError`` becomes DRF's rather than becoming a 500.
 
-    response = drf_exception_handler(exc, context)
-    if response is None:
-        return _unhandled_exception_response(exc, request)
+        A model's ``clean()`` or a plain Django validator raises Django's class,
+        which DRF does not recognise, so a serializer that calls ``full_clean()``
+        would answer 500 to what is a client mistake.
+        """
+        if isinstance(exc, DjangoValidationError):
+            return exceptions.ValidationError(detail=as_serializer_error(exc))
+        return super().convert_known_exceptions(exc)
 
-    status_code = response.status_code
-    problem = _problem(status_code, _safe_detail(exc, status_code), request)
-    headers: dict[str, str] = {}
+    def get_headers(self, exc: exceptions.APIException) -> dict:
+        headers = super().get_headers(exc)
+        retry_after = _retry_after(exc)
+        if retry_after is not None:
+            headers["Retry-After"] = str(retry_after)
+        return headers
 
-    if isinstance(exc, exceptions.ValidationError):
-        problem["errors"] = list(_iter_field_errors(exc.detail))
-
-    if isinstance(exc, exceptions.Throttled) and exc.wait is not None:
-        wait = int(exc.wait) + 1  # round up: a client that retries at exactly wait is early
-        problem["retry_after"] = wait
-        headers["Retry-After"] = str(wait)
-
-    # DRF sets this on NotAuthenticated when an authenticator can name a scheme.
-    # Without it the client cannot tell "log in" from "you may not do this".
-    auth_header = getattr(exc, "auth_header", None)
-    if auth_header:
-        headers["WWW-Authenticate"] = auth_header
-
-    if status_code >= 500:
-        logger.error(
-            "api.error",
-            extra={"api_status": status_code, "api_path": problem["instance"]},
+    def get_response(self, exc: exceptions.APIException, data: dict) -> Response:
+        return Response(
+            data,
+            status=exc.status_code,
+            headers=self.get_headers(exc),
+            content_type=PROBLEM_CONTENT_TYPE,
         )
 
-    return Response(
-        problem,
-        status=status_code,
-        headers=headers,
-        content_type=PROBLEM_CONTENT_TYPE,
-    )
+    def report_exception(self, exc: exceptions.APIException, response: Response) -> None:
+        if is_server_error(exc.status_code):
+            # The body deliberately says nothing about the failure, so the log
+            # line carrying the same request_id is the whole diagnostic channel.
+            logger.error(
+                "api.error",
+                extra={
+                    "api_status": exc.status_code,
+                    "api_path": response.data.get("instance", ""),
+                    "api_request_id": response.data.get("request_id", ""),
+                },
+            )
+        super().report_exception(exc, response)

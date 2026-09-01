@@ -99,6 +99,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
+    "drf_standardized_errors",
     "corsheaders",
     "django_filters",
 {%- endif %}
@@ -934,7 +935,9 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # drf-standardized-errors' AutoSchema, not drf-spectacular's: it is the
+    # subclass that adds the error responses to every operation.
+    "DEFAULT_SCHEMA_CLASS": "drf_standardized_errors.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "apps.api.pagination.DefaultPagination",
     "PAGE_SIZE": 20,
     "DEFAULT_FILTER_BACKENDS": [
@@ -952,8 +955,12 @@ REST_FRAMEWORK = {
         "auth": env("THROTTLE_AUTH", default="10/min"),
         "write": env("THROTTLE_WRITE", default="60/hour"),
     },
-    # Single error envelope: RFC 9457 application/problem+json.
-    "EXCEPTION_HANDLER": "apps.api.exceptions.problem_detail_handler",
+    # Single error envelope: RFC 9457 application/problem+json. This must name
+    # the package's own function and nothing else - the schema generator compares
+    # the view's handler against it by identity, and a wrapper of our own would
+    # silently switch every generated error response back off. The project's
+    # behaviour is injected through DRF_STANDARDIZED_ERRORS below instead.
+    "EXCEPTION_HANDLER": "drf_standardized_errors.handler.exception_handler",
     "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.URLPathVersioning",
     "DEFAULT_VERSION": "v1",
     "ALLOWED_VERSIONS": ["v1"],
@@ -972,6 +979,27 @@ if DEBUG:
         *REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"],
         "rest_framework.renderers.BrowsableAPIRenderer",
     ]
+
+# drf-standardized-errors owns exception coverage; apps/api/exceptions.py owns
+# the wire format. ERROR_SCHEMAS replaces the package's own response schemas with
+# the RFC 9457 ones, so the documented shape and the shipped shape are the same
+# thing. ENABLE_IN_DEBUG_FOR_UNHANDLED_EXCEPTIONS stays off deliberately: with
+# DEBUG on, a bug should show its traceback rather than a tidy 500 body.
+DRF_STANDARDIZED_ERRORS = {
+    "EXCEPTION_HANDLER_CLASS": "apps.api.exceptions.ProblemDetailExceptionHandler",
+    "EXCEPTION_FORMATTER_CLASS": "apps.api.exceptions.ProblemDetailExceptionFormatter",
+    "ERROR_SCHEMAS": {
+        "400": "apps.api.serializers.ValidationProblemDetailSerializer",
+        "401": "apps.api.serializers.ProblemDetailSerializer",
+        "403": "apps.api.serializers.ProblemDetailSerializer",
+        "404": "apps.api.serializers.ProblemDetailSerializer",
+        "405": "apps.api.serializers.ProblemDetailSerializer",
+        "406": "apps.api.serializers.ProblemDetailSerializer",
+        "415": "apps.api.serializers.ProblemDetailSerializer",
+        "429": "apps.api.serializers.ThrottledProblemDetailSerializer",
+        "500": "apps.api.serializers.ProblemDetailSerializer",
+    },
+}
 
 # Base URI for the "type" member of RFC 9457 problem documents.
 API_PROBLEM_BASE_URL = env("API_PROBLEM_BASE_URL", default=f"{BASE_URL}/api/problems")
@@ -1000,6 +1028,10 @@ SPECTACULAR_SETTINGS = {
     "SCHEMA_PATH_PREFIX": "/api/v[0-9]",
     "COMPONENT_SPLIT_REQUEST": True,
     "SORT_OPERATIONS": True,
+    # drf-standardized-errors' copy of drf-spectacular's enum hook. It behaves
+    # identically except that it leaves the error components alone, where the
+    # same choice set legitimately appears under several names.
+    "POSTPROCESSING_HOOKS": ["drf_standardized_errors.openapi_hooks.postprocess_schema_enums"],
 }
 
 SIMPLE_JWT = {

@@ -219,6 +219,9 @@ sends bulk mail, revisit this decision rather than working around it.
 **Context.** Every project inventing its own error shape means every integrator writes a new error
 handler.
 **Decision.** DRF, with `application/problem+json` (RFC 9457) as the single error envelope,
+produced by `drf-standardized-errors` and a project formatter rather than a bespoke handler
+(it is the established KUWAITNET package, covers every DRF exception path, and puts error
+responses into the OpenAPI schema; its own default format is not RFC 9457, hence the formatter),
 page-number pagination with a hard maximum of 100, deny-by-default permissions, and JWT access plus
 rotating refresh tokens with the superseded token blacklisted.
 **Alternatives considered.** django-ninja or FastAPI (a second framework in one process, and no

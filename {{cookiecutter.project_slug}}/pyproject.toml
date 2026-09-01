@@ -116,6 +116,10 @@ dependencies = [
     "djangorestframework>=3.15",
     "djangorestframework-simplejwt>=5.3",
     "drf-spectacular>=0.28",
+    # One error envelope for every DRF exception path, and the KUWAITNET house
+    # standard. The [openapi] extra is what makes it contribute error responses
+    # to the generated schema; without it the package is runtime-only.
+    "drf-standardized-errors[openapi]>=0.16",
     "django-cors-headers>=4.4",
     "django-filter>=24.3",
 {%- endif %}

@@ -92,18 +92,28 @@ every failure — a client writes one error handler.
 
 ```json
 {
-  "type": "about:blank",
-  "title": "Bad Request",
+  "type": "https://example.com/api/problems/validation-error",
+  "title": "Validation failed",
   "status": 400,
-  "detail": "Validation failed.",
+  "detail": "The request body failed validation. See the errors member.",
+  "instance": "/api/v1/notes/",
+  "request_id": "0f9c1a7e-2b3d-4a5f-8c6e-1d2f3a4b5c6d",
   "errors": [
-    { "name": "email", "reason": "Enter a valid email address." }
+    { "field": "title", "code": "required", "detail": "This field is required." }
   ]
 }
 ```
 
-TODO: confirm the exact field set produced by the project's exception handler and replace the
-example above with a real captured response.
+A `429` additionally carries `retry_after` in the body and a matching `Retry-After` header.
+
+The envelope is produced by [`drf-standardized-errors`](https://pypi.org/project/drf-standardized-errors/)
+with a project formatter that emits RFC 9457, rather than a hand-written exception handler. That gives
+consistent coverage of every DRF exception path and, through its drf-spectacular integration, error
+responses that appear in the OpenAPI schema instead of being invisible to it.
+
+One caveat worth knowing when reading the schema: drf-spectacular labels these responses
+`application/json` because it derives media types from the renderer classes. The wire response is
+`application/problem+json`; only the schema's label is generic.
 
 | Status | Means |
 |---|---|
