@@ -40,6 +40,21 @@ COMPRESS_ENABLED = True
 # The schema UI is available on staging and gated in production.
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=False)  # noqa: F405
 {% endif %}
+{%- if cookiecutter.task_queue == "huey" %}
+
+# The queue must never run inline in production. base.py derives this from DEBUG,
+# but DEBUG there comes from the environment file - which ships as DEBUG=True - so
+# the value is re-decided here against the settings module that is actually
+# running. Inline mode means the consumer has nothing to consume and the periodic
+# schedule never fires, so the audit log would silently never be pruned.
+HUEY = {**HUEY, "immediate": env.bool("HUEY_IMMEDIATE", default=False)}  # noqa: F405
+{%- endif %}
+{%- if cookiecutter.task_queue == "celery" %}
+
+# Same reasoning as the huey block: never run tasks inline in the web process.
+CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)  # noqa: F405
+{%- endif %}
+
 try:
     from .local import *  # noqa: F403
 except ImportError:

@@ -28,6 +28,10 @@ db.sqlite3
 coverage.xml
 htmlcov/
 
+# Background task runtime state
+/celerybeat-schedule*
+/huey.sqlite3
+
 # Tooling
 .ruff_cache/
 .DS_Store
