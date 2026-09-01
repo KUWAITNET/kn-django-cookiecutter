@@ -1,4 +1,4 @@
-{%- if cookiecutter.stack == "wagtail" %}
+{% if cookiecutter.stack == "wagtail" -%}
 """CMS admin surface for the country reference data.
 
 The same toggle listing as ``admin.py``, mirrored into the CMS admin so an editor

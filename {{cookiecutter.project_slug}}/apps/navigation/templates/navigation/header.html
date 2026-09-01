@@ -66,8 +66,8 @@
                 </form>
             {% endif %}
 
-            {# One implementation of "this page in another language", shared with the
-               hreflang alternates in includes/meta.html. #}
+            {% comment %} One implementation of "this page in another language", shared with the
+               hreflang alternates in includes/meta.html. {% endcomment %}
             {% include "includes/language_switcher.html" %}
 
             {# available_sites is injected by apps.navigation.context_processors on multi-site projects only; undefined and falsy everywhere else. #}

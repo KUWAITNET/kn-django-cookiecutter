@@ -5,6 +5,7 @@ depend on a cookiecutter variable. Anything that differs per project therefore
 arrives here, from settings.
 """
 
+from django.apps import apps as django_apps
 from django.conf import settings
 
 from apps.core.utils import language_alternatives, static_absolute_url
@@ -40,4 +41,8 @@ def site_context(request):
         # Drives hreflang, x-default, og:locale and the language switcher, which
         # is why they all read the same list instead of each deriving their own.
         "LANGUAGES_AVAILABLE": language_alternatives(request),
+        # Checked at runtime rather than generation time so a template can guard
+        # an {% raw %}{% include %}{% endraw %} of an optional app without failing to compile when that
+        # app is absent.
+        "NEWSLETTER_ENABLED": django_apps.is_installed("apps.newsletter"),
     }

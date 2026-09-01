@@ -1,4 +1,4 @@
-{%- if cookiecutter.frontend != "api_only" %}
+{% if cookiecutter.frontend != "api_only" -%}
 """The submission path and the AJAX contract every KUWAITNET form speaks.
 
 The contract is tested rather than documented-and-hoped-for because the

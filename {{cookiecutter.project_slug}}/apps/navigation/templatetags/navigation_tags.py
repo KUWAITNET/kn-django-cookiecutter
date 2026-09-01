@@ -61,6 +61,13 @@ def _localize_internal_path(path):
     return f"/{get_language() or settings.LANGUAGE_CODE}{path}"
 
 {% endif %}
+#: What an entry renders as when its destination cannot be resolved. It is a
+#: single "#" on purpose: an empty href reloads the current page, and anything
+#: built by concatenation leaks a broken value into the markup - a chosen page
+#: with no URL and an anchor of "#team" used to render as "##team".
+UNRESOLVED_HREF = "#"
+
+
 @register.filter
 def nav_href(value):
     """Resolve a link block value (page, document or url) to an href.
@@ -68,23 +75,29 @@ def nav_href(value):
     Accepts any block exposing ``page`` / ``document`` / ``url`` children, so the
     menu blocks and the link and button blocks in ``apps.core.blocks`` all render
     through one resolver. When a page is chosen, ``url`` is treated as an in-page
-    anchor and appended; otherwise it is used as given. Returns "#" rather than an
-    empty string so a half-configured menu entry stays a visible, inert link
-    instead of reloading the current page.
+    anchor and appended to the page's own URL.
+
+    A chosen page has no URL when it sits outside every site's page tree, and a
+    chosen document can have lost its file. In both cases the entry resolves to
+    ``UNRESOLVED_HREF`` and the anchor is dropped: an anchor into a destination we
+    cannot address is meaningless, and pretending otherwise puts "##team" or the
+    string "None" into the page.
     """
     getter = getattr(value, "get", None)
     if getter is None:
-        return "#"
+        return UNRESOLVED_HREF
     page = getter("page")
     document = getter("document")
     url = (getter("url") or "").strip()
     if page:
-        base = page.url or "#"
+        base = page.url
+        if not base:
+            return UNRESOLVED_HREF
         return f"{base}{url}" if url.startswith("#") else base
     if document:
-        return document.url or "#"
+        return document.url or UNRESOLVED_HREF
     if not url:
-        return "#"
+        return UNRESOLVED_HREF
 {%- if cookiecutter.languages == "en_ar" %}
     return _localize_internal_path(url)
 {%- else %}

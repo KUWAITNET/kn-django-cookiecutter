@@ -72,10 +72,11 @@
             {% endif %}
         </div>
 
-        {# Newsletter slot. The sign-up form is deliberately NOT written out here:
-           the newsletter app owns the form, including its honeypot and Turnstile
-           fields, and a hand-rolled copy in the footer would be rejected by its own
-           spam check. Drop the app's form partial in here when it is enabled. #}
+        {% comment %} The newsletter app owns the sign-up form, including its honeypot and
+           Turnstile fields; a hand-rolled copy here would be rejected by its own spam
+           check. NEWSLETTER_ENABLED is a runtime flag, so this include is never
+           resolved on a project generated without the app. {% endcomment %}
+        {% if NEWSLETTER_ENABLED %}{% include "newsletter/footer_signup.html" %}{% endif %}
     </div>
 
     <div class="site-footer__bottom">

@@ -24,10 +24,10 @@ from pathlib import PurePosixPath
 import phonenumbers
 from django import forms
 from django.utils.translation import gettext_lazy as _
-{%- if cookiecutter.countries_app == "yes" %}
 
+{% if cookiecutter.countries_app == "yes" -%}
 from apps.cities.models import Country
-{%- endif %}
+{% endif -%}
 from apps.contact.models import ContactSubmission
 {%- if cookiecutter.spam_protection != "none" %}
 from apps.core.spam import SpamProtectedForm

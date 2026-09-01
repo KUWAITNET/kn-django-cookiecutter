@@ -14,7 +14,8 @@ VALID_KUWAIT_E164 = "+96522345678"
 def pdf_bytes():
     """A real, minimal PDF. The attachment is validated by content, so a fake fails."""
     return b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n"
-{% if cookiecutter.countries_app == "yes" %}
+{%- if cookiecutter.countries_app == "yes" %}
+
 
 @pytest.fixture
 def country(db):

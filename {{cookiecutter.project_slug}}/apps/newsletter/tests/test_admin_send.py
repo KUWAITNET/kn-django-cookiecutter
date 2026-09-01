@@ -8,8 +8,13 @@ from apps.newsletter.models import AUDIENCE_ALL, Campaign
 from apps.newsletter.tests.factories import SubscriberFactory
 {% if cookiecutter.stack == "wagtail" %}
 SEND_URL_NAME = "send-newsletter:index"
+LIST_URL_NAMES = ["newsletter-subscribers:index", "newsletter-campaigns:index"]
 {%- else %}
 SEND_URL_NAME = "admin:newsletter_campaign_add"
+LIST_URL_NAMES = [
+    "admin:newsletter_subscriber_changelist",
+    "admin:newsletter_campaign_changelist",
+]
 {%- endif %}
 
 
@@ -33,6 +38,14 @@ def _payload(audience=AUDIENCE_ALL):
         payload[f"subject_{code}"] = f"Subject {code}"
         payload[f"body_{code}"] = f"Body {code}"
     return payload
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("url_name", LIST_URL_NAMES)
+def test_every_listing_renders(editor_client, url_name):
+    SubscriberFactory()
+
+    assert editor_client.get(reverse(url_name)).status_code == 200
 
 
 @pytest.mark.django_db

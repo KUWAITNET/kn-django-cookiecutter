@@ -1,4 +1,4 @@
-{%- if cookiecutter.languages == "en_ar" %}
+{% if cookiecutter.languages == "en_ar" -%}
 """Translation registration for the country reference data.
 
 Only ``display_name`` is translated. ``name`` and the other GeoNames columns are

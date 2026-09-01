@@ -1,11 +1,11 @@
 {% load i18n wagtailimages_tags %}
-{# Include this on a contact page. The map is built from the validated coordinates
+{% comment %} Include this on a contact page. The map is built from the validated coordinates
    in Contact settings, never from an editor-supplied embed snippet - a settings
    field holding raw HTML rendered with |safe is stored XSS.
 
    The live frame is off by default. Turning it on also requires adding the map
    host to CONTENT_SECURITY_POLICY frame-src in settings, otherwise the browser
-   blocks it and the visitor sees an empty box. #}
+   blocks it and the visitor sees an empty box. {% endcomment %}
 {% with contact=settings.navigation.ContactSettings %}
 {% if contact.has_map or contact.map_image %}
     <div class="site-map">

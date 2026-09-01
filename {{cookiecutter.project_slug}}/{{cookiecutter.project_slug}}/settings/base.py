@@ -153,7 +153,7 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
 {%- if cookiecutter.languages == "en_ar" %}
-    "django.middleware.locale.LocaleMiddleware",
+    "apps.core.middleware.NonLocalisedPathLocaleMiddleware",
 {%- endif %}
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -317,6 +317,22 @@ MODELTRANSLATION_FALLBACK_LANGUAGES = ("en", "ar")
 LANGUAGE_CODE = "en"
 LANGUAGES = [("en", "English")]
 LOCALE_PATHS = [os.path.join(PROJECT_DIR, "locale")]
+{%- endif %}
+
+{%- if cookiecutter.languages == "en_ar" %}
+# Paths that must NOT be redirected to a language-prefixed URL. Django's
+# LocaleMiddleware turns a 404 on an unprefixed path into a 302; for machine
+# endpoints that converts an honest "not found" into a redirect an API client
+# cannot interpret. See apps.core.middleware.
+LOCALE_REDIRECT_EXEMPT_PREFIXES = [
+{%- if cookiecutter.api != "none" %}
+    "/api/",
+{%- endif %}
+    "/healthz",
+    "/robots.txt",
+    "/sitemap.xml",
+    "/private-media/",
+]
 {%- endif %}
 
 TIME_ZONE = "{{ cookiecutter.timezone }}"
@@ -667,6 +683,11 @@ API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=True)
 
 # Countries -----------------------------------------------------------------------
 CITIES_LIGHT_APP_NAME = "cities"
+
+# Countries withheld from public choice lists, as ISO 3166-1 alpha-2 codes.
+# Env-driven so the policy is configuration rather than a literal buried in a
+# queryset: Country.objects.selectable() is the only reader.
+COUNTRY_EXCLUDED_CODES = env.list("COUNTRY_EXCLUDED_CODES", default=[])
 
 # The concrete country/region/city models live in apps.cities, so cities_light's
 # own migrations must not run: they would try to alter models that no longer

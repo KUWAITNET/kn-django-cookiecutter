@@ -207,7 +207,8 @@ def test_the_attachment_is_optional(form_data):
 
     assert form.is_valid(), form.errors
     assert not form.save().attachment
-{% if cookiecutter.spam_protection != "none" %}
+{%- if cookiecutter.spam_protection != "none" %}
+
 
 # --- Bot protection -----------------------------------------------------------
 

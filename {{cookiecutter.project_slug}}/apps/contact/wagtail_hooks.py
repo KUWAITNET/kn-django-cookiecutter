@@ -1,4 +1,4 @@
-{%- if cookiecutter.stack == "wagtail" %}
+{% if cookiecutter.stack == "wagtail" -%}
 """CMS admin surface for contact submissions.
 
 ``NoAddModelViewSet`` plus panels that are all ``read_only``: a submission is

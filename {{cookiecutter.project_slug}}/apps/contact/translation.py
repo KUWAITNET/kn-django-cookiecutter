@@ -1,4 +1,4 @@
-{%- if cookiecutter.languages == "en_ar" and cookiecutter.stack == "wagtail" %}
+{% if cookiecutter.languages == "en_ar" and cookiecutter.stack == "wagtail" -%}
 """Translated fields on the contact page.
 
 Only the editor-authored copy is translated. ``ContactSubmission`` is not: a

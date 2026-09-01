@@ -1,8 +1,8 @@
 {% extends "wagtailadmin/login.html" %}
 {% load i18n wagtailimages_tags %}
 
-{# Two named blocks only. The reference project forked this whole template to move
-   the logo, and the fork then drifted silently across CMS upgrades. #}
+{% comment %} Two named blocks only. The reference project forked this whole template to move
+   the logo, and the fork then drifted silently across CMS upgrades. {% endcomment %}
 {% block branding_login %}{% blocktranslate %}Sign in to {{ SITE_NAME }}{% endblocktranslate %}{% endblock %}
 
 {% block branding_logo %}

@@ -9,9 +9,19 @@ from apps.notifications.tests.factories import NotificationTemplateFactory
 {% if cookiecutter.stack == "wagtail" %}
 RESET_URL_NAME = "notification-templates:reset-field"
 EDIT_URL_NAME = "notification-templates:edit"
+LIST_URL_NAMES = [
+    "notification-recipients:index",
+    "notification-templates:index",
+    "notification-log:index",
+]
 {%- else %}
 RESET_URL_NAME = "admin:notifications_notificationtemplate_reset_field"
 EDIT_URL_NAME = "admin:notifications_notificationtemplate_change"
+LIST_URL_NAMES = [
+    "admin:notifications_notificationrecipient_changelist",
+    "admin:notifications_notificationtemplate_changelist",
+    "admin:post_office_email_changelist",
+]
 {%- endif %}
 
 
@@ -22,6 +32,15 @@ def admin_client_logged_in(client, django_user_model):
     )
     client.force_login(user)
     return client
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("url_name", LIST_URL_NAMES)
+def test_every_listing_renders(admin_client_logged_in, url_name):
+    """Recipients, copy and the delivery log: the client's three questions."""
+    NotificationTemplateFactory(language=settings.LANGUAGE_CODE)
+
+    assert admin_client_logged_in.get(reverse(url_name)).status_code == 200
 
 
 @pytest.mark.django_db
@@ -63,7 +82,11 @@ def test_only_allowlisted_fields_can_be_reset(admin_client_logged_in):
     """The field name comes from the URL, so it is an allowlist, not a denylist."""
     template = NotificationTemplateFactory(language=settings.LANGUAGE_CODE)
 
-    response = admin_client_logged_in.get(reverse(RESET_URL_NAME, args=[template.pk, "updated_at"]))
+    # follow=True because a bilingual site's LocaleMiddleware answers a 404 with
+    # a redirect to the language-prefixed path first.
+    response = admin_client_logged_in.get(
+        reverse(RESET_URL_NAME, args=[template.pk, "updated_at"]), follow=True
+    )
 
     assert response.status_code == 404
 

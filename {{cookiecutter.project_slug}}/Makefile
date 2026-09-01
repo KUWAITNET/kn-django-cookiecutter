@@ -29,7 +29,8 @@ superuser:  ## Create an administrator account
 
 seed:  ## Populate the database with development content
 	uv run python manage.py seed_content
-
+{% if cookiecutter.notifications_app == "yes" %}	uv run python manage.py seed_notifications
+{% endif %}
 shell:  ## Django shell
 	uv run python manage.py shell
 

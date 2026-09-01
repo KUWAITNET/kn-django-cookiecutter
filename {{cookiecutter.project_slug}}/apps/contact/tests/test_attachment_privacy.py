@@ -41,9 +41,7 @@ def test_the_attachment_has_no_public_url(submission_with_attachment):
 
 
 @pytest.mark.django_db
-def test_an_anonymous_visitor_cannot_download_the_attachment(
-    client, submission_with_attachment
-):
+def test_an_anonymous_visitor_cannot_download_the_attachment(client, submission_with_attachment):
     response = client.get(submission_with_attachment.attachment_download_url)
 
     assert response.status_code in (302, 403)
@@ -66,9 +64,7 @@ def test_a_staff_account_without_the_permission_cannot_download_it(
 @pytest.mark.django_db
 def test_a_permitted_account_can_download_it(client, staff_user, submission_with_attachment):
     staff_user.user_permissions.add(
-        Permission.objects.get(
-            codename="access_private_media", content_type__app_label="core"
-        )
+        Permission.objects.get(codename="access_private_media", content_type__app_label="core")
     )
     client.force_login(staff_user)
 

@@ -12,7 +12,7 @@ from wagtail.admin.panels import FieldPanel
 from wagtail.fields import StreamField
 from wagtail.search import index
 
-from apps.core.blocks import HOME_BLOCKS
+from apps.core.blocks import HOME_BLOCKS, HOME_BLOCKS_COUNTS
 from apps.core.models import BasePage
 
 
@@ -34,7 +34,16 @@ class HomePage(BasePage):
     # Only ever created directly under the tree root, as a site's root page.
     parent_page_types = ["wagtailcore.Page"]
 
-    body = StreamField(HOME_BLOCKS, blank=True, collapsed=True, verbose_name=_("Body"))
+    # block_counts carries the "one hero band per page" style of limit with the
+    # block list, so the cap is defined next to the blocks instead of being
+    # re-guessed by every page type that reuses them.
+    body = StreamField(
+        HOME_BLOCKS,
+        block_counts=HOME_BLOCKS_COUNTS,
+        blank=True,
+        collapsed=True,
+        verbose_name=_("Body"),
+    )
 
     content_panels = BasePage.content_panels + [FieldPanel("body")]
 

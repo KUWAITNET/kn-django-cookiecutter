@@ -66,7 +66,9 @@ def test_the_rfc_8058_post_works_without_a_csrf_token():
 def test_an_unknown_token_is_a_404(client):
     SubscriberFactory()
 
-    response = client.get(reverse("newsletter:unsubscribe", args=[uuid.uuid4()]))
+    # follow=True because a bilingual site's LocaleMiddleware answers a 404 with
+    # a redirect to the language-prefixed path first.
+    response = client.get(reverse("newsletter:unsubscribe", args=[uuid.uuid4()]), follow=True)
 
     assert response.status_code == 404
 

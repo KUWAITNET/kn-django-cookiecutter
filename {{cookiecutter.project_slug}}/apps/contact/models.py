@@ -27,14 +27,15 @@ from wagtail.fields import RichTextField
 from wagtail.rich_text import expand_db_html
 
 from apps.core.models import BasePage{% if cookiecutter.multisite == "multi" %}, SiteScopedModel{% endif %}
+from apps.core.validators import SecureFileField
 {%- else %}
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from phonenumber_field.modelfields import PhoneNumberField
-{%- endif %}
 
 from apps.core.validators import SecureFileField
+{%- endif %}
 
 #: The narrowest set that still lets someone attach a specification or a quote.
 #: An allowlist, never a denylist: a denylist is a guess about what is dangerous
@@ -135,7 +136,8 @@ class ContactSubmission({% if cookiecutter.stack == "wagtail" and cookiecutter.m
         verbose_name_plural = _("contact submissions")
 
     def __str__(self):
-        return f"{self.full_name} - {self.get_enquiry_type_display()} ({self.submitted_at:%Y-%m-%d})"
+        when = f"{self.submitted_at:%Y-%m-%d}" if self.submitted_at else "-"
+        return f"{self.full_name} - {self.get_enquiry_type_display()} ({when})"
 
     @property
     def attachment_download_url(self) -> str:
@@ -233,7 +235,5 @@ class ContactPage(BasePage):
         context["form"] = result.form
         context["submitted"] = result.submitted
         context["submit_error"] = result.submit_error
-        return TemplateResponse(
-            request, self.get_template(request), context, status=result.status
-        )
+        return TemplateResponse(request, self.get_template(request), context, status=result.status)
 {%- endif %}

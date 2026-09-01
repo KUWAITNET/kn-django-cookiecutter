@@ -248,7 +248,8 @@ def send_contact_notification(submission, page=None) -> None:
         # One message per address: recipients of the same enquiry never see each
         # other's addresses.
         send_branded_mail(subject, [address], body_html=body_html)
-{% if cookiecutter.stack == "django" and cookiecutter.frontend != "api_only" %}
+{%- if cookiecutter.stack == "django" and cookiecutter.frontend != "api_only" %}
+
 
 # --- The page -----------------------------------------------------------------
 

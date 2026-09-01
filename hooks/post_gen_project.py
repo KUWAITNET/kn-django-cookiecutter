@@ -162,6 +162,7 @@ if not IS_BILINGUAL:
         str(APPS / "core" / "tests" / "test_i18n.py"),
         str(APPS / "core" / "translation.py"),
         str(APPS / "core" / "url_patches.py"),
+        str(APPS / "core" / "middleware.py"),
         str(APPS / "navigation" / "translation.py"),
         str(APPS / "home" / "translation.py"),
         str(APPS / "search" / "indexing.py"),
@@ -177,6 +178,13 @@ if MULTISITE != "multi":
 # "/" from the page tree, and an API-only project serves no HTML at all.
 if IS_WAGTAIL or IS_API_ONLY:
     remove(str(APPS / "core" / "urls.py"))
+
+# The contact app is served from the page tree on the CMS stack, so its own
+# URLConf is dead there; an API-only project has no HTML form at all.
+if IS_WAGTAIL or IS_API_ONLY:
+    remove(str(APPS / "contact" / "urls.py"))
+if IS_API_ONLY:
+    remove(str(APPS / "contact" / "tests" / "test_views.py"))
 
 # API-only projects have no server-rendered surface at all.
 if IS_API_ONLY:

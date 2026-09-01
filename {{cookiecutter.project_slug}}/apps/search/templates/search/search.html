@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% load i18n wagtailcore_tags %}
 
-{# The page title and the noindex directive come from the view's "seo" context,
+{% comment %} The page title and the noindex directive come from the view's "seo" context,
    which includes/meta.html reads. There is no title block here on purpose:
-   metadata is emitted in exactly one place. #}
+   metadata is emitted in exactly one place. {% endcomment %}
 {% block body_class %}template-search{% endblock %}
 
 {% block content %}

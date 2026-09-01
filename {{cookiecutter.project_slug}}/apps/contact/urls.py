@@ -1,4 +1,4 @@
-{%- if cookiecutter.stack == "django" and cookiecutter.frontend != "api_only" %}
+{% if cookiecutter.stack == "django" and cookiecutter.frontend != "api_only" -%}
 """Public URLs for the contact app.
 
 Namespaced, so a template links to it as {% raw %}{% url 'contact:contact' %}{% endraw %} and the path can

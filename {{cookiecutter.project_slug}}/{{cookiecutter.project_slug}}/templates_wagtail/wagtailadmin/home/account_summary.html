@@ -1,5 +1,5 @@
 {% load wagtailadmin_tags i18n %}
-{# Full replacement, not an extend: Wagtail's own account_summary.html exposes no
+{% comment %} Full replacement, not an extend: Wagtail's own account_summary.html exposes no
    named block, so there is nothing to override. It is deliberately the ONLY
    replacement in this directory, and it is kept small so re-diffing it is cheap.
 
@@ -8,7 +8,7 @@
 
    What changed from the original: the outbound "Wagtail <version> editor guide"
    link is removed. Client editors should be sent to the project's own CMS guide,
-   not to the CMS vendor's documentation. #}
+   not to the CMS vendor's documentation. {% endcomment %}
 <div class="w-hidden lg:w-flex w-gap-5 w-pt-4 w-mb-[3.5rem] w-px-[3.75rem] w-border-l w-border-border-furniture">
     {% avatar user size="large" edit_link=True %}
     <div>
