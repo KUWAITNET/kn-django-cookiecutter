@@ -42,6 +42,13 @@ COMPRESS_OFFLINE = False
 {%- endif %}
 
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
+# The configuration singleton is read from the database in every test, never from
+# a cache. django-solo's cache lives in the process and is NOT rolled back with
+# the per-test transaction, so a row one test saved would still be handed to the
+# next test after its transaction had been undone - which surfaces as a failure in
+# whichever test happens to run second.
+SOLO_CACHE = None
 {%- if cookiecutter.task_queue == "huey" %}
 
 # Tasks run inline, in this process, against an in-memory store: the suite tests

@@ -103,6 +103,11 @@ decoration; each has a job.
 | `requests` | Server-side verification of the Turnstile token |
 {%- endif %}
 | `django-post-office` | Wraps the real mail transport so every send is logged and auditable |
+{%- if cookiecutter.stack == "wagtail" %}
+| `django-solo` | Site-wide configuration as a single admin-edited row: `apps.core.models.OperationalSettings`. **Operational settings only** — branding, contact details and social profiles belong to the CMS site settings in `apps/navigation`, and no setting exists in both places |
+{%- else %}
+| `django-solo` | Site-wide configuration as a single admin-edited row: `apps.core.models.SiteConfiguration` (site name, logo, share image, contact details, social profiles) |
+{%- endif %}
 {%- if cookiecutter.countries_app == "cities" %}
 | `django-cities-light` | Country, region and city reference data, imported from GeoNames into `apps/cities` |
 {%- elif cookiecutter.countries_app == "django_countries" %}

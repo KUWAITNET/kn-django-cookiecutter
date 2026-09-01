@@ -87,6 +87,20 @@ dependencies = [
     # the fork exists to allow superusers to delete entries, which is in tension
     # with what an audit log is for. Switch to it deliberately, not by default.
     "django-auditlog>=3.4.1",
+{%- if cookiecutter.stack == "wagtail" %}
+    # Site-wide configuration as a single row, edited in the Django admin. Here it
+    # carries OPERATIONAL settings only - integration toggles, thresholds, the
+    # switches an administrator flips. Editor-facing branding, contact and social
+    # details stay in the CMS site settings, where editors expect them, and a
+    # setting must never exist in both places.
+    "django-solo>=2.5",
+{%- else %}
+    # Site-wide configuration as a single row (apps.core.models.SiteConfiguration),
+    # edited in the Django admin. Replaces the hand-rolled "settings model with one
+    # instance, and a get_or_create scattered through the views" that every
+    # non-CMS project in the estate reinvented differently.
+    "django-solo>=2.5",
+{%- endif %}
     # A RUNTIME dependency, not a dev one. It goes in INSTALLED_APPS to provide
     # shell_plus/show_urls/graph_models, and once it is there a production install
     # without it fails at startup. Worse, its db fields (AutoSlugField and friends)

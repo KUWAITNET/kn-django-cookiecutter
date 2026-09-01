@@ -89,6 +89,9 @@ INSTALLED_APPS = [
 {%- endif %}
     "post_office",
     "auditlog",
+    # Site-wide configuration as a single row. Provides no models of its own; the
+    # project's singleton lives in apps.core.models.
+    "solo",
 {%- if cookiecutter.task_queue == "huey" %}
     # Provides 'manage.py run_huey' (the consumer) and the decorators in
     # apps/tasks/tasks.py. Importing it is what builds the HUEY object below.
@@ -1329,6 +1332,27 @@ CELERY_BEAT_SCHEDULE = {
 # The admin is not mounted at /admin/. This is defence in depth (it removes scanner
 # noise), never a substitute for 2FA, lockout or TLS.
 ADMIN_URL_PREFIX = "{{ cookiecutter.admin_url_prefix }}"
+
+# Site-wide configuration singleton (django-solo). The model is
+# apps.core.models.{% if cookiecutter.stack == "wagtail" %}OperationalSettings{% else %}SiteConfiguration{% endif %}; it is read on{% if cookiecutter.stack == "wagtail" %}ce per request that needs it{% else %} every rendered page{% endif %},
+# so the lookup is cached.
+{%- if cookiecutter.cache == "redis" %}
+# Redis is a SHARED cache, which is what makes this safe: django-solo refreshes the
+# cached row on save, and every gunicorn worker sees that refresh. Caching the
+# singleton in a per-process LocMemCache would instead leave the other workers
+# serving the old values until the timeout expired - an edit that "did not save"
+# on three page loads out of four. That is why this is enabled only here.
+SOLO_CACHE = "default"
+SOLO_CACHE_TIMEOUT = 60 * 60
+SOLO_CACHE_PREFIX = "solo"
+{%- else %}
+# Deliberately NOT cached: this project's cache is per-process LocMemCache, and
+# django-solo's cache refresh on save only reaches the worker that handled the
+# save. The other workers would keep serving the old values until the timeout
+# expired. One primary-key lookup per request is the cheaper mistake. Switch the
+# cache to Redis and set SOLO_CACHE = "default" together, never separately.
+SOLO_CACHE = None
+{%- endif %}
 
 UNFOLD = {
     "SITE_TITLE": SITE_NAME,
