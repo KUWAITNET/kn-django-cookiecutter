@@ -19,7 +19,7 @@ TODO: this record is unsigned. Complete it before go-live.
 | 1 | Django deployment configuration | `make check-deploy` | **Zero** warnings under production settings | TODO: |
 | 2 | Known-vulnerable dependencies | `make audit` (`pip-audit` against `uv.lock`) | No Critical or High, or a documented time-boxed exception | TODO: |
 | 3 | Static security analysis | `make lint` (ruff `S` rules) and `make security` (bandit) | Clean, or a per-finding `# nosec` with a reviewed justification | TODO: |
-| 4 | Dynamic scan | OWASP ZAP baseline, authenticated and unauthenticated | No Critical or High alerts; Medium triaged with a written decision | TODO: |
+| 4 | Dynamic scan | ZAP baseline, authenticated and unauthenticated | No Critical or High alerts; Medium triaged with a written decision | TODO: |
 | 5 | Security response headers | A headers scanner against staging | CSP, HSTS, nosniff, frame-ancestors, referrer-policy and permissions-policy all present and restrictive | TODO: |
 | 6 | TLS configuration | An SSL grading service against the production hostname | Grade A or better; TLS 1.2 minimum; no weak ciphers | TODO: |
 | 7 | Secret leakage | `detect-private-key` (pre-commit) plus a repository **history** scan | No credential in the repository or its history | TODO: |
