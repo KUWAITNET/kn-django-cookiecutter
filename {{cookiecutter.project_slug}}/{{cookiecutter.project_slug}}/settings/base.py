@@ -13,6 +13,7 @@ import os
 {% if cookiecutter.api != "none" %}from datetime import timedelta
 {% endif %}
 import environ
+from csp.constants import NONCE
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE_DIR = os.path.dirname(PROJECT_DIR)
@@ -127,8 +128,10 @@ INSTALLED_APPS = [
     "apps.api",
 {%- endif %}
     # Django. The admin app is loaded through our own AppConfig so that the admin
-    # site class (Unfold{% if cookiecutter.use_2fa == "yes" %}, with two-factor enforcement{% endif %}) is applied.
-    "apps.core.apps.KuwaitnetAdminConfig",
+    # site class (Unfold{% if cookiecutter.use_2fa == "yes" %}, with two-factor enforcement{% endif %}) is applied. It lives in its own
+    # module because Django refuses to auto-discover an app config when a single
+    # apps.py defines more than one AppConfig subclass.
+    "apps.core.admin_config.KuwaitnetAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -405,6 +408,11 @@ DEFAULT_ADMIN_EMAIL = env("DEFAULT_ADMIN_EMAIL", default="{{ cookiecutter.author
 SITE_NAME = env("SITE_NAME", default="{{ cookiecutter.project_name }}")
 CLIENT_NAME = "{{ cookiecutter.client_name }}"
 BASE_URL = env("BASE_URL", default="http://localhost:8000")
+
+# Staging/UAT must never be indexed. Basic auth alone has repeatedly leaked through
+# shared links and screenshots, and an indexed UAT site competes with production in
+# search results. Production sets this to False.
+ROBOTS_DISALLOW_ALL = env.bool("ROBOTS_DISALLOW_ALL", default=True)
 {%- if cookiecutter.stack == "wagtail" %}
 WAGTAIL_SITE_NAME = SITE_NAME
 WAGTAILADMIN_BASE_URL = BASE_URL
@@ -449,6 +457,8 @@ CONTENT_SECURITY_POLICY = {
         "default-src": ["'self'"],
         "script-src": [
             "'self'",
+            # django-csp 4.x replaces this sentinel with the per-request nonce.
+            NONCE,
 {%- if cookiecutter.analytics == "ga4_gtm" %}
             "https://www.googletagmanager.com",
             "https://www.google-analytics.com",
@@ -486,8 +496,6 @@ CONTENT_SECURITY_POLICY = {
         "form-action": ["'self'"],
         "object-src": ["'none'"],
     },
-    # Per-request nonce for the few inline scripts the site genuinely needs.
-    "include_nonce_in": ["script-src"],
 }
 
 # Deny every browser feature the site does not use. Enable explicitly, with a reason.

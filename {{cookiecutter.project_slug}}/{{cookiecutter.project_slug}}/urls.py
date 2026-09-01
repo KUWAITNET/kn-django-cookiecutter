@@ -6,30 +6,29 @@ right: 2FA, lockout and TLS do the actual work.
 """
 
 from django.conf import settings
-from django.conf.urls.static import static
-from django.contrib import admin
-from django.urls import include, path
 {%- if cookiecutter.languages == "en_ar" %}
 from django.conf.urls.i18n import i18n_patterns
 {%- endif %}
+from django.conf.urls.static import static
+from django.contrib import admin
+{%- if cookiecutter.stack != "wagtail" and cookiecutter.frontend != "api_only" %}
+from django.contrib.sitemaps.views import sitemap
+{%- endif %}
+from django.urls import include, path
 {%- if cookiecutter.stack == "wagtail" %}
-
 from wagtail import urls as wagtail_urls
 from wagtail.admin import urls as wagtailadmin_urls
 from wagtail.contrib.sitemaps.views import sitemap
 from wagtail.documents import urls as wagtaildocs_urls
-{%- if cookiecutter.api == "headless" %}
+{%- endif %}
 
+{%- if cookiecutter.api == "headless" %}
 from apps.api.wagtail_api import api_router
 {%- endif %}
-{%- else %}
-
-from django.contrib.sitemaps.views import sitemap
-
+from apps.core import views as core_views
+{%- if cookiecutter.stack != "wagtail" and cookiecutter.frontend != "api_only" %}
 from apps.core.sitemaps import SITEMAPS
 {%- endif %}
-
-from apps.core import views as core_views
 
 ADMIN = settings.ADMIN_URL_PREFIX
 

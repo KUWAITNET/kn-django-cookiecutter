@@ -75,6 +75,26 @@ def prune_empty_dirs(root: Path) -> None:
 # 1. Prune
 # ---------------------------------------------------------------------------
 
+# Stack-specific templates. HTML is never rendered by Jinja (Django and Jinja share
+# the same delimiters), so per-stack template differences are handled by shipping
+# two directories and merging the right one here.
+def merge_template_variant() -> None:
+    chosen = PKG / ("templates_wagtail" if IS_WAGTAIL else "templates_django")
+    shared = PROJECT_ROOT / PKG / "templates"
+    source = PROJECT_ROOT / chosen
+    if source.is_dir():
+        shared.mkdir(parents=True, exist_ok=True)
+        for item in source.iterdir():
+            destination = shared / item.name
+            if item.is_dir():
+                shutil.copytree(item, destination, dirs_exist_ok=True)
+            else:
+                shutil.copy2(item, destination)
+    remove(str(PKG / "templates_wagtail"), str(PKG / "templates_django"))
+
+
+merge_template_variant()
+
 # Optional applications.
 if COUNTRIES_APP != "yes":
     remove(str(APPS / "cities"))
@@ -89,7 +109,7 @@ if FORMS_SUITE != "yes":
     remove(str(APPS / "contact"))
 
 if API == "none":
-    remove(str(APPS / "api"), "docs/api.md")
+    remove(str(APPS / "api"), "docs/12-api.md")
 
 # Stack layer: Wagtail-only modules and templates.
 if not IS_WAGTAIL:
@@ -104,9 +124,8 @@ if not IS_WAGTAIL:
         str(APPS / "core" / "url_patches.py"),
         str(APPS / "core" / "site_context.py"),
         str(APPS / "core" / "tests" / "test_blocks.py"),
-        str(PKG / "templates" / "wagtailadmin"),
         str(PKG / "static" / "css" / "admin-branding.css"),
-        "docs/cms-guide.md",
+        "docs/10-cms-guide.md",
     )
 else:
     # Wagtail projects use the Wagtail page tree and its own translation machinery.
