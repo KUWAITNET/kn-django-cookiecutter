@@ -137,6 +137,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.sitemaps",
+    # Required from Django 6.1: the postgres.E005 system check rejects
+    # SearchVectorField and GinIndex unless this app is installed, and the search
+    # index uses both. Harmless on 5.2, and this project is PostgreSQL-only anyway.
+    "django.contrib.postgres",
     "django.contrib.staticfiles",
 ]
 
@@ -486,11 +490,17 @@ CONTENT_SECURITY_POLICY = {
             "https://analytics.google.com",
 {%- endif %}
         ],
+        "frame-src": [
+            "'self'",
 {%- if cookiecutter.spam_protection == "turnstile_honeypot" %}
-        "frame-src": ["'self'", "https://challenges.cloudflare.com"],
-{%- else %}
-        "frame-src": ["'self'"],
+            "https://challenges.cloudflare.com",
 {%- endif %}
+{%- if cookiecutter.analytics == "ga4_gtm" %}
+            # The GTM <noscript> fallback is an iframe. Allowing it here is far
+            # cheaper than loosening script-src.
+            "https://www.googletagmanager.com",
+{%- endif %}
+        ],
         "frame-ancestors": ["'self'"],
         "base-uri": ["'self'"],
         "form-action": ["'self'"],

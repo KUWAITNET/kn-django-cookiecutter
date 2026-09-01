@@ -5,11 +5,17 @@ description = "{{ cookiecutter.description }}"
 readme = "README.md"
 requires-python = "~={{ cookiecutter.python_version }}.0"
 dependencies = [
-    # Django 5.2 LTS: extended support to April 2028. Pinned to the LTS line on
-    # purpose. Wagtail declares only "Django>=5.2" with no upper bound, so an
-    # unpinned install silently resolves to a Django release Wagtail has never
-    # been tested against. The next LTS is 6.2 (April 2027) - see docs/14-decisions.md.
+    # Pinned to one Django minor on purpose: Wagtail declares only "Django>=5.2"
+    # with no upper bound, so an unpinned install silently resolves to whatever
+    # Django is newest - a combination nobody has tested. See docs/14-decisions.md.
+{%- if cookiecutter.django_version == "6.1" %}
+    # 6.1 is the current release. Chosen so the April 2027 move to the 6.2 LTS is
+    # a single-step upgrade rather than a jump across two release cycles.
+    "django>=6.1,<6.2",
+{%- else %}
+    # 5.2 LTS: security support to April 2028.
     "django>=5.2,<5.3",
+{%- endif %}
 {%- if cookiecutter.stack == "wagtail" %}
     "wagtail>=7.4,<7.5",
 {%- endif %}
