@@ -318,7 +318,7 @@ sys.stdout.write(
 if SPAM_PROTECTION == "none" or RATE_LIMITING != "yes" or USE_2FA != "yes":
     sys.stdout.write(
         f"{YELLOW}This project was generated with security defaults disabled. Record the\n"
-        f"exception in docs/decisions.md.{RESET}\n\n"
+        f"exception in docs/14-decisions.md.{RESET}\n\n"
     )
 
 # Never leave a failed bootstrap looking like a success in CI.

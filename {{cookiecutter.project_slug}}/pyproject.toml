@@ -5,9 +5,15 @@ description = "{{ cookiecutter.description }}"
 readme = "README.md"
 requires-python = "~={{ cookiecutter.python_version }}.0"
 dependencies = [
+{%- if cookiecutter.stack == "wagtail" %}
     # Pinned to one Django minor on purpose: Wagtail declares only "Django>=5.2"
     # with no upper bound, so an unpinned install silently resolves to whatever
     # Django is newest - a combination nobody has tested. See docs/14-decisions.md.
+{%- else %}
+    # Pinned to one Django minor on purpose, so an upgrade is a deliberate change
+    # with its own test run rather than something a re-resolve does silently.
+    # See docs/14-decisions.md.
+{%- endif %}
 {%- if cookiecutter.django_version == "6.1" %}
     # 6.1 is the current release. Chosen so the April 2027 move to the 6.2 LTS is
     # a single-step upgrade rather than a jump across two release cycles.
