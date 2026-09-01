@@ -17,8 +17,12 @@ uv run python -c "import django; print(django.get_version())"
 
 | Component | Version in use | Vendor support until | Notes |
 |---|---|---|---|
-| Python | {{ cookiecutter.python_version }} | October 2029 (3.13 security support) | Pinned in `.python-version` and `requires-python` |
+| Python | {{ cookiecutter.python_version }} | {% if cookiecutter.python_version == '3.14' %}October 2030{% else %}October 2029{% endif %} (security support) | Pinned in `.python-version` and `requires-python` |
+{%- if cookiecutter.django_version == '6.1' %}
+| Django | 6.1 | December 2027 | Current release, not LTS. Chosen so the move to the 6.2 LTS in April 2027 is a single step rather than a jump across two release cycles. `django>=6.1,<6.2` |
+{%- else %}
 | Django | 5.2 LTS | April 2028 | Long-term support release. `django>=5.2,<5.3` |
+{%- endif %}
 {%- if cookiecutter.stack == "wagtail" %}
 | Wagtail (content management system) | 7.4 LTS | November 2027 | Long-term support release. `wagtail>=7.4,<7.5` |
 {%- endif %}
@@ -40,7 +44,7 @@ months out is a sprint; the same upgrade started after support ends is an incide
 
 ## Why LTS releases
 
-Both Django and{% if cookiecutter.stack == "wagtail" %} Wagtail{% else %} the supporting libraries{% endif %} are pinned to long-term support releases with a narrow upper bound
+{% if cookiecutter.django_version == '6.1' %}Django is pinned to one minor release, and{% if cookiecutter.stack == "wagtail" %} Wagtail to its long-term support line,{% endif %} with a narrow upper bound{% else %}Both Django and{% if cookiecutter.stack == "wagtail" %} Wagtail{% else %} the supporting libraries{% endif %} are pinned to long-term support releases with a narrow upper bound{% endif %}
 (`<5.3`{% if cookiecutter.stack == "wagtail" %}, `<7.5`{% endif %}). A minor release is picked up by `uv lock --upgrade`; a feature release is a
 deliberate, tested, scheduled piece of work. This is recorded as a decision in
 [14-decisions.md](14-decisions.md); do not widen the bound to make an unrelated dependency resolve.
