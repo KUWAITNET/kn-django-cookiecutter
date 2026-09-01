@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Django
+*.log
+db.sqlite3
+/staticfiles/
+/media/
+/private-media/
+/.test-media/
+/.test-private-media/
+
+# Compiled translations are built at deploy time, never trusted from the repo.
+*.mo
+
+# Secrets and local overrides
+.env
+.env.*
+!.env.example
+{{ cookiecutter.project_slug }}/settings/local.py
+
+# Tests and coverage
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Tooling
+.ruff_cache/
+.DS_Store
+.idea/
+.vscode/

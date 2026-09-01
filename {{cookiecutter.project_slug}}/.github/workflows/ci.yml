@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, "release/**"]
+  pull_request:
+
+jobs:
+  quality:
+    name: Lint, security and dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run bandit -c pyproject.toml -r apps {{ cookiecutter.project_slug }}
+      # Fails the build on a known-vulnerable dependency.
+      - run: uv run pip-audit
+
+  tests:
+    name: Tests and coverage gate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: test_{{ cookiecutter.project_slug }}
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+{%- if cookiecutter.cache == "redis" %}
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s
+          --health-timeout 5s --health-retries 5
+{%- endif %}
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_{{ cookiecutter.project_slug }}
+{%- if cookiecutter.cache == "redis" %}
+      REDIS_URL: redis://localhost:6379/1
+{%- endif %}
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libmagic1 gettext
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      # A model change without a migration fails here, not on the server.
+      - run: uv run python manage.py makemigrations --check --dry-run
+      - run: uv run pytest --cov=apps --cov-report=term-missing --cov-report=xml --cov-fail-under=60
+
+  deploy-checks:
+    name: Production configuration checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      # Must report zero issues. This is a gate, not advice.
+      - run: uv run python manage.py check --deploy --fail-level WARNING
+        env:
+          DJANGO_SETTINGS_MODULE: {{ cookiecutter.project_slug }}.settings.production
+          SECRET_KEY: ci-only-not-a-secret
+          ALLOWED_HOSTS: {{ cookiecutter.domain_name }}
+
+# Before go-live, run the OWASP ZAP baseline scan against staging as part of the
+# security pass (security-baseline.md section 18).

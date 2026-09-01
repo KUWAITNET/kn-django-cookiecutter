@@ -1,0 +1,53 @@
+# Local development services. The application itself normally runs on the host
+# with 'make run'; add the app service below when you want the full stack.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: {{ cookiecutter.project_slug }}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+{%- if cookiecutter.cache == "redis" %}
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+{%- endif %}
+
+  mail:
+    # Catches outbound mail in development so nothing reaches a real address.
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+{%- if cookiecutter.deploy_target == "docker_compose" %}
+
+  web:
+    build: .
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    # Migrations run as an explicit deploy step, never on container start:
+    #   docker compose run --rm web python manage.py migrate
+{%- endif %}
+
+volumes:
+  pgdata:

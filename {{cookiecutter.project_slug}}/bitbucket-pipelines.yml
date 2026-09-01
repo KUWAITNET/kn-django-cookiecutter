@@ -1,0 +1,82 @@
+# CI for {{ cookiecutter.project_name }}.
+# Every gate here is a KUWAITNET standard: lint (with security rules), static
+# security analysis, a dependency vulnerability audit, a check that no model
+# change is missing a migration, and the test suite with the coverage floor.
+image: python:{{ cookiecutter.python_version }}
+
+definitions:
+  services:
+    postgres:
+      image: postgres:17-alpine
+      variables:
+        POSTGRES_DB: test_{{ cookiecutter.project_slug }}
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: postgres
+{%- if cookiecutter.cache == "redis" %}
+    redis:
+      image: redis:7-alpine
+{%- endif %}
+  caches:
+    uv: ~/.cache/uv
+
+  steps:
+    - step: &quality
+        name: Lint, security and dependency audit
+        caches: [uv]
+        script:
+          - pip install --quiet uv
+          - uv sync --frozen
+          - uv run ruff check .
+          - uv run ruff format --check .
+          - uv run bandit -c pyproject.toml -r apps {{ cookiecutter.project_slug }}
+          # Fails the build on a known-vulnerable dependency.
+          - uv run pip-audit
+
+    - step: &tests
+        name: Tests and coverage gate
+        caches: [uv]
+        services: [postgres{% if cookiecutter.cache == "redis" %}, redis{% endif %}]
+        script:
+          - apt-get update && apt-get install -y --no-install-recommends libmagic1 gettext
+          - pip install --quiet uv
+          - uv sync --frozen
+          - export DATABASE_URL=postgres://postgres:postgres@localhost:5432/test_{{ cookiecutter.project_slug }}
+{%- if cookiecutter.cache == "redis" %}
+          - export REDIS_URL=redis://localhost:6379/1
+{%- endif %}
+          # A model change without a migration fails here, not on the server.
+          - uv run python manage.py makemigrations --check --dry-run
+          - uv run pytest --cov=apps --cov-report=term-missing --cov-fail-under=60
+        artifacts:
+          - coverage.xml
+
+    - step: &deploy_checks
+        name: Production configuration checks
+        caches: [uv]
+        script:
+          - pip install --quiet uv
+          - uv sync --frozen
+          # Must report zero issues. This is a gate, not advice.
+          - >
+            DJANGO_SETTINGS_MODULE={{ cookiecutter.project_slug }}.settings.production
+            SECRET_KEY=ci-only-not-a-secret
+            ALLOWED_HOSTS={{ cookiecutter.domain_name }}
+            uv run python manage.py check --deploy --fail-level WARNING
+
+pipelines:
+  default:
+    - parallel:
+        - step: *quality
+        - step: *tests
+        - step: *deploy_checks
+  branches:
+    main:
+      - parallel:
+          - step: *quality
+          - step: *tests
+          - step: *deploy_checks
+
+# Before go-live, run the OWASP ZAP baseline scan against staging as part of the
+# security pass (security-baseline.md section 18):
+#   docker run --rm -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+#     -t https://staging.{{ cookiecutter.domain_name }} -r zap-report.html

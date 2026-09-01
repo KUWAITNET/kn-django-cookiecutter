@@ -1,0 +1,156 @@
+[project]
+name = "{{ cookiecutter.project_slug }}"
+version = "0.1.0"
+description = "{{ cookiecutter.description }}"
+readme = "README.md"
+requires-python = ">={{ cookiecutter.python_version }},<3.14"
+dependencies = [
+    "django>=5.2,<5.3",
+{%- if cookiecutter.stack == "wagtail" %}
+    "wagtail>=7.4,<7.5",
+{%- endif %}
+{%- if cookiecutter.languages == "en_ar" %}
+{%- if cookiecutter.stack == "wagtail" %}
+    "wagtail-modeltranslation>=0.16",
+{%- else %}
+    "django-modeltranslation>=0.19",
+{%- endif %}
+{%- endif %}
+    "psycopg[binary]>=3.2",
+    "django-environ>=0.12",
+    "Pillow>=11.0",
+    "gunicorn>=23.0",
+    "whitenoise>=6.7",
+    # Admin skin: the KUWAITNET standard wherever django.contrib.admin is mounted.
+    "django-unfold>=0.40",
+    # Security baseline.
+    "django-csp>=4.0",
+    "django-permissions-policy>=4.25",
+    "argon2-cffi>=23.1",
+    "python-magic>=0.4.27",
+{%- if cookiecutter.use_2fa == "yes" %}
+    "django-otp>=1.5",
+{%- if cookiecutter.stack == "wagtail" %}
+    "wagtail-2fa>=1.8",
+{%- endif %}
+{%- endif %}
+{%- if cookiecutter.rate_limiting == "yes" %}
+    "django-axes>=7.0",
+{%- if cookiecutter.frontend != "api_only" %}
+    "django-ratelimit>=4.1",
+{%- endif %}
+{%- endif %}
+{%- if cookiecutter.spam_protection == "turnstile_honeypot" %}
+    "requests>=2.32",
+{%- endif %}
+    # E-mail: post-office wraps the real transport so every send is logged and auditable.
+    "django-post-office>=3.9",
+{%- if cookiecutter.countries_app == "yes" %}
+    "django-cities-light>=3.10",
+{%- endif %}
+{%- if cookiecutter.countries_app == "yes" or cookiecutter.forms_suite == "yes" %}
+    "django-phonenumber-field[phonenumbers]>=8.0",
+{%- endif %}
+{%- if cookiecutter.api != "none" %}
+    # API pack.
+    "djangorestframework>=3.15",
+    "djangorestframework-simplejwt>=5.3",
+    "drf-spectacular>=0.28",
+    "django-cors-headers>=4.4",
+    "django-filter>=24.3",
+{%- endif %}
+{%- if cookiecutter.cache == "redis" %}
+    "redis>=5.0",
+{%- endif %}
+{%- if cookiecutter.sentry == "yes" %}
+    "sentry-sdk[django]>=2.0",
+{%- endif %}
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9",
+    "pytest>=8.3",
+    "pytest-django>=4.9",
+    "pytest-cov>=6.0",
+    "factory-boy>=3.3",
+    "django-debug-toolbar>=4.4",
+    "bandit[toml]>=1.8",
+    "pre-commit>=4.0",
+    "pip-audit>=2.7",
+]
+
+[tool.uv]
+package = false
+
+# --- Lint and format --------------------------------------------------------
+
+[tool.ruff]
+target-version = "py{{ cookiecutter.python_version.replace('.', '') }}"
+line-length = 100
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "DJ",  # flake8-django
+    "S",   # flake8-bandit (security)
+]
+ignore = [
+    "E501",  # line length is handled by the formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Migrations are generated; settings use star imports by design; asserts are the
+# point of a test.
+"*/migrations/*" = ["E501", "F401", "S"]
+"*/settings/*" = ["F403", "F405", "S105", "S106"]
+"*/tests/*" = ["S101", "S105", "S106"]
+"**/test_*.py" = ["S101", "S105", "S106"]
+"conftest.py" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# --- Tests ------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "{{ cookiecutter.project_slug }}.settings.test"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+# Coverage is deliberately NOT in addopts: it slows every local run. CI adds it
+# explicitly along with the failure threshold (see the Makefile 'test-ci' target).
+addopts = "--reuse-db"
+testpaths = ["apps"]
+filterwarnings = ["ignore::DeprecationWarning:pkg_resources"]
+
+[tool.coverage.run]
+source = ["apps"]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+# The KUWAITNET floor. It may rise; it does not fall.
+fail_under = 60
+
+# --- Static security analysis ------------------------------------------------
+
+[tool.bandit]
+# ruff's flake8-bandit ("S") rules cover most checks inline; this configuration
+# drives the standalone bandit run used by pre-commit and CI.
+exclude_dirs = [".venv", "tests", "node_modules", "migrations"]
+skips = [
+    "B101",  # assert_used - fine in tests
+]

@@ -1,0 +1,149 @@
+{
+  "stack": ["wagtail", "django"],
+  "project_name": "KUWAITNET Web Project",
+  "project_slug": "{{ cookiecutter.project_name.lower().replace(' ', '_').replace('-', '_').replace('.', '_') }}",
+  "client_name": "KUWAITNET",
+  "domain_name": "example.com",
+  "author": "KUWAITNET",
+  "author_email": "info@kuwaitnet.com",
+  "description": "A KUWAITNET web project.",
+  "timezone": "Asia/Kuwait",
+  "python_version": "3.13",
+  "languages": ["en_ar", "en"],
+  "frontend": ["server_rendered", "api_only"],
+  "multisite": ["single", "multi"],
+  "admin_url_prefix": "manage",
+  "use_2fa": ["yes", "no"],
+  "spam_protection": ["turnstile_honeypot", "honeypot", "none"],
+  "rate_limiting": ["yes", "no"],
+  "countries_app": ["yes", "no"],
+  "notifications_app": ["yes", "no"],
+  "newsletter": ["yes", "no"],
+  "forms_suite": ["yes", "no"],
+  "api": ["none", "rest", "headless"],
+  "sentry": ["yes", "no"],
+  "analytics": ["ga4_gtm", "none"],
+  "database": "postgres",
+  "cache": ["redis", "locmem"],
+  "docker": ["yes", "no"],
+  "ci": ["bitbucket", "github", "none"],
+  "deploy_target": ["gunicorn_nginx", "docker_compose"],
+  "bootstrap": ["yes", "no"],
+  "__prompts__": {
+    "stack": {
+      "__prompt__": "Which stack? (wagtail = CMS site; django = plain Django app or API backend, no CMS)",
+      "wagtail": "Wagtail CMS site",
+      "django": "Plain Django application or API backend"
+    },
+    "project_name": "Project name (human readable)",
+    "project_slug": "Python package / directory name",
+    "client_name": "Client name (used in branding and documentation)",
+    "domain_name": "Production domain (no scheme, e.g. example.com)",
+    "author": "Author / team",
+    "author_email": "Author e-mail",
+    "description": "One-line project description",
+    "timezone": "TIME_ZONE",
+    "python_version": "Python version",
+    "languages": {
+      "__prompt__": "Languages",
+      "en_ar": "Bilingual English + Arabic (RTL support, translated fields)",
+      "en": "English only"
+    },
+    "frontend": {
+      "__prompt__": "Frontend",
+      "server_rendered": "Server-rendered HTML templates",
+      "api_only": "API only, no server-rendered frontend (requires stack=django and an API)"
+    },
+    "multisite": {
+      "__prompt__": "Site scoping (Wagtail only)",
+      "single": "Single site",
+      "multi": "Multiple sites from one instance (site-scoped content and settings)"
+    },
+    "admin_url_prefix": "Admin URL prefix (must NOT be 'admin'; no slashes)",
+    "use_2fa": {
+      "__prompt__": "Require two-factor authentication for admin accounts?",
+      "yes": "Yes (company standard)",
+      "no": "No (requires a documented exception)"
+    },
+    "spam_protection": {
+      "__prompt__": "Spam / bot protection on public forms",
+      "turnstile_honeypot": "Cloudflare Turnstile + honeypot (company standard)",
+      "honeypot": "Honeypot only",
+      "none": "None (NOT recommended; a go-live finding)"
+    },
+    "rate_limiting": {
+      "__prompt__": "Rate limiting on public POST endpoints (django-ratelimit) + login lockout (django-axes)?",
+      "yes": "Yes (company standard)",
+      "no": "No (requires a documented exception)"
+    },
+    "countries_app": {
+      "__prompt__": "Include the countries/cities app (editor-toggleable country list, phone codes, nationalities)?",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "notifications_app": {
+      "__prompt__": "Include the notifications app (admin-editable e-mail templates, per-language sending, e-mail log)?",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "newsletter": {
+      "__prompt__": "Include the newsletter app (subscribers, unsubscribe tokens, admin composer)?",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "forms_suite": {
+      "__prompt__": "Include the example contact form (validated, rate-limited, spam-protected, secure uploads)?",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "api": {
+      "__prompt__": "REST API",
+      "none": "No API",
+      "rest": "Django REST Framework pack (/api/v1/, OpenAPI, JWT, throttles, RFC 9457 errors)",
+      "headless": "DRF pack + Wagtail API v2 page/image/document endpoints (Wagtail only)"
+    },
+    "sentry": {
+      "__prompt__": "Sentry error monitoring (activated only when SENTRY_DSN is set)?",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "analytics": {
+      "__prompt__": "Analytics",
+      "ga4_gtm": "Google Analytics 4 / Tag Manager hooks (IDs from env)",
+      "none": "None"
+    },
+    "cache": {
+      "__prompt__": "Cache backend",
+      "redis": "Redis (required in production when rate limiting is enabled)",
+      "locmem": "Local memory (development only)"
+    },
+    "docker": {
+      "__prompt__": "Include a Dockerfile (uv-based multi-stage) and docker-compose for local services?",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "ci": {
+      "__prompt__": "CI configuration (runs ruff, bandit, pip-audit, tests with the coverage gate)",
+      "bitbucket": "Bitbucket Pipelines",
+      "github": "GitHub Actions",
+      "none": "None"
+    },
+    "deploy_target": {
+      "__prompt__": "Deployment target documented in the runbook",
+      "gunicorn_nginx": "gunicorn behind nginx (systemd)",
+      "docker_compose": "docker compose"
+    },
+    "bootstrap": {
+      "__prompt__": "Bootstrap the generated project (git init, uv sync, makemigrations, pre-commit install, first commit)?",
+      "yes": "Yes",
+      "no": "No (generate files only)"
+    }
+  },
+  "_copy_without_render": [
+    "*.html",
+    "*/templates/*",
+    "*/templates_wagtail/*",
+    "*/templates_django/*"
+  ],
+  "__kuwaitnet_standards": "https://github.com/kuwaitnet/kuwaitnet-web-standards"
+}
