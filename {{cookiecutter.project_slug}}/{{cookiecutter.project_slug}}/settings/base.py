@@ -86,6 +86,11 @@ INSTALLED_APPS = [
 {%- endif %}
     "post_office",
     "auditlog",
+    # Installed in every environment, not just development: shell_plus, show_urls
+    # and graph_models are as useful on a server as locally, and an app that is
+    # only present in development is an app that breaks production at startup.
+    # runserver_plus needs Werkzeug, which is deliberately not a dependency.
+    "django_extensions",
 {%- if cookiecutter.asset_pipeline == "compressor" %}
     "compressor",
 {%- endif %}

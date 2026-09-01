@@ -87,6 +87,14 @@ dependencies = [
     # the fork exists to allow superusers to delete entries, which is in tension
     # with what an audit log is for. Switch to it deliberately, not by default.
     "django-auditlog>=3.4.1",
+    # A RUNTIME dependency, not a dev one. It goes in INSTALLED_APPS to provide
+    # shell_plus/show_urls/graph_models, and once it is there a production install
+    # without it fails at startup. Worse, its db fields (AutoSlugField and friends)
+    # get written into migrations, so a server without the package cannot even
+    # migrate. Werkzeug is NOT pulled in (requires_dist is just django), so
+    # runserver_plus and its debugger are unavailable unless someone installs
+    # Werkzeug explicitly - which production must never do.
+    "django-extensions>=4.1",
 {%- if cookiecutter.countries_app == "cities" %}
     # Country/region/city reference data. The concrete models live in apps/cities.
     "django-cities-light>=3.10",
@@ -130,11 +138,7 @@ dev = [
     "bandit[toml]>=1.8",
     "pre-commit>=4.0",
     "pip-audit>=2.7",
-    # Dev tooling ONLY - never a runtime dependency. runserver_plus ships the
-    # Werkzeug debugger, which is remote code execution if it is ever reachable.
-    # Never import from django_extensions.db: doing so would make this a runtime
-    # dependency and drag that debugger into production installs.
-    "django-extensions>=4.1",
+    # shell_plus is much better with a real REPL; it degrades gracefully without.
     "ipython>=8.30",
 ]
 
