@@ -13,7 +13,6 @@ import logging
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives, get_connection
-from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.html import strip_tags
 from django.utils.safestring import mark_safe
@@ -28,6 +27,26 @@ logger = logging.getLogger("{{ cookiecutter.project_slug }}")
 EMAIL_LOGO_STATIC_PATH = "img/email-logo.png"
 
 EMAIL_TEMPLATE = "emails/base_email.html"
+
+#: ``emails/base_email.html`` is a *shell* with a ``content`` block, so that
+#: hand-written messages can extend it. This one-line child fills that block from
+#: a body the caller supplies as text or HTML. It is a string rather than another
+#: template file so that a caller with one paragraph to send does not have to add
+#: a template to the project first.
+_BODY_TEMPLATE_SOURCE = """{% raw %}{% extends "emails/base_email.html" %}
+{% block content %}{% if body_html %}{{ body_html }}{% else %}{% for line in body_lines %}{% if line %}<p style="margin:0 0 12px;">{{ line }}</p>{% else %}<div style="height:8px; line-height:8px; font-size:0;">&nbsp;</div>{% endif %}{% endfor %}{% endif %}{% endblock %}{% endraw %}"""
+
+_body_template = None
+
+
+def _get_body_template():
+    """Compile the child template once, on first use rather than at import."""
+    global _body_template
+    if _body_template is None:
+        from django.template import engines
+
+        _body_template = engines["django"].from_string(_BODY_TEMPLATE_SOURCE)
+    return _body_template
 
 
 def _logo_url() -> str:
@@ -48,29 +67,31 @@ def _logo_url() -> str:
 def render_branded_email(subject, body_text=None, body_html=None, context=None) -> str:
     """Render a body inside the shared HTML shell.
 
-    Pass exactly one of ``body_text`` (plain text, wrapped into paragraphs by the
-    template) or ``body_html``. ``body_html`` is marked safe, so it must come from
-    trusted markup - an admin-composed rich-text body from a restricted feature
-    set, or a ``format_html``-built summary. Never pass raw visitor input.
+    Pass exactly one of ``body_text`` (plain text, wrapped into paragraphs) or
+    ``body_html``. ``body_html`` is marked safe, so it must come from trusted
+    markup - an admin-composed rich-text body from a restricted feature set, or a
+    ``format_html``-built summary. Never pass raw visitor input.
+
+    ``context`` overrides or adds shell values: ``preheader``, ``footer_note``,
+    ``unsubscribe_url``, ``logo_width``, ``logo_height``.
     """
-    is_rtl = get_language_bidi()
     render_context = {
         "subject": subject,
         "body_lines": body_text.splitlines() if body_text is not None else None,
         "body_html": mark_safe(body_html) if body_html is not None else None,  # noqa: S308
         "logo_url": _logo_url(),
-        "site_url": settings.BASE_URL,
+        "base_url": settings.BASE_URL,
         "site_name": settings.SITE_NAME,
         "client_name": settings.CLIENT_NAME,
         "year": timezone.now().year,
-        # Direction comes from the language active at render time, so callers
-        # wrap the call in translation.override() to send in the recipient's
-        # language rather than the server's.
-        "is_rtl": is_rtl,
-        "text_direction": "rtl" if is_rtl else "ltr",
+        # The shell reads the direction from the active language itself; this is
+        # here for messages that need it in their own markup. Callers wrap the
+        # call in translation.override() to send in the recipient's language
+        # rather than the server's.
+        "is_rtl": get_language_bidi(),
     }
     render_context.update(context or {})
-    return render_to_string(EMAIL_TEMPLATE, render_context)
+    return _get_body_template().render(render_context)
 
 
 def build_branded_email(

@@ -4,7 +4,7 @@ from django import forms
 from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
-{% if cookiecutter.spam_protection != "none" %}from apps.core.spam import SpamProtectionMixin
+{% if cookiecutter.spam_protection != "none" %}from apps.core.spam import SpamProtectedForm
 {% endif %}from apps.newsletter.models import AUDIENCE_ALL
 from apps.newsletter.services import check_template_source
 
@@ -19,12 +19,10 @@ BODY_WIDGET_ATTRS = {
 
 
 def audience_choices():
-    return [(AUDIENCE_ALL, _("Everyone"))] + [
-        (code, label) for code, label in settings.LANGUAGES
-    ]
+    return [(AUDIENCE_ALL, _("Everyone"))] + [(code, label) for code, label in settings.LANGUAGES]
 
 
-class SubscribeForm({% if cookiecutter.spam_protection != "none" %}SpamProtectionMixin, {% endif %}forms.Form):
+class SubscribeForm({% if cookiecutter.spam_protection != "none" %}SpamProtectedForm, {% endif %}forms.Form):
     """Public newsletter signup.
 
     A plain ``Form``, not a ``ModelForm``: resubmitting an address must
@@ -37,14 +35,13 @@ class SubscribeForm({% if cookiecutter.spam_protection != "none" %}SpamProtectio
         max_length=254,
         widget=forms.EmailInput(attrs={"autocomplete": "email"}),
     )
-
+{% if cookiecutter.spam_protection == "none" %}
     def __init__(self, *args, request=None, **kwargs):
+        # Accepted for signature parity with the spam-protected build of this
+        # project, where SpamProtectedForm consumes it to reach the client IP.
+        self.request = request
         super().__init__(*args, **kwargs)
-        # Set after super() so it survives a mixin that declares its own
-        # request kwarg and defaults it to None.
-        if request is not None:
-            self.request = request
-
+{% endif %}
     def clean_email(self):
         # Normalised so the same person cannot end up on the list twice with a
         # different capitalisation.

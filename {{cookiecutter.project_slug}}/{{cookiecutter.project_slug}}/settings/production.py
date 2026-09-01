@@ -25,7 +25,7 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 
 CSRF_TRUSTED_ORIGINS = env.list(  # noqa: F405
-    "CSRF_TRUSTED_ORIGINS", default=[f"https://{{ cookiecutter.domain_name }}"]
+    "CSRF_TRUSTED_ORIGINS", default=["https://{{ cookiecutter.domain_name }}"]
 )
 {% if cookiecutter.api != "none" %}
 # The schema UI is available on staging and gated in production.

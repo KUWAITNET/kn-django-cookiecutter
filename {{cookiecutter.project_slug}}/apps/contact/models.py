@@ -16,6 +16,7 @@ field or a private attachment.
 
 {%- if cookiecutter.stack == "wagtail" %}
 
+from django.core.validators import validate_email
 from django.db import models
 from django.template.response import TemplateResponse
 from django.utils.safestring import mark_safe
@@ -49,10 +50,23 @@ ATTACHMENT_EXTENSIONS = ("pdf", "doc", "docx")
 #: field's own message rather than by a bare 413 from the server.
 ATTACHMENT_MAX_MB = 5
 
+{%- if cookiecutter.stack == "wagtail" %}
+
 #: Rich-text features an editor needs for form copy. Deliberately narrow: this
 #: text is rendered into the page and into an e-mail, and images and embeds do
 #: not survive the e-mail.
 FORM_COPY_FEATURES = ["bold", "italic", "link", "ol", "ul"]
+
+
+def validate_email_list(value):
+    """Validate a comma-separated list of e-mail addresses.
+
+    A module-level function so a migration can serialise it by reference.
+    """
+    for address in str(value or "").split(","):
+        if address.strip():
+            validate_email(address.strip())
+{%- endif %}
 
 
 class ContactSubmission({% if cookiecutter.stack == "wagtail" and cookiecutter.multisite == "multi" %}SiteScopedModel{% else %}models.Model{% endif %}):
@@ -161,12 +175,17 @@ class ContactPage(BasePage):
         features=FORM_COPY_FEATURES,
         help_text=_("Shown after a successful submission."),
     )
-    notification_email = models.EmailField(
+    notification_email = models.CharField(
         _("notification e-mail"),
+        max_length=500,
         blank=True,
+        # A list, not one address, so an editor can add a second inbox without a
+        # deploy - which is why this is a CharField with its own validator rather
+        # than an EmailField.
+        validators=[validate_email_list],
         help_text=_(
-            "Where submissions are sent. Several addresses may be separated by "
-            "commas. Falls back to DEFAULT_ADMIN_EMAIL when blank."
+            "Where submissions are sent. Separate several addresses with commas. "
+            "Leave blank to use the project default."
         ),
     )
 
@@ -189,6 +208,7 @@ class ContactPage(BasePage):
         # An unbound form for GET. serve() replaces it with the bound one on POST.
         context["form"] = ContactForm(request=request)
         context["submitted"] = False
+        context["submit_error"] = ""
         # Rich text is expanded here instead of with the |richtext filter, so the
         # template stays a plain Django template that either stack can render and
         # needs no CMS tag library. Admin-authored markup from a restricted
@@ -212,6 +232,7 @@ class ContactPage(BasePage):
         context = self.get_context(request, *args, **kwargs)
         context["form"] = result.form
         context["submitted"] = result.submitted
+        context["submit_error"] = result.submit_error
         return TemplateResponse(
             request, self.get_template(request), context, status=result.status
         )

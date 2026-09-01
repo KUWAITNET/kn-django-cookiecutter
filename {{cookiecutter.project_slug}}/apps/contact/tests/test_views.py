@@ -31,17 +31,42 @@ def test_an_ajax_submission_returns_ok_and_is_stored(client, contact_url, form_d
 
 
 @pytest.mark.django_db
-def test_a_submission_notifies_staff(client, contact_url, form_data, settings):
-    settings.DEFAULT_ADMIN_EMAIL = "enquiries@example.com"
+def test_a_submission_notifies_staff(client, contact_url, form_data):
+    client.post(contact_url, form_data, **AJAX)
+
+    # The wording is deliberately not asserted: {% if cookiecutter.notifications_app == "yes" %}it comes from the
+    # admin-editable template{% else %}it is editable copy{% endif %}, and a test that pins it turns a
+    # copy change into a failing build.
+    assert mail.outbox
+{%- if cookiecutter.stack == "wagtail" %}
+
+
+@pytest.mark.django_db
+def test_the_page_notification_address_is_an_override(client, contact_page, contact_url, form_data):
+    contact_page.notification_email = "sales@example.com, ops@example.com"
+    contact_page.save()
 
     client.post(contact_url, form_data, **AJAX)
 
-    # One message, to the configured address. The wording is deliberately not
-    # asserted here: {% if cookiecutter.notifications_app == "yes" %}it comes from the admin-editable template when one
-    # exists{% else %}it is editable copy{% endif %}, and a test that pins it turns a copy change into a
-    # failing build.
-    assert len(mail.outbox) == 1
-    assert mail.outbox[0].to == ["enquiries@example.com"]
+    addressed = {address for message in mail.outbox for address in message.to}
+    assert addressed == {"sales@example.com", "ops@example.com"}
+    # One message per address: recipients never see each other's addresses.
+    assert all(len(message.to) == 1 for message in mail.outbox)
+{%- elif cookiecutter.notifications_app != "yes" %}
+
+
+@pytest.mark.django_db
+def test_the_default_admin_address_receives_the_notification(
+    client, contact_url, form_data, settings
+):
+    settings.DEFAULT_ADMIN_EMAIL = "sales@example.com, ops@example.com"
+
+    client.post(contact_url, form_data, **AJAX)
+
+    addressed = {address for message in mail.outbox for address in message.to}
+    assert addressed == {"sales@example.com", "ops@example.com"}
+    assert all(len(message.to) == 1 for message in mail.outbox)
+{%- endif %}
 
 
 @pytest.mark.django_db

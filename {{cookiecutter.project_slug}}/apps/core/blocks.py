@@ -358,6 +358,35 @@ class EmbedMediaBlock(ToggleableStructBlock):
         template = "blocks/embed.html"
 
 
+class HeroSlideBlock(blocks.StructBlock):
+    """One slide of the home-page hero."""
+
+    image = ImageChooserBlock()
+    heading = blocks.CharBlock(max_length=255)
+    body = blocks.TextBlock(required=False)
+    button = ButtonBlock(required=False)
+
+    class Meta:
+        icon = "image"
+        label = _("Hero slide")
+
+
+class HeroCarouselBlock(ToggleableStructBlock):
+    """The lead band of the home page.
+
+    The first slide is the page's largest contentful paint, so its image is
+    rendered eagerly and preloaded while the rest lazy-load.
+    """
+
+    slides = blocks.ListBlock(HeroSlideBlock(), min_num=1, max_num=6)
+
+    class Meta:
+        collapsed = True
+        icon = "image"
+        label = _("Hero carousel")
+        template = "blocks/hero_carousel.html"
+
+
 #: The blocks available on a generic content page.
 CONTENT_BLOCKS = [
     ("section_title", SectionTitleBlock()),
@@ -381,4 +410,19 @@ CONTENT_BLOCKS_COUNTS = {
     "cta_banner": {"max_num": 2},
     "gallery": {"max_num": 3},
     "embed": {"max_num": 6},
+}
+
+#: The home page: its own lead band, plus everything a content page can do.
+#: Built from CONTENT_BLOCKS rather than listing block types again - the
+#: reference project kept two hand-maintained lists, so the home page could not
+#: use a rich-text or CTA block at all.
+HOME_BLOCKS = [
+    ("hero_carousel", HeroCarouselBlock()),
+    *CONTENT_BLOCKS,
+]
+
+HOME_BLOCKS_COUNTS = {
+    # One hero band per home page: a second one is never the design.
+    "hero_carousel": {"max_num": 1},
+    **CONTENT_BLOCKS_COUNTS,
 }

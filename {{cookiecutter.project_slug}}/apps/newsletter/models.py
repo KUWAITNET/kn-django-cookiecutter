@@ -14,6 +14,8 @@ from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.utils import absolute_url
+
 #: Audience value meaning "every mailable subscriber, whatever their language".
 AUDIENCE_ALL = "all"
 
@@ -30,15 +32,6 @@ def language_choices():
 
 def default_language():
     return settings.LANGUAGE_CODE
-
-
-def absolute_url(path: str) -> str:
-    """``path`` against ``BASE_URL``.
-
-    Links in e-mail have no request to build against, and an unsubscribe link
-    that only works from inside the site is not an unsubscribe link.
-    """
-    return f"{settings.BASE_URL.rstrip('/')}{path}"
 
 
 class SubscriberQuerySet(models.QuerySet):
@@ -77,9 +70,7 @@ class Subscriber(models.Model):
     token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Subscribed at"))
     confirmed_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Confirmed at"))
-    unsubscribed_at = models.DateTimeField(
-        null=True, blank=True, verbose_name=_("Unsubscribed at")
-    )
+    unsubscribed_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Unsubscribed at"))
 
     objects = SubscriberQuerySet.as_manager()
 

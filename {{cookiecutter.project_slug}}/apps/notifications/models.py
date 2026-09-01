@@ -1,14 +1,14 @@
-"""Admin-editable transactional e-mail: one row per trigger per language.
+"""Admin-editable transactional e-mail: one row per trigger, audience and language.
 
-The coupling surface between the rest of the project and this app is a single
-string - the ``NotificationTrigger`` value. Recipients and copy are data an
-editor owns, not code, so adding a form or changing an e-mail's wording is not
-a deployment.
+The coupling surface between the rest of the project and this app is two strings
+- a ``NotificationTrigger`` value and a ``RecipientType``. Recipients and copy are
+data an editor owns, not code, so adding a form or rewording an e-mail is not a
+deployment.
 
 Copy is stored as Django template source and rendered with the Django template
-engine (see ``apps.notifications.services``). Invalid syntax is rejected on
-save with a field error, never at send time, because a template that only
-fails when a visitor submits a form is a bug the client discovers first.
+engine (see ``apps.notifications.services``). Invalid syntax is rejected on save
+with a field error, never at send time: a template that only fails when a visitor
+submits a form is a bug the client finds first.
 """
 
 from django.conf import settings
@@ -28,8 +28,8 @@ def language_choices():
     """The project's configured languages, resolved at access time.
 
     A callable rather than ``settings.LANGUAGES`` itself: Django serialises a
-    callable by reference, so adding a language does not produce a migration
-    that only rewrites a choices list.
+    callable by reference, so adding a language does not produce a migration that
+    only rewrites a choices list.
     """
     return list(settings.LANGUAGES)
 
@@ -41,26 +41,38 @@ def _split_addresses(value: str) -> list[str]:
 class NotificationTrigger(models.TextChoices):
     """Stable identifier for each event that sends an e-mail.
 
-    Adding a notification takes three edits and no new machinery: a member
-    here, an entry in ``apps.notifications.defaults.DEFAULTS`` for every
-    configured language, and one ``send_notification`` call where the event
-    happens. ``seed_notifications`` provisions the rows.
+    Adding a notification takes three edits and no new machinery: a member here,
+    an entry in ``apps.notifications.defaults.DEFAULTS`` for every configured
+    language, and one ``send_notification`` call where the event happens.
+    ``seed_notifications`` provisions the rows.
     """
 
-    CONTACT_ENQUIRY_ADMIN = "contact_enquiry_admin", _("Contact enquiry - staff notification")
-    CONTACT_ENQUIRY_USER = "contact_enquiry_user", _("Contact enquiry - sender confirmation")
+    CONTACT_SUBMISSION = "contact_submission", _("Contact form submission")
 {%- if cookiecutter.newsletter == "yes" %}
-    NEWSLETTER_SUBSCRIBED = "newsletter_subscribed", _("Newsletter - confirm subscription")
+    NEWSLETTER_SUBSCRIPTION = "newsletter_subscription", _("Newsletter subscription")
 {%- endif %}
 
 
+class RecipientType(models.TextChoices):
+    """Who a template is written for: staff, or the person who triggered it."""
+
+    ADMIN = "admin", _("Staff")
+    USER = "user", _("The person who triggered it")
+
+
 class NotificationTemplate(models.Model):
-    """Subject and body for one ``(trigger, language)`` pair."""
+    """Subject and body for one ``(trigger, recipient_type, language)``."""
 
     trigger = models.CharField(
         max_length=64,
         choices=NotificationTrigger.choices,
         verbose_name=_("Trigger"),
+    )
+    recipient_type = models.CharField(
+        max_length=16,
+        choices=RecipientType.choices,
+        default=RecipientType.ADMIN,
+        verbose_name=_("Written for"),
     )
     language = models.CharField(
         max_length=16,
@@ -72,9 +84,10 @@ class NotificationTemplate(models.Model):
         blank=True,
         verbose_name=_("Body"),
         help_text=_(
-            "Plain-text Django template source. Placeholders are written as "
-            "{% raw %}{{ name }}{% endraw %}; conditions as "
-            "{% raw %}{% if phone %}...{% endif %}{% endraw %}."
+            "An HTML fragment, dropped into the branded e-mail shell. Placeholders "
+            "are written as {% raw %}{{ name }}{% endraw %} and conditions as "
+            "{% raw %}{% if phone %}...{% endif %}{% endraw %}. Values are escaped, "
+            "so a visitor cannot put markup into the message."
         ),
     )
     updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Last updated"))
@@ -82,26 +95,28 @@ class NotificationTemplate(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["trigger", "language"],
-                name="notifications_unique_template_per_language",
+                fields=["trigger", "recipient_type", "language"],
+                name="notifications_unique_template",
             )
         ]
-        ordering = ["trigger", "language"]
+        ordering = ["trigger", "recipient_type", "language"]
         verbose_name = _("E-mail template")
         verbose_name_plural = _("E-mail templates")
 
     def __str__(self):
-        return f"{self.get_trigger_display()} ({self.language})"
+        return (
+            f"{self.get_trigger_display()} / {self.get_recipient_type_display()} ({self.language})"
+        )
 
     def default(self, field_name: str) -> str:
         """This row's built-in value for ``field_name``."""
-        return get_default(self.trigger, self.language, field_name)
+        return get_default(self.trigger, self.recipient_type, self.language, field_name)
 
     def reset_field(self, field_name: str) -> None:
         """Restore one field to its built-in value.
 
         Only the named field is written, so resetting a subject cannot silently
-        revert an edited body saved in the same session.
+        revert a body edited in the same session.
         """
         if field_name not in RESETTABLE_FIELDS:
             raise ValueError(f"{field_name} is not resettable")
@@ -125,9 +140,9 @@ class NotificationTemplate(models.Model):
 class NotificationRecipient(models.Model):
     """The staff addresses one trigger notifies.
 
-    A comma-separated list rather than a relation to user accounts: the people
-    who must see an enquiry are often a shared inbox or someone without a login,
-    and the client changes them without our help.
+    A comma-separated list rather than a relation to user accounts: the people who
+    must see an enquiry are often a shared inbox or somebody without a login, and
+    the client changes them without our help.
     """
 
     trigger = models.CharField(

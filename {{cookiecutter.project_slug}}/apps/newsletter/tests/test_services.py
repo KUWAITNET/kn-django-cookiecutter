@@ -1,6 +1,7 @@
 import pytest
 from django.conf import settings
 
+from apps.core import emails as core_emails
 from apps.newsletter import services
 from apps.newsletter.models import AUDIENCE_ALL, Campaign
 from apps.newsletter.tests.factories import SubscriberFactory
@@ -17,9 +18,17 @@ class RecordingConnection:
         return len(messages)
 
 
+def message_text(message) -> str:
+    """Everything a recipient could read: the plain part and every alternative."""
+    parts = [message.body]
+    for alternative in getattr(message, "alternatives", ()):
+        parts.append(getattr(alternative, "content", None) or alternative[0])
+    return "\n".join(parts)
+
+
 def _content_for_every_language():
     return {
-        code: {"subject": f"Subject {code}", "body": f"Body {code}"}
+        code: {"subject": f"Subject {code}", "body": f"<p>Body {code}</p>"}
         for code, _label in settings.LANGUAGES
     }
 
@@ -36,13 +45,13 @@ def test_each_subscriber_is_written_in_their_own_language(mailoutbox):
     for code, _label in settings.LANGUAGES:
         message = by_address[f"{code}@example.com"]
         assert message.subject == f"Subject {code}"
-        assert message.body.startswith(f"Body {code}")
+        assert f"Body {code}" in message_text(message)
 
 
 @pytest.mark.django_db
 def test_a_language_nobody_composed_falls_back_rather_than_being_skipped(mailoutbox):
     subscriber = SubscriberFactory(language="zz")
-    content = {settings.LANGUAGE_CODE: {"subject": "Only one", "body": "Body"}}
+    content = {settings.LANGUAGE_CODE: {"subject": "Only one", "body": "<p>Body</p>"}}
 
     campaign = services.send_campaign(content)
 
@@ -55,16 +64,16 @@ def test_a_language_nobody_composed_falls_back_rather_than_being_skipped(mailout
 def test_every_message_carries_a_working_unsubscribe_link(mailoutbox):
     subscriber = SubscriberFactory()
 
-    services.send_campaign({settings.LANGUAGE_CODE: {"subject": "S", "body": "B"}})
+    services.send_campaign({settings.LANGUAGE_CODE: {"subject": "S", "body": "<p>B</p>"}})
 
-    assert str(subscriber.token) in mailoutbox[0].body
+    assert str(subscriber.token) in message_text(mailoutbox[0])
 
 
 @pytest.mark.django_db
 def test_messages_advertise_one_click_unsubscribe():
     subscriber = SubscriberFactory()
 
-    message = services._build_message("Subject", "Body", subscriber)
+    message = services._build_message("Subject", "<p>Body</p>", subscriber)
 
     assert message.extra_headers["List-Unsubscribe"] == f"<{subscriber.unsubscribe_url}>"
     assert message.extra_headers["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
@@ -74,9 +83,11 @@ def test_messages_advertise_one_click_unsubscribe():
 def test_a_campaign_is_one_batch_over_one_connection_with_one_recipient_each(monkeypatch):
     SubscriberFactory.create_batch(3)
     connection = RecordingConnection()
-    monkeypatch.setattr(services.mail, "get_connection", lambda *args, **kwargs: connection)
+    monkeypatch.setattr(core_emails, "get_connection", lambda *args, **kwargs: connection)
 
-    campaign = services.send_campaign({settings.LANGUAGE_CODE: {"subject": "S", "body": "B"}})
+    campaign = services.send_campaign(
+        {settings.LANGUAGE_CODE: {"subject": "S", "body": "<p>B</p>"}}
+    )
 
     assert len(connection.batches) == 1
     assert len(connection.batches[0]) == 3
@@ -92,7 +103,7 @@ def test_only_confirmed_and_still_subscribed_addresses_are_mailed(mailoutbox):
     SubscriberFactory(email="unconfirmed@example.com", is_confirmed=False)
     SubscriberFactory(email="gone@example.com", is_active=False)
 
-    services.send_campaign({settings.LANGUAGE_CODE: {"subject": "S", "body": "B"}})
+    services.send_campaign({settings.LANGUAGE_CODE: {"subject": "S", "body": "<p>B</p>"}})
 
     assert [message.to[0] for message in mailoutbox] == ["yes@example.com"]
 
@@ -103,7 +114,7 @@ def test_an_audience_narrows_to_one_language(mailoutbox):
     SubscriberFactory(email="other@example.com", language="zz")
 
     services.send_campaign(
-        {settings.LANGUAGE_CODE: {"subject": "S", "body": "B"}},
+        {settings.LANGUAGE_CODE: {"subject": "S", "body": "<p>B</p>"}},
         audience=settings.LANGUAGE_CODE,
     )
 
@@ -122,7 +133,7 @@ def test_the_send_is_logged(mailoutbox):
     SubscriberFactory.create_batch(2)
 
     services.send_campaign(
-        {settings.LANGUAGE_CODE: {"subject": "Hello", "body": "Body"}},
+        {settings.LANGUAGE_CODE: {"subject": "Hello", "body": "<p>Body</p>"}},
         audience=AUDIENCE_ALL,
     )
 
@@ -146,20 +157,20 @@ def test_recipient_counts_cover_every_audience_option():
 
 
 @pytest.mark.django_db
-def test_body_placeholders_are_rendered_without_html_escaping(mailoutbox):
+def test_placeholders_resolve_and_visitor_values_stay_out_of_the_markup(mailoutbox):
     SubscriberFactory(email="reader@example.com")
 
     services.send_campaign(
         {
             settings.LANGUAGE_CODE: {
                 "subject": "{% raw %}Hello {{ email }}{% endraw %}",
-                "body": "{% raw %}Smith & Sons wrote to {{ email }}{% endraw %}",
+                "body": "{% raw %}<p>Written to {{ email }}</p>{% endraw %}",
             }
         }
     )
 
     assert mailoutbox[0].subject == "Hello reader@example.com"
-    assert "Smith & Sons wrote to reader@example.com" in mailoutbox[0].body
+    assert "Written to reader@example.com" in message_text(mailoutbox[0])
 
 
 @pytest.mark.django_db

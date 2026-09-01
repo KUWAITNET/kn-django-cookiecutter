@@ -40,7 +40,9 @@ browser would otherwise perform itself.
         {% csrf_token %}
 
         {# novalidate above: every message comes from the server, so the visitor never sees two different wordings for the same problem, and every message is translated by Django. #}
-        <div id="contact-form-errors" class="form-errors" role="alert"{% if not form.non_field_errors %} hidden{% endif %}>
+        {# Whole-request problems: a form-wide validation error, or a refusal (rate limit) that never reached validation. #}
+        <div id="contact-form-errors" class="form-errors" role="alert"{% if not form.non_field_errors and not submit_error %} hidden{% endif %}>
+            {% if submit_error %}<p class="form-error">{{ submit_error }}</p>{% endif %}
             {% for error in form.non_field_errors %}<p class="form-error">{{ error }}</p>{% endfor %}
         </div>
 

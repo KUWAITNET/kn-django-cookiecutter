@@ -1,43 +1,47 @@
 """Subscribing, confirming, unsubscribing and sending.
 
-Every send goes out with ``django.core.mail``, which this project points at
-django-post-office, so each message - delivered or failed - is recorded and
-visible in the admin e-mail log without this module knowing about it.
+Messages are built by ``apps.core.emails`` so a newsletter looks like every other
+e-mail the project sends, and go out over ``django.core.mail`` - which is
+django-post-office here, so each one is recorded and visible in the admin e-mail
+log without this module knowing about it.
 """
 
 import logging
 
 from django.conf import settings
-from django.core import mail
 from django.db.models import Count
 from django.template import engines
 from django.template.exceptions import TemplateSyntaxError
 from django.utils import timezone, translation
+from django.utils.html import format_html
 from django.utils.translation import gettext as _
 
+from apps.core.emails import build_branded_email, send_branded_mass_mail
 from apps.newsletter.models import AUDIENCE_ALL, Campaign, Subscriber
-{%- if cookiecutter.notifications_app == "yes" %}
-from apps.notifications.models import NotificationTrigger
-from apps.notifications.services import render_notification
-{%- endif %}
-
+{% if cookiecutter.notifications_app == "yes" %}from apps.notifications.models import NotificationTrigger, RecipientType
+from apps.notifications.services import render_notification_template
+{% endif %}
 logger = logging.getLogger(__name__)
 
-# Bodies are plain text, so the engine must not HTML-escape the context: an
-# address containing "&" is not an entity in a text/plain part.
+# A subject is a header, not markup, so it is rendered with escaping off - an
+# ampersand in a site name must not arrive as "&amp;". Bodies keep Django's
+# autoescaping: they are HTML fragments, and the values dropped into them are
+# addresses a visitor typed.
 _AUTOESCAPE_OPEN = "{% raw %}{% autoescape off %}{% endraw %}"
 _AUTOESCAPE_CLOSE = "{% raw %}{% endautoescape %}{% endraw %}"
 
 
-def _compile(source: str):
-    return engines["django"].from_string(f"{_AUTOESCAPE_OPEN}{source}{_AUTOESCAPE_CLOSE}")
+def _compile(source: str, autoescape: bool = True):
+    if not autoescape:
+        source = f"{_AUTOESCAPE_OPEN}{source}{_AUTOESCAPE_CLOSE}"
+    return engines["django"].from_string(source)
 
 
 def check_template_source(source: str) -> str | None:
     """Return a readable error for invalid template source, or ``None``.
 
-    Campaign copy is compiled when it is composed, so a broken tag is a field
-    error in the admin rather than a half-sent campaign.
+    Campaign copy is compiled while it is being composed, so a broken tag is a
+    field error in the admin rather than a half-sent campaign.
     """
     if not source:
         return None
@@ -48,25 +52,27 @@ def check_template_source(source: str) -> str | None:
     return None
 
 
-def render_source(source: str, context: dict) -> str:
-    return _compile(source).render(context)
+def render_source(source: str, context: dict, autoescape: bool = True) -> str:
+    return _compile(source, autoescape=autoescape).render(context)
 
 
-def _build_message(subject: str, body: str, subscriber: Subscriber) -> mail.EmailMessage:
-    return mail.EmailMessage(
-        # The subject is a mail header and it is rendered from stored copy, so a
-        # newline in a context value must not be able to become a header.
-        subject=" ".join(subject.split()),
-        body=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[subscriber.email],
-        headers={
+def _build_message(subject: str, body_html: str, subscriber: Subscriber):
+    message = build_branded_email(
+        # Collapsed to one line: the subject becomes a mail header, and a
+        # newline in a rendered value must not be able to start a header.
+        " ".join(subject.split()),
+        [subscriber.email],
+        body_html=body_html,
+    )
+    message.extra_headers.update(
+        {
             # One-click unsubscribe (RFC 8058): mail clients show a real button
             # instead of the recipient reaching for "report as spam".
             "List-Unsubscribe": f"<{subscriber.unsubscribe_url}>",
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-        },
+        }
     )
+    return message
 
 
 def _mail_context(subscriber: Subscriber) -> dict:
@@ -110,29 +116,28 @@ def send_confirmation(subscriber: Subscriber) -> bool:
         with translation.override(subscriber.language):
             context = _mail_context(subscriber)
 {%- if cookiecutter.notifications_app == "yes" %}
-            subject, body = render_notification(
-                NotificationTrigger.NEWSLETTER_SUBSCRIBED, context, subscriber.language
+            subject, body_html = render_notification_template(
+                NotificationTrigger.NEWSLETTER_SUBSCRIPTION,
+                RecipientType.USER,
+                context=context,
+                language=subscriber.language,
             )
 {%- else %}
             subject = _("Confirm your newsletter subscription")
-            body = render_source(
+            body_html = format_html(
+                '<p>{}</p>\n<p><a href="{}">{}</a></p>\n<p>{}</p>',
+                _("%(email)s was used to subscribe to the %(site)s newsletter.")
+                % {"email": context["email"], "site": context["site_name"]},
+                context["confirm_url"],
+                _("Confirm the subscription"),
                 _(
-                    "Hello,\n"
-                    "\n"
-                    "{% raw %}{{ email }}{% endraw %} was used to subscribe to the "
-                    "{% raw %}{{ site_name }}{% endraw %} newsletter.\n"
-                    "\n"
-                    "Confirm the subscription:\n"
-                    "{% raw %}{{ confirm_url }}{% endraw %}\n"
-                    "\n"
                     "If this was not you, ignore this message. Nothing will be sent "
-                    "unless the link above is used.\n"
+                    "unless the link above is used."
                 ),
-                context,
             )
 {%- endif %}
-            message = _build_message(subject, body, subscriber)
-        message.send()
+            message = _build_message(subject, body_html, subscriber)
+        send_branded_mass_mail([message])
     except Exception:
         logger.exception("Newsletter confirmation to subscriber %s failed", subscriber.pk)
         return False
@@ -208,18 +213,21 @@ def send_campaign(content: dict, audience: str = AUDIENCE_ALL, sent_by=None) -> 
     for subscriber in subscribers_for(audience):
         entry = content.get(subscriber.language) or fallback
         with translation.override(subscriber.language):
-            # Rendered inside the override so the body, the appended unsubscribe
-            # line and any translated value agree on one language.
+            # Rendered inside the override so the body, the branded shell's text
+            # direction and the appended unsubscribe line agree on one language.
             context = _mail_context(subscriber)
-            subject = render_source(entry["subject"], context)
-            body = render_source(entry["body"], context)
-            footer = _("Unsubscribe: %(url)s") % {"url": subscriber.unsubscribe_url}
-            messages.append(_build_message(subject, f"{body}\n\n--\n{footer}\n", subscriber))
+            subject = render_source(entry["subject"], context, autoescape=False)
+            body_html = render_source(entry["body"], context)
+            footer = format_html(
+                '<p><a href="{}">{}</a></p>',
+                subscriber.unsubscribe_url,
+                _("Unsubscribe from this newsletter"),
+            )
+            messages.append(_build_message(subject, f"{body_html}\n{footer}", subscriber))
 
     # One connection for the whole campaign rather than a handshake per
     # recipient, and one message per recipient rather than a shared To.
-    connection = mail.get_connection()
-    connection.send_messages(messages)
+    send_branded_mass_mail(messages)
 
     return Campaign.objects.create(
         content=content,

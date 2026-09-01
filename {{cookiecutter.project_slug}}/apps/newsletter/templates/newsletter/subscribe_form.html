@@ -1,0 +1,22 @@
+{% load i18n %}
+{% comment %}
+The signup form, rendered by the app that validates it.
+
+Drop it anywhere - the footer slot, a landing page - with either
+{% include "newsletter/subscribe_form.html" %} when the view already put `form`
+in the context, or {% load newsletter_tags %}{% newsletter_signup_form %} from a
+page that did not.
+
+Never hand-write the fields: the subscribe view checks a honeypot and a
+challenge field, and a hand-rolled copy in a footer fails the app's own spam
+check - the kind of bug that only shows up once the site is live.
+
+(A comment block rather than the {#...#} form, which is single-line only: the
+tags quoted above would otherwise be parsed for real, and this template would
+include itself until the stack ran out.)
+{% endcomment %}
+<form class="newsletter-signup" method="post" action="{% url 'newsletter:subscribe' %}" novalidate>
+  {% csrf_token %}
+  {{ form.as_div }}
+  <button type="submit" class="newsletter-signup__submit">{% translate "Subscribe" %}</button>
+</form>

@@ -10,6 +10,8 @@ from wagtail.blocks.struct_block import StructBlockValidationError
 from apps.core.blocks import (
     CONTENT_BLOCKS,
     CONTENT_BLOCKS_COUNTS,
+    HOME_BLOCKS,
+    HOME_BLOCKS_COUNTS,
     ButtonBlock,
     LinkBlock,
     PageOrURLBlock,
@@ -62,6 +64,15 @@ def test_every_content_block_is_capped():
     assert names <= set(CONTENT_BLOCKS_COUNTS)
     for name in names:
         assert CONTENT_BLOCKS_COUNTS[name]["max_num"] > 0
+
+
+def test_the_home_page_can_use_every_content_block():
+    # The reference project kept two hand-maintained lists, so a home page could
+    # not use a rich-text or CTA block at all.
+    home_names = {name for name, _block in HOME_BLOCKS}
+    assert {name for name, _block in CONTENT_BLOCKS} <= home_names
+    assert "hero_carousel" in home_names
+    assert home_names <= set(HOME_BLOCKS_COUNTS)
 
 
 def test_content_blocks_are_registered_under_stable_names():

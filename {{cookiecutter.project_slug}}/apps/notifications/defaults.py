@@ -1,38 +1,41 @@
-"""Built-in copy for every notification, per trigger and per language.
+"""Built-in copy for every notification, per recipient type and per language.
 
-This is the file to open when someone asks "what does that e-mail say?". It is
-also the source of the admin's per-field "Reset to default" action, so the copy
-an editor can restore is always the copy the project shipped with - there is no
-second hard-coded string anywhere.
+This is the file to open when someone asks "what does that e-mail say?". It also
+backs the admin's per-field "Reset to default", so the copy an editor can restore
+is always the copy the project shipped with - there is no second hard-coded
+string anywhere.
 
-Keys are plain strings rather than ``NotificationTrigger`` members on purpose:
-``models`` imports this module, so importing the enum back would be a circular
-import (the reference implementation worked around it with a mid-module import
-that reads like a mistake). ``test_defaults`` asserts the two stay in step.
+Keys are plain strings rather than ``NotificationTrigger``/``RecipientType``
+members on purpose: ``models`` imports this module, so importing the enums back
+would be a circular import (the reference implementation worked around it with a
+mid-module import that reads like a mistake). ``test_defaults`` asserts the two
+stay in step.
 
-Bodies are Django template source, rendered as **plain text** against a
-per-send context. A trigger's context may carry more keys than the copy below
-uses - that is the point: an editor can add a placeholder from the admin
-without a code change.
+Bodies are HTML fragments, rendered as Django templates against a per-send
+context and dropped into the branded shell from ``apps.core.emails``. A trigger's
+context usually carries more keys than the copy below uses - that is the point:
+an editor can add a placeholder from the admin with no code change.
 """
 
 from django.conf import settings
 
-DEFAULTS: dict[str, dict[str, dict[str, str]]] = {
-    "contact_enquiry_admin": {
+DEFAULTS: dict[tuple[str, str], dict[str, dict[str, str]]] = {
+    ("contact_submission", "admin"): {
         "en": {
 {%- raw %}
             "subject": "New enquiry from {{ name }}",
             "body": (
-                "A new enquiry has been submitted on {{ site_name }}.\n"
-                "\n"
-                "Name: {{ name }}\n"
-                "E-mail: {{ email }}\n"
-                "{% if phone %}Phone: {{ phone }}\n{% endif %}"
-                "\n"
-                "Message:\n"
-                "{{ message }}\n"
-                "{% if admin_url %}\nOpen it in the admin: {{ admin_url }}\n{% endif %}"
+                "<p>A new enquiry has been submitted on {{ site_name }}.</p>\n"
+                "<p><strong>Name:</strong> {{ name }}<br/>\n"
+                "<strong>E-mail:</strong> {{ email }}"
+                "{% if phone %}<br/>\n<strong>Phone:</strong> {{ phone }}{% endif %}"
+                "{% if country %}<br/>\n<strong>Country:</strong> {{ country }}{% endif %}"
+                "</p>\n"
+                "{% if subject %}<p><strong>Subject:</strong> {{ subject }}</p>\n{% endif %}"
+                "<p>{{ message|linebreaksbr }}</p>\n"
+                "{% if admin_url %}"
+                '<p><a href="{{ admin_url }}">Open this submission in the admin</a></p>'
+                "{% endif %}"
             ),
 {%- endraw %}
         },
@@ -41,74 +44,34 @@ DEFAULTS: dict[str, dict[str, dict[str, str]]] = {
 {%- raw %}
             "subject": "استفسار جديد من {{ name }}",
             "body": (
-                "تم إرسال استفسار جديد عبر {{ site_name }}.\n"
-                "\n"
-                "الاسم: {{ name }}\n"
-                "البريد الإلكتروني: {{ email }}\n"
-                "{% if phone %}الهاتف: {{ phone }}\n{% endif %}"
-                "\n"
-                "الرسالة:\n"
-                "{{ message }}\n"
-                "{% if admin_url %}\nعرض الاستفسار في لوحة التحكم: {{ admin_url }}\n{% endif %}"
-            ),
-{%- endraw %}
-        },
-{%- endif %}
-    },
-    "contact_enquiry_user": {
-        "en": {
-{%- raw %}
-            "subject": "We have received your enquiry",
-            "body": (
-                "Hello {{ name }},\n"
-                "\n"
-                "Thank you for contacting {{ site_name }}. We have received your message "
-                "and will reply as soon as we can.\n"
-                "\n"
-                "This is what you sent us:\n"
-                "\n"
-                "{{ message }}\n"
-                "\n"
-                "Kind regards,\n"
-                "{{ site_name }}\n"
-            ),
-{%- endraw %}
-        },
-{%- if cookiecutter.languages == "en_ar" %}
-        "ar": {
-{%- raw %}
-            "subject": "لقد استلمنا استفسارك",
-            "body": (
-                "مرحباً {{ name }}،\n"
-                "\n"
-                "شكراً لتواصلك مع {{ site_name }}. لقد استلمنا رسالتك وسنرد عليك في أقرب وقت.\n"
-                "\n"
-                "نص رسالتك:\n"
-                "\n"
-                "{{ message }}\n"
-                "\n"
-                "مع أطيب التحيات،\n"
-                "{{ site_name }}\n"
+                "<p>تم إرسال استفسار جديد عبر {{ site_name }}.</p>\n"
+                "<p><strong>الاسم:</strong> {{ name }}<br/>\n"
+                "<strong>البريد الإلكتروني:</strong> {{ email }}"
+                "{% if phone %}<br/>\n<strong>الهاتف:</strong> {{ phone }}{% endif %}"
+                "{% if country %}<br/>\n<strong>الدولة:</strong> {{ country }}{% endif %}"
+                "</p>\n"
+                "{% if subject %}<p><strong>الموضوع:</strong> {{ subject }}</p>\n{% endif %}"
+                "<p>{{ message|linebreaksbr }}</p>\n"
+                "{% if admin_url %}"
+                '<p><a href="{{ admin_url }}">عرض الطلب في لوحة التحكم</a></p>'
+                "{% endif %}"
             ),
 {%- endraw %}
         },
 {%- endif %}
     },
 {%- if cookiecutter.newsletter == "yes" %}
-    "newsletter_subscribed": {
+    ("newsletter_subscription", "user"): {
         "en": {
 {%- raw %}
             "subject": "Confirm your newsletter subscription",
             "body": (
-                "Hello,\n"
-                "\n"
-                "{{ email }} was used to subscribe to the {{ site_name }} newsletter.\n"
-                "\n"
-                "Confirm the subscription:\n"
-                "{{ confirm_url }}\n"
-                "\n"
-                "If this was not you, ignore this message. Nothing will be sent unless "
-                "the link above is used.\n"
+                "<p>Hello,</p>\n"
+                "<p>{{ email }} was used to subscribe to the {{ site_name }} "
+                "newsletter.</p>\n"
+                '<p><a href="{{ confirm_url }}">Confirm the subscription</a></p>\n'
+                "<p>If this was not you, ignore this message. Nothing will be sent "
+                "unless the link above is used.</p>"
             ),
 {%- endraw %}
         },
@@ -117,15 +80,12 @@ DEFAULTS: dict[str, dict[str, dict[str, str]]] = {
 {%- raw %}
             "subject": "تأكيد الاشتراك في النشرة البريدية",
             "body": (
-                "مرحباً،\n"
-                "\n"
-                "تم استخدام {{ email }} للاشتراك في النشرة البريدية لـ {{ site_name }}.\n"
-                "\n"
-                "لتأكيد الاشتراك:\n"
-                "{{ confirm_url }}\n"
-                "\n"
-                "إذا لم تكن أنت من قام بذلك، تجاهل هذه الرسالة. لن نرسل لك شيئاً ما لم "
-                "يُستخدم الرابط أعلاه.\n"
+                "<p>مرحباً،</p>\n"
+                "<p>تم استخدام {{ email }} للاشتراك في النشرة البريدية لـ "
+                "{{ site_name }}.</p>\n"
+                '<p><a href="{{ confirm_url }}">تأكيد الاشتراك</a></p>\n'
+                "<p>إذا لم تكن أنت من قام بذلك، تجاهل هذه الرسالة. لن نرسل لك شيئاً "
+                "ما لم يُستخدم الرابط أعلاه.</p>"
             ),
 {%- endraw %}
         },
@@ -135,13 +95,13 @@ DEFAULTS: dict[str, dict[str, dict[str, str]]] = {
 }
 
 
-def get_default(trigger: str, language: str, field: str) -> str:
-    """The built-in value of ``field`` for ``trigger`` in ``language``.
+def get_default(trigger: str, recipient_type: str, language: str, field: str) -> str:
+    """The built-in value of ``field`` for one template in ``language``.
 
     Falls back to ``LANGUAGE_CODE`` when a language has no copy of its own, and
-    to an empty string for an unknown trigger - a missing default must never be
-    the reason a send raises.
+    to an empty string for an unknown key - a missing default must never be the
+    reason a send raises.
     """
-    per_language = DEFAULTS.get(str(trigger), {})
+    per_language = DEFAULTS.get((str(trigger), str(recipient_type)), {})
     entry = per_language.get(language) or per_language.get(settings.LANGUAGE_CODE) or {}
     return entry.get(field, "")

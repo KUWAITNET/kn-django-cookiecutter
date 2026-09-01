@@ -8,8 +8,9 @@ resource has to carry: server-side validation, bot protection and a rate limit.
 from django.conf import settings
 from django.http import Http404, JsonResponse
 from django.shortcuts import render
-from django.utils.translation import get_language, gettext as _
-from django.views.decorators.csrf import csrf_exempt
+from django.utils.translation import get_language
+{% if cookiecutter.rate_limiting == "yes" %}from django.utils.translation import gettext as _
+{% endif %}from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 {% if cookiecutter.rate_limiting == "yes" %}from django_ratelimit.decorators import ratelimit
 {% endif %}{% if cookiecutter.multisite == "multi" %}from wagtail.models import Site
@@ -48,6 +49,7 @@ def _rate_limited(request, is_ajax):
     response["Retry-After"] = str(_retry_after(settings.RATELIMIT_NEWSLETTER))
     return response
 
+{% else %}
 {% endif %}
 @require_http_methods(["GET", "POST"])
 {% if cookiecutter.rate_limiting == "yes" %}@ratelimit(key="ip", rate=_newsletter_rate, method="POST", block=False)

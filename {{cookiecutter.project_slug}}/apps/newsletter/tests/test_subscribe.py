@@ -3,6 +3,7 @@ from django.urls import reverse
 
 from apps.newsletter.models import Subscriber
 from apps.newsletter.tests.factories import SubscriberFactory
+from apps.newsletter.tests.test_services import message_text
 
 
 @pytest.fixture
@@ -27,7 +28,7 @@ def test_subscribing_records_the_address_and_mails_a_confirmation_link(client, u
 
     assert len(mailoutbox) == 1
     assert mailoutbox[0].to == ["reader@example.com"]
-    assert str(subscriber.token) in mailoutbox[0].body
+    assert str(subscriber.token) in message_text(mailoutbox[0])
 
 
 @pytest.mark.django_db

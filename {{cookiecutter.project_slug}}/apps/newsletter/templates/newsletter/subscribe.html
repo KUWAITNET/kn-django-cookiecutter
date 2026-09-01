@@ -8,12 +8,7 @@
     <p role="alert">{{ rate_limited }}</p>
   {% endif %}
 
-  {# novalidate: browser validation is a convenience, the server decides. #}
-  <form method="post" action="{% url 'newsletter:subscribe' %}" novalidate>
-    {% csrf_token %}
-    {{ form.as_div }}
-    <button type="submit">{% translate "Subscribe" %}</button>
-  </form>
+  {% include "newsletter/subscribe_form.html" %}
 
   <p>{% translate "We will send you a confirmation link. Nothing is sent until you use it." %}</p>
 {% endblock %}

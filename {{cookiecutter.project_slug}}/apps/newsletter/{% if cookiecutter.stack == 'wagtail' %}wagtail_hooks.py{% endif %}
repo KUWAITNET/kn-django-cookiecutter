@@ -10,31 +10,12 @@ from wagtail.admin.ui.tables import Column
 from wagtail.admin.views.generic.base import WagtailAdminTemplateMixin
 from wagtail.admin.views.generic.permissions import PermissionCheckedMixin
 from wagtail.admin.viewsets.base import ViewSet, ViewSetGroup
-from wagtail.admin.viewsets.model import ModelViewSet
 from wagtail.permission_policies import ModelPermissionPolicy
 
+from apps.core.viewsets import NoAddModelViewSet
 from apps.newsletter.forms import CampaignForm
 from apps.newsletter.models import AUDIENCE_ALL, Campaign, Subscriber
 from apps.newsletter.services import recipient_counts, send_campaign
-
-
-class NoAddModelViewSet(ModelViewSet):
-    """A listing for rows nobody creates by hand.
-
-    Subscribers arrive through the public form and campaigns are written after
-    a send; an "Add" button on either only offers a way to create a row that
-    means nothing.
-    """
-
-    add_to_admin_menu = False
-    copy_view_enabled = False
-    list_per_page = 50
-
-    def get_urlpatterns(self):
-        return [p for p in super().get_urlpatterns() if getattr(p, "name", "") != "add"]
-
-    def get_common_view_kwargs(self, **kwargs):
-        return super().get_common_view_kwargs(add_url_name=None, **kwargs)
 
 
 class SendNewsletterView(PermissionCheckedMixin, WagtailAdminTemplateMixin, FormView):
@@ -73,17 +54,21 @@ class SendNewsletterView(PermissionCheckedMixin, WagtailAdminTemplateMixin, Form
         )
         messages.success(
             self.request,
-            _("Newsletter sent to %(count)d subscriber(s).")
-            % {"count": campaign.recipient_count},
+            _("Newsletter sent to %(count)d subscriber(s).") % {"count": campaign.recipient_count},
         )
         return super().form_valid(form)
 
 
 class SubscriberViewSet(NoAddModelViewSet):
+    """Subscribers arrive through the public form; a hand-typed one consented to nothing."""
+
     model = Subscriber
     name = "newsletter-subscribers"
     icon = "mail"
     menu_label = "Subscribers"
+    add_to_admin_menu = False
+    copy_view_enabled = False
+    list_per_page = 50
     list_display = ["email", "language", "is_confirmed", "is_active", "created_at"]
     list_filter = ["is_confirmed", "is_active", "language"]
     search_fields = ["email"]
@@ -109,6 +94,9 @@ class CampaignViewSet(NoAddModelViewSet):
     name = "newsletter-campaigns"
     icon = "mail"
     menu_label = "Sent newsletters"
+    add_to_admin_menu = False
+    copy_view_enabled = False
+    list_per_page = 50
     list_display = [
         Column("subject", label="Subject"),
         "audience",

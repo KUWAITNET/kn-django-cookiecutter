@@ -5,7 +5,7 @@ answer "who gets told, what does it say, and did it actually go out?".
 
 The log is django-post-office's own ``Email`` model registered read-only. There
 is no custom logging table: post-office already records every send, failure
-included, and a second table would only be able to disagree with it.
+included, and a second table could only disagree with it.
 """
 
 from django import forms
@@ -22,9 +22,9 @@ from wagtail.admin.ui.tables import Column, TitleColumn
 from wagtail.admin.views.generic.base import WagtailAdminTemplateMixin
 from wagtail.admin.views.generic.permissions import PermissionCheckedMixin
 from wagtail.admin.viewsets.base import ViewSetGroup
-from wagtail.admin.viewsets.model import ModelViewSet
 from wagtail.permission_policies import ModelPermissionPolicy
 
+from apps.core.viewsets import NoAddModelViewSet
 from apps.notifications.forms import (
     BODY_WIDGET_ATTRS,
     TEMPLATE_ADMIN_NAME,
@@ -35,25 +35,6 @@ from apps.notifications.models import (
     NotificationRecipient,
     NotificationTemplate,
 )
-
-
-class NoAddModelViewSet(ModelViewSet):
-    """A listing for rows nobody creates by hand.
-
-    Recipient lists and template rows are provisioned by ``seed_notifications``
-    and the log is written by post-office; an "Add" button on any of them only
-    offers a way to create a row the code will never look up.
-    """
-
-    add_to_admin_menu = False
-    copy_view_enabled = False
-    list_per_page = 50
-
-    def get_urlpatterns(self):
-        return [p for p in super().get_urlpatterns() if getattr(p, "name", "") != "add"]
-
-    def get_common_view_kwargs(self, **kwargs):
-        return super().get_common_view_kwargs(add_url_name=None, **kwargs)
 
 
 class ResetTemplateFieldView(PermissionCheckedMixin, WagtailAdminTemplateMixin, View):
@@ -97,12 +78,17 @@ class ResetTemplateFieldView(PermissionCheckedMixin, WagtailAdminTemplateMixin, 
 
 
 class NotificationRecipientViewSet(NoAddModelViewSet):
+    """Rows are provisioned by ``seed_notifications``; editors only change addresses."""
+
     model = NotificationRecipient
     name = "notification-recipients"
     icon = "mail"
     menu_label = "Recipients"
+    add_to_admin_menu = False
+    copy_view_enabled = False
+    list_per_page = 50
     list_display = [
-        # A plain field name would be auto-wrapped as the row link, but
+        # A plain field name is auto-wrapped as the row link, but
         # get_trigger_display is a method, so the link column is built here.
         TitleColumn(
             "get_trigger_display",
@@ -124,6 +110,9 @@ class NotificationTemplateViewSet(NoAddModelViewSet):
     name = TEMPLATE_ADMIN_NAME
     icon = "mail"
     menu_label = "E-mail templates"
+    add_to_admin_menu = False
+    copy_view_enabled = False
+    list_per_page = 50
     list_display = [
         TitleColumn(
             "get_trigger_display",
@@ -131,17 +120,19 @@ class NotificationTemplateViewSet(NoAddModelViewSet):
             url_name=f"{TEMPLATE_ADMIN_NAME}:edit",
             sort_key="trigger",
         ),
+        Column("get_recipient_type_display", label="Written for", sort_key="recipient_type"),
         Column("language", label="Language", sort_key="language"),
         "subject",
         "updated_at",
     ]
-    list_filter = ["trigger", "language"]
+    list_filter = ["trigger", "recipient_type", "language"]
     search_fields = ["subject", "body"]
     edit_handler = ObjectList(
         [
             MultiFieldPanel(
                 [
                     FieldPanel("trigger", read_only=True),
+                    FieldPanel("recipient_type", read_only=True),
                     FieldPanel("language", read_only=True),
                 ],
                 heading="Template",
@@ -169,6 +160,9 @@ class EmailLogViewSet(NoAddModelViewSet):
     name = "notification-log"
     icon = "mail"
     menu_label = "E-mail log"
+    add_to_admin_menu = False
+    copy_view_enabled = False
+    list_per_page = 50
     list_display = [
         "to",
         "subject",

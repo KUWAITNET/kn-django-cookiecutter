@@ -56,13 +56,18 @@ class SubmissionResult(NamedTuple):
 
     ``response`` is not ``None`` when the request is already finished (the AJAX
     paths); otherwise the caller renders the page itself with ``form``,
-    ``submitted`` and ``status``.
+    ``submitted``, ``submit_error`` and ``status``.
     """
 
     response: HttpResponse | None
     form: ContactForm
     submitted: bool
     status: int = 200
+    #: A whole-request problem rather than a field one - currently only the rate
+    #: limit. It is not a form error because the form was never bound: running
+    #: validation on a request we have already decided to refuse would spend the
+    #: outbound Turnstile call the limit exists to protect.
+    submit_error: str = ""
 
 
 def is_ajax(request) -> bool:
@@ -94,16 +99,17 @@ def handle_contact_post(request, page=None) -> SubmissionResult:
     """Validate, store and notify. Never renders."""
 {%- if cookiecutter.rate_limiting == "yes" and cookiecutter.frontend != "api_only" %}
     if _rate_limited(request):
-        form = ContactForm(request=request)
-        form.add_error(None, RATE_LIMIT_MESSAGE)
-        if is_ajax(request):
-            return SubmissionResult(
-                JsonResponse({"ok": False, "errors": form.errors}, status=429),
-                form,
-                False,
-                429,
-            )
-        return SubmissionResult(None, form, False, 429)
+        message = str(RATE_LIMIT_MESSAGE)
+        # Same envelope as a validation failure, under the form-wide key, so the
+        # client displays it with no special case.
+        errors = {"__all__": [message]}
+        return SubmissionResult(
+            JsonResponse({"ok": False, "errors": errors}, status=429) if is_ajax(request) else None,
+            ContactForm(request=request),
+            False,
+            429,
+            message,
+        )
 {%- endif %}
 
     form = ContactForm(request.POST, request.FILES, request=request)
@@ -137,15 +143,22 @@ def handle_contact_post(request, page=None) -> SubmissionResult:
 # --- Notification -------------------------------------------------------------
 
 
-def notification_recipients(page=None) -> list[str]:
-    """Who is told about a new submission.
+def _split_addresses(value) -> list[str]:
+    return [address.strip() for address in str(value or "").split(",") if address.strip()]
 
-    The page's own address wins so an editor can redirect enquiries without a
-    deploy; ``DEFAULT_ADMIN_EMAIL`` is the fallback. Both accept a comma-separated
-    list.
+
+def page_recipients(page=None) -> list[str]:
+    """Addresses an editor typed on the page, if any.
+
+    An override, so enquiries can be redirected to a different inbox without a
+    deploy{% if cookiecutter.notifications_app == "yes" %} and without touching the shared notification-recipient list{% endif %}.
     """
-    configured = getattr(page, "notification_email", "") or settings.DEFAULT_ADMIN_EMAIL
-    return [address.strip() for address in str(configured).split(",") if address.strip()]
+    return _split_addresses(getattr(page, "notification_email", ""))
+
+
+def notification_recipients(page=None) -> list[str]:
+    """Who is told about a new submission: the page override, else the default."""
+    return page_recipients(page) or _split_addresses(settings.DEFAULT_ADMIN_EMAIL)
 
 
 def notification_context(submission) -> dict:
@@ -167,32 +180,13 @@ def notification_context(submission) -> dict:
     }
 
 
-def _render_notification(submission):
-    """``(subject, body_html)`` for the staff notification.
-{% if cookiecutter.notifications_app == "yes" %}
-    Prefers the admin-editable template so the wording is an editor's decision.
-    The import is guarded rather than assumed: this app must keep working if the
-    notifications app is removed from the project later.
-{%- else %}
-    Built here, from a template, because this project has no notifications app.
-{%- endif %}
+def _built_in_notification(submission):
+    """``(subject, body_html)`` built here{% if cookiecutter.notifications_app == "yes" %}, for when the notifications app is gone{% endif %}.
+
+    ``format_html`` throughout: every value here is visitor-supplied, and this
+    body is sent as HTML.
     """
     context = notification_context(submission)
-{%- if cookiecutter.notifications_app == "yes" %}
-
-    try:
-        from apps.notifications.models import NotificationTrigger, RecipientType
-        from apps.notifications.services import render_notification_template
-
-        return render_notification_template(
-            NotificationTrigger.CONTACT_SUBMISSION,
-            RecipientType.ADMIN,
-            context=context,
-        )
-    except (ImportError, AttributeError, LookupError):
-        logger.info("No admin-editable contact template; using the built-in body.")
-{%- endif %}
-
     subject = gettext("New contact enquiry: %(subject)s") % {"subject": submission.subject}
     rows = [
         (_("Name"), context["name"]),
@@ -224,12 +218,36 @@ def send_contact_notification(submission, page=None) -> None:
     a mail-server outage must not turn a successful submission into a 500 that
     invites them to send it again.
     """
+{%- if cookiecutter.notifications_app == "yes" %}
+    try:
+        from apps.notifications.models import NotificationTrigger
+        from apps.notifications.services import send_notification
+    except ImportError:
+        # The notifications app can be dropped from a project after generation.
+        # This form keeps working when it is; it just loses the editable wording.
+        logger.info("apps.notifications is not installed; using the built-in body.")
+    else:
+        send_notification(
+            NotificationTrigger.CONTACT_SUBMISSION,
+            # A callable, not a dict: the context holds translated values and the
+            # sender renders it once per recipient language.
+            lambda: notification_context(submission),
+            # None means "whatever the notification-recipient admin says", so the
+            # page's field is an override rather than a replacement.
+            recipients=page_recipients(page) or None,
+        )
+        return
+{%- endif %}
+
     recipients = notification_recipients(page)
     if not recipients:
         logger.warning("Contact submission %s stored with no notification recipient", submission.pk)
         return
-    subject, body_html = _render_notification(submission)
-    send_branded_mail(subject, recipients, body_html=body_html)
+    subject, body_html = _built_in_notification(submission)
+    for address in recipients:
+        # One message per address: recipients of the same enquiry never see each
+        # other's addresses.
+        send_branded_mail(subject, [address], body_html=body_html)
 {% if cookiecutter.stack == "django" and cookiecutter.frontend != "api_only" %}
 
 # --- The page -----------------------------------------------------------------
@@ -250,7 +268,11 @@ def contact(request):
     return render(
         request,
         TEMPLATE_NAME,
-        {"form": result.form, "submitted": result.submitted},
+        {
+            "form": result.form,
+            "submitted": result.submitted,
+            "submit_error": result.submit_error,
+        },
         status=result.status,
     )
 {%- endif %}

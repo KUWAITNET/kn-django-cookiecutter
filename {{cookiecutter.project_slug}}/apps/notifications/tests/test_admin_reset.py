@@ -53,7 +53,9 @@ def test_reset_restores_the_built_in_body(admin_client_logged_in):
 
     assert response.status_code == 302
     template.refresh_from_db()
-    assert template.body == get_default(template.trigger, template.language, "body")
+    assert template.body == get_default(
+        template.trigger, template.recipient_type, template.language, "body"
+    )
 
 
 @pytest.mark.django_db
@@ -61,9 +63,7 @@ def test_only_allowlisted_fields_can_be_reset(admin_client_logged_in):
     """The field name comes from the URL, so it is an allowlist, not a denylist."""
     template = NotificationTemplateFactory(language=settings.LANGUAGE_CODE)
 
-    response = admin_client_logged_in.get(
-        reverse(RESET_URL_NAME, args=[template.pk, "updated_at"])
-    )
+    response = admin_client_logged_in.get(reverse(RESET_URL_NAME, args=[template.pk, "updated_at"]))
 
     assert response.status_code == 404
 

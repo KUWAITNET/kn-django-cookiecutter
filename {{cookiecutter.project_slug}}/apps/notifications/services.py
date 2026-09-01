@@ -1,9 +1,9 @@
 """Rendering and delivery of the admin-editable notifications.
 
-Everything leaves through ``send_notification``. It goes out with
-``django.core.mail``, which this project points at django-post-office, so every
-message - delivered or failed - is recorded and visible in the admin e-mail log
-without this module knowing anything about it.
+Messages are built by ``apps.core.emails`` so a notification looks like every
+other e-mail the project sends, and go out over ``django.core.mail`` - which is
+django-post-office here, so each one is recorded and visible in the admin e-mail
+log without this module knowing about it.
 """
 
 import logging
@@ -11,37 +11,41 @@ from collections import defaultdict
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core import mail
 from django.template import engines
 from django.template.exceptions import TemplateSyntaxError
 from django.utils import translation
 from django.utils.translation import get_language
-{%- if cookiecutter.stack == "wagtail" %}
-from wagtail.users.models import UserProfile
-{%- endif %}
-
+{% if cookiecutter.stack == "wagtail" %}from wagtail.users.models import UserProfile
+{% endif %}
+from apps.core.emails import build_branded_email, send_branded_mass_mail
 from apps.notifications.defaults import get_default
-from apps.notifications.models import NotificationRecipient, NotificationTemplate
+from apps.notifications.models import (
+    NotificationRecipient,
+    NotificationTemplate,
+    RecipientType,
+)
 
 logger = logging.getLogger(__name__)
 
-# Bodies are plain text, so the engine must not HTML-escape the context: an
-# address containing "&" is not an entity in a text/plain part. Wrapping the
-# stored source keeps the project's configured engine (and its template
-# libraries) instead of building a second, differently-configured one.
+# A subject is a header, not markup, so it is rendered with escaping off - an
+# ampersand in a company name must not arrive as "&amp;". Bodies keep Django's
+# autoescaping: they are HTML, and the values dropped into them come from
+# visitors.
 _AUTOESCAPE_OPEN = "{% raw %}{% autoescape off %}{% endraw %}"
 _AUTOESCAPE_CLOSE = "{% raw %}{% endautoescape %}{% endraw %}"
 
 
-def _compile(source: str):
-    return engines["django"].from_string(f"{_AUTOESCAPE_OPEN}{source}{_AUTOESCAPE_CLOSE}")
+def _compile(source: str, autoescape: bool = True):
+    if not autoescape:
+        source = f"{_AUTOESCAPE_OPEN}{source}{_AUTOESCAPE_CLOSE}"
+    return engines["django"].from_string(source)
 
 
 def check_template_source(source: str) -> str | None:
     """Return a readable error for invalid template source, or ``None``.
 
-    Used by ``NotificationTemplate.clean`` so a broken tag is a field error on
-    the edit page rather than an exception in a visitor's request.
+    Used by ``NotificationTemplate.clean`` so a broken tag is a field error on the
+    edit page rather than an exception in a visitor's request.
     """
     if not source:
         return None
@@ -52,37 +56,50 @@ def check_template_source(source: str) -> str | None:
     return None
 
 
-def render_source(source: str, context: dict) -> str:
-    return _compile(source).render(context)
+def render_source(source: str, context: dict, autoescape: bool = True) -> str:
+    return _compile(source, autoescape=autoescape).render(context)
 
 
-def get_template(trigger, language: str) -> NotificationTemplate | None:
-    """The stored row for ``(trigger, language)``, falling back to the default language."""
-    rows = {row.language: row for row in NotificationTemplate.objects.filter(trigger=trigger)}
+def get_template(trigger, recipient_type, language: str) -> NotificationTemplate | None:
+    """The stored row for this template, falling back to the default language."""
+    rows = {
+        row.language: row
+        for row in NotificationTemplate.objects.filter(
+            trigger=trigger, recipient_type=recipient_type
+        )
+    }
     return rows.get(language) or rows.get(settings.LANGUAGE_CODE)
 
 
-def render_notification(trigger, context: dict, language: str | None = None) -> tuple[str, str]:
-    """Render ``(subject, body)`` for ``trigger`` in ``language``.
+def render_notification_template(
+    trigger,
+    recipient_type=RecipientType.ADMIN,
+    context: dict | None = None,
+    language: str | None = None,
+) -> tuple[str, str]:
+    """Render ``(subject, body_html)`` for one template.
 
-    Falls back to the built-in copy when no row exists yet, so a project that
-    has not run ``seed_notifications`` still sends a real message. The
-    reference implementation returned a placeholder subject and an empty body
-    instead, which reached real recipients.
+    Falls back to the built-in copy when no row exists yet, so a project that has
+    not run ``seed_notifications`` still sends a real message. The reference
+    implementation returned a placeholder subject and an empty body instead, and
+    those reached real recipients.
     """
+    context = context or {}
     language = language or get_language() or settings.LANGUAGE_CODE
-    row = get_template(trigger, language)
+    row = get_template(trigger, recipient_type, language)
     if row is not None:
         subject_source, body_source = row.subject, row.body
     else:
-        subject_source = get_default(trigger, language, "subject")
-        body_source = get_default(trigger, language, "body")
+        subject_source = get_default(trigger, recipient_type, language, "subject")
+        body_source = get_default(trigger, recipient_type, language, "body")
 
-    body = render_source(body_source, context)
-    # The subject becomes a mail header. Context values are submitter-supplied,
-    # so a newline in one would otherwise let a visitor inject headers.
-    subject = " ".join(render_source(subject_source, context).split())
-    return subject, body
+    context.setdefault("site_name", settings.SITE_NAME)
+    body_html = render_source(body_source, context)
+    # Collapsed to one line: the subject becomes a mail header, and context
+    # values are visitor-supplied, so a newline in one must not be able to start
+    # a header of its own.
+    subject = " ".join(render_source(subject_source, context, autoescape=False).split())
+    return subject, body_html
 
 
 def get_recipients(trigger) -> list[str]:
@@ -101,9 +118,9 @@ def get_recipients(trigger) -> list[str]:
 def get_recipient_language(email: str) -> str:
     """The language ``email`` should be written in.
 
-    An address with no account behind it (a shared inbox, an external
-    consultant) gets whichever language is active for the request that
-    triggered the notification.
+    An address with no account behind it - a shared inbox, an external consultant
+    - gets whichever language was active for the request that triggered the
+    notification.
     """
     user = get_user_model().objects.filter(email__iexact=email, is_active=True).first()
 {%- if cookiecutter.stack == "wagtail" %}
@@ -112,8 +129,8 @@ def get_recipient_language(email: str) -> str:
         if preferred:
             return preferred
 {%- else %}
-    # A stock Django user has no language preference. A project that adds one
-    # (a ``preferred_language`` field on the user or its profile) gets it here
+    # A stock Django user has no language preference. A project that adds one (a
+    # ``preferred_language`` field on the user or its profile) gets it here
     # without touching this module.
     preferred = getattr(user, "preferred_language", "") if user is not None else ""
     if preferred:
@@ -127,30 +144,30 @@ def send_notification(
     context,
     recipients=None,
     language: str | None = None,
+    recipient_type=RecipientType.ADMIN,
     from_email: str | None = None,
-    reply_to=None,
 ) -> int:
-    """Send ``trigger`` to each recipient in that recipient's language.
+    """Send ``trigger`` to each recipient, in that recipient's language.
 
     ``recipients`` defaults to the addresses configured for the trigger.
-    ``context`` may be a dict or a callable returning one; pass a callable when
-    it contains translated values, because ``get_FOO_display()`` and
-    ``str(lazy)`` resolve eagerly and a dict built once outside the language
-    override would freeze to whichever language was rendered first.
+    ``context`` may be a dict or a callable returning one; pass a callable when it
+    holds translated values, because ``get_FOO_display()`` and ``str(lazy)``
+    resolve eagerly and a dict built once outside the language override would
+    freeze to whichever language was rendered first.
 
     Returns the number of messages handed to the backend. Never raises: a
     notification is a side effect of somebody's form submission, and a mail
-    failure must not turn their successful submission into a 500. The failure
-    is logged here and recorded by post-office.
+    failure must not turn their successful submission into a 500. The failure is
+    logged here and recorded by post-office.
     """
     try:
-        return _send(trigger, context, recipients, language, from_email, reply_to)
+        return _send(trigger, context, recipients, language, recipient_type, from_email)
     except Exception:
         logger.exception("Notification %s could not be sent", trigger)
         return 0
 
 
-def _send(trigger, context, recipients, language, from_email, reply_to) -> int:
+def _send(trigger, context, recipients, language, recipient_type, from_email) -> int:
     addresses = list(recipients) if recipients else get_recipients(trigger)
     # dict.fromkeys de-duplicates while keeping the configured order.
     addresses = [address for address in dict.fromkeys(addresses) if address]
@@ -165,22 +182,19 @@ def _send(trigger, context, recipients, language, from_email, reply_to) -> int:
     messages = []
     for code, group in by_language.items():
         with translation.override(code):
-            resolved_context = context() if callable(context) else dict(context)
-            subject, body = render_notification(trigger, resolved_context, code)
+            resolved_context = context() if callable(context) else dict(context or {})
+            subject, body_html = render_notification_template(
+                trigger, recipient_type, resolved_context, code
+            )
             for address in group:
                 # One message per address: recipients of the same notification
                 # never see each other's addresses.
                 messages.append(
-                    mail.EmailMessage(
-                        subject=subject,
-                        body=body,
-                        from_email=from_email or settings.DEFAULT_FROM_EMAIL,
-                        to=[address],
-                        reply_to=list(reply_to) if reply_to else None,
+                    build_branded_email(
+                        subject, [address], body_html=body_html, from_email=from_email
                     )
                 )
 
     # One connection for the whole batch rather than one per message.
-    connection = mail.get_connection()
-    connection.send_messages(messages)
+    send_branded_mass_mail(messages)
     return len(messages)

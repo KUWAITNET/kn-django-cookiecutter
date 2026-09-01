@@ -195,6 +195,9 @@ TEMPLATES = [
                 "django.template.context_processors.i18n",
 {%- if cookiecutter.stack == "wagtail" %}
                 "wagtail.contrib.settings.context_processors.settings",
+{%- if cookiecutter.multisite == "multi" %}
+                "apps.navigation.context_processors.site_switcher",
+{%- endif %}
 {%- endif %}
                 "apps.core.context_processors.site_context",
             ],
@@ -417,6 +420,12 @@ BASE_URL = env("BASE_URL", default="http://localhost:8000")
 # shared links and screenshots, and an indexed UAT site competes with production in
 # search results. Production sets this to False.
 ROBOTS_DISALLOW_ALL = env.bool("ROBOTS_DISALLOW_ALL", default=True)
+
+# Fallback meta description when a page supplies none.
+SITE_DESCRIPTION = env("SITE_DESCRIPTION", default="")
+
+# Search-console style verification tokens rendered into <head>.
+SEO_SITE_VERIFICATION = env.list("SEO_SITE_VERIFICATION", default=[])
 {%- if cookiecutter.stack == "wagtail" %}
 WAGTAIL_SITE_NAME = SITE_NAME
 WAGTAILADMIN_BASE_URL = BASE_URL
@@ -658,6 +667,13 @@ API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=True)
 
 # Countries -----------------------------------------------------------------------
 CITIES_LIGHT_APP_NAME = "cities"
+
+# The concrete country/region/city models live in apps.cities, so cities_light's
+# own migrations must not run: they would try to alter models that no longer
+# exist in this project and abort the migrate with
+# "Region has no field named 'country'". Required by django-cities-light whenever
+# CITIES_LIGHT_APP_NAME is customised.
+MIGRATION_MODULES = {"cities_light": None}
 {%- if cookiecutter.languages == "en_ar" %}
 CITIES_LIGHT_TRANSLATION_LANGUAGES = ["ar", "en"]
 {%- else %}

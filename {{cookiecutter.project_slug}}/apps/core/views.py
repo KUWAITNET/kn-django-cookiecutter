@@ -143,10 +143,18 @@ def home(request):
 
 
 def _error_response(request, template_name, status):
+{%- if cookiecutter.api != "none" %}
+    if request.path.startswith("/api/"):
+        # An API client that has to parse an HTML error page is a client that
+        # breaks. Everything under /api/ answers in one error shape.
+        from apps.api.exceptions import problem_json_response
+
+        return problem_json_response(request, status)
+{%- endif %}
     try:
         return render(request, template_name, status=status)
     except TemplateDoesNotExist:
-        return HttpResponse(f"{status}", status=status, content_type="text/plain")
+        return HttpResponse(str(status), status=status, content_type="text/plain")
 
 
 def bad_request(request, exception=None):

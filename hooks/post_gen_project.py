@@ -133,6 +133,13 @@ if not IS_WAGTAIL:
         str(PKG / "static" / "css" / "admin-branding.css"),
         "docs/10-cms-guide.md",
     )
+    # Optional apps ship a CMS-admin module that renders empty on this stack. Sweep
+    # by name rather than listing each one: the requirement is that the string
+    # "wagtail" appears nowhere in a plain-Django project, and a file NAME leaks it
+    # just as effectively as file contents - which a contents-only grep will not catch.
+    for leftover in PROJECT_ROOT.rglob("*wagtail*"):
+        if ".git" not in leftover.parts:
+            remove(str(leftover.relative_to(PROJECT_ROOT)))
 else:
     # Wagtail projects use the Wagtail page tree and its own translation machinery.
     remove(
@@ -146,13 +153,30 @@ if MULTISITE != "multi" or not IS_WAGTAIL:
         str(APPS / "core" / "tests" / "test_site_scoping.py"),
     )
 
-# Bilingual assets.
+# Bilingual assets. The translation modules and the Arabic search-index patch
+# render to empty files on a single-language project.
 if not IS_BILINGUAL:
     remove(
         str(PKG / "static" / "css" / "rtl.css"),
         str(PKG / "locale"),
         str(APPS / "core" / "tests" / "test_i18n.py"),
+        str(APPS / "core" / "translation.py"),
+        str(APPS / "core" / "url_patches.py"),
+        str(APPS / "navigation" / "translation.py"),
+        str(APPS / "home" / "translation.py"),
+        str(APPS / "search" / "indexing.py"),
+        str(APPS / "cities" / "translation.py"),
+        str(APPS / "contact" / "translation.py"),
     )
+
+# The site switcher only exists on a multi-site project.
+if MULTISITE != "multi":
+    remove(str(APPS / "navigation" / "context_processors.py"))
+
+# apps/core/urls.py only routes the plain-Django home page. A CMS project serves
+# "/" from the page tree, and an API-only project serves no HTML at all.
+if IS_WAGTAIL or IS_API_ONLY:
+    remove(str(APPS / "core" / "urls.py"))
 
 # API-only projects have no server-rendered surface at all.
 if IS_API_ONLY:
@@ -270,6 +294,11 @@ if BOOTSTRAP == "yes":
             ["uv", "run", "python", "manage.py", "makemigrations", "--no-header"],
             "makemigrations",
         )
+        # Normalise import order and formatting. Which optional apps are present
+        # changes the import graph, so the canonical order differs per option
+        # combination and cannot be baked into the template source.
+        run(["uv", "run", "ruff", "check", "--fix", "--quiet", "."], "ruff --fix", required=False)
+        run(["uv", "run", "ruff", "format", "--quiet", "."], "ruff format", required=False)
         run(["uv", "run", "pre-commit", "install"], "pre-commit install", required=False)
 
     if git_ok:

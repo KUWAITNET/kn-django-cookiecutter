@@ -98,6 +98,10 @@ urlpatterns += i18n_patterns(
     path("search/", include("apps.search.urls")),
     path("", include(wagtail_urls)),
 {%- else %}
+{%- if cookiecutter.forms_suite == "yes" %}
+    # On the CMS stack this lives in the page tree; here it needs a route.
+    path("contact/", include("apps.contact.urls")),
+{%- endif %}
     path("", include("apps.core.urls")),
 {%- endif %}
     prefix_default_language=True,
@@ -109,6 +113,10 @@ urlpatterns += [
     path("search/", include("apps.search.urls")),
     path("", include(wagtail_urls)),
 {%- else %}
+{%- if cookiecutter.forms_suite == "yes" %}
+    # On the CMS stack this lives in the page tree; here it needs a route.
+    path("contact/", include("apps.contact.urls")),
+{%- endif %}
     path("", include("apps.core.urls")),
 {%- endif %}
 ]

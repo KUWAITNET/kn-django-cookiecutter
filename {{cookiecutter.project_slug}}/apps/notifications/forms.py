@@ -32,7 +32,6 @@ RESET_URL_NAME = f"{TEMPLATE_ADMIN_NAME}:reset-field"
 {% else %}RESET_URL_NAME = "admin:notifications_notificationtemplate_reset_field"
 {% endif %}
 
-
 def reset_field_url(pk, field_name: str) -> str:
     return reverse(RESET_URL_NAME, args=[pk, field_name])
 

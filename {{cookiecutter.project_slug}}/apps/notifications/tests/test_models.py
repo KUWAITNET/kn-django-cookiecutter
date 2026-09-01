@@ -7,21 +7,24 @@ from apps.notifications.models import (
     NotificationRecipient,
     NotificationTemplate,
     NotificationTrigger,
+    RecipientType,
 )
 from apps.notifications.tests.factories import NotificationTemplateFactory
 
 
-def test_every_trigger_has_copy_in_every_configured_language():
-    """The enum and the copy registry drift apart silently otherwise."""
-    for trigger in NotificationTrigger.values:
-        assert trigger in DEFAULTS, f"{trigger} has no entry in DEFAULTS"
+def test_every_default_has_copy_in_every_configured_language():
+    """The enums and the copy registry drift apart silently otherwise."""
+    for trigger, recipient_type in DEFAULTS:
+        assert trigger in NotificationTrigger.values
+        assert recipient_type in RecipientType.values
         for code, _label in settings.LANGUAGES:
-            assert get_default(trigger, code, "subject"), f"{trigger}/{code} has no subject"
-            assert get_default(trigger, code, "body"), f"{trigger}/{code} has no body"
+            assert get_default(trigger, recipient_type, code, "subject")
+            assert get_default(trigger, recipient_type, code, "body")
 
 
-def test_defaults_has_no_unknown_triggers():
-    assert set(DEFAULTS) <= set(NotificationTrigger.values)
+def test_every_trigger_has_at_least_one_default_template():
+    covered = {trigger for trigger, _recipient_type in DEFAULTS}
+    assert covered == set(NotificationTrigger.values)
 
 
 @pytest.mark.django_db
@@ -50,20 +53,22 @@ def test_invalid_subject_syntax_is_rejected():
 def test_valid_template_syntax_passes_validation():
     template = NotificationTemplateFactory.build(
         subject="{% raw %}Enquiry from {{ name }}{% endraw %}",
-        body="{% raw %}{% if name %}Hello {{ name }}{% endif %}{% endraw %}",
+        body="{% raw %}{% if name %}<p>Hello {{ name }}</p>{% endif %}{% endraw %}",
     )
     template.full_clean()
 
 
 @pytest.mark.django_db
 def test_reset_field_restores_the_built_in_body_and_leaves_the_subject_alone():
-    template = NotificationTemplateFactory(subject="Edited subject", body="Edited body")
+    template = NotificationTemplateFactory(subject="Edited subject", body="<p>Edited</p>")
 
     template.reset_field("body")
 
     template.refresh_from_db()
-    assert template.body == get_default(template.trigger, template.language, "body")
-    assert template.body != "Edited body"
+    assert template.body == get_default(
+        template.trigger, template.recipient_type, template.language, "body"
+    )
+    assert template.body != "<p>Edited</p>"
     assert template.subject == "Edited subject"
 
 
@@ -75,10 +80,11 @@ def test_reset_field_refuses_a_field_that_is_not_resettable():
 
 
 @pytest.mark.django_db
-def test_one_row_per_trigger_and_language():
+def test_one_row_per_trigger_audience_and_language():
     NotificationTemplateFactory(language=settings.LANGUAGE_CODE)
     duplicate = NotificationTemplate(
-        trigger=NotificationTrigger.CONTACT_ENQUIRY_ADMIN,
+        trigger=NotificationTrigger.CONTACT_SUBMISSION,
+        recipient_type=RecipientType.ADMIN,
         language=settings.LANGUAGE_CODE,
         subject="Second",
     )
@@ -89,7 +95,7 @@ def test_one_row_per_trigger_and_language():
 @pytest.mark.django_db
 def test_recipient_list_rejects_a_malformed_address():
     recipient = NotificationRecipient(
-        trigger=NotificationTrigger.CONTACT_ENQUIRY_ADMIN,
+        trigger=NotificationTrigger.CONTACT_SUBMISSION,
         recipients="ok@example.com, not-an-address",
     )
     with pytest.raises(ValidationError) as excinfo:
@@ -100,7 +106,7 @@ def test_recipient_list_rejects_a_malformed_address():
 @pytest.mark.django_db
 def test_recipient_list_is_split_and_trimmed():
     recipient = NotificationRecipient(
-        trigger=NotificationTrigger.CONTACT_ENQUIRY_ADMIN,
+        trigger=NotificationTrigger.CONTACT_SUBMISSION,
         recipients=" one@example.com , two@example.com ,, ",
     )
     assert recipient.as_list() == ["one@example.com", "two@example.com"]

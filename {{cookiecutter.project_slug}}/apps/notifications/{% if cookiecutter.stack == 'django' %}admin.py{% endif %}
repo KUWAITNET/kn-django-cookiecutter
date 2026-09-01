@@ -30,16 +30,17 @@ from apps.notifications.models import (
 @admin.register(NotificationTemplate)
 class NotificationTemplateAdmin(ModelAdmin):
     form = NotificationTemplateForm
-    list_display = ["trigger_display", "language", "subject", "updated_at"]
-    list_filter = ["trigger", "language"]
+    list_display = ["trigger_display", "recipient_type", "language", "subject", "updated_at"]
+    list_filter = ["trigger", "recipient_type", "language"]
     search_fields = ["subject", "body"]
-    ordering = ["trigger", "language"]
-    fields = ["trigger", "language", "subject", "body", "updated_at"]
-    readonly_fields = ["trigger", "language", "updated_at"]
+    ordering = ["trigger", "recipient_type", "language"]
+    fields = ["trigger", "recipient_type", "language", "subject", "body", "updated_at"]
+    readonly_fields = ["trigger", "recipient_type", "language", "updated_at"]
     formfield_overrides = {db_models.TextField: {"widget": Textarea(attrs=BODY_WIDGET_ATTRS)}}
 
     def has_add_permission(self, request):
-        # One row per trigger per language, provisioned by seed_notifications.
+        # One row per trigger, audience and language, provisioned by
+        # seed_notifications.
         return False
 
     @admin.display(description=_("Trigger"), ordering="trigger")
