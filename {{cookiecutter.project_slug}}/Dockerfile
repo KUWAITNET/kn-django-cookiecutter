@@ -15,7 +15,19 @@ COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /usr/local/bin/uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never
-
+{% if cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "sqs" %}
+# celery[sqs] depends on pycurl, a C extension with no wheel for this platform: it
+# is compiled here, against libcurl and OpenSSL. Without these three packages the
+# build fails inside 'uv sync' with a compiler error about missing curl headers,
+# which reads like a broken lockfile and is not. The runtime stage does NOT need
+# them - only the shared libraries, which come in with curl below.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        gcc \
+        libcurl4-openssl-dev \
+        libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+{% endif %}
 WORKDIR /app
 
 # Install dependencies first so the layer is cached until the lockfile changes.
@@ -33,6 +45,12 @@ FROM python:{{ cookiecutter.python_version }}-slim AS runtime
 
 # libmagic1: content-type sniffing for upload validation (python-magic).
 # gettext:   compilemessages at build time, so .mo files are never trusted from git.
+{%- if cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "sqs" %}
+# curl:      the HEALTHCHECK below, and it brings in the libcurl that the compiled
+#            pycurl (celery[sqs]) loads at runtime. Removing curl breaks the worker.
+{%- else %}
+# curl:      the HEALTHCHECK below.
+{%- endif %}
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libmagic1 \

@@ -1,3 +1,6 @@
+{%- set needs_redis = cookiecutter.cache == "redis"
+    or (cookiecutter.task_queue == "huey" and cookiecutter.huey_backend == "redis")
+    or (cookiecutter.task_queue == "celery" and cookiecutter.task_broker != "rabbitmq") -%}
 # Local development services. The application itself normally runs on the host
 # with 'make run'; add the app service below when you want the full stack.
 services:
@@ -16,9 +19,16 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-{%- if cookiecutter.cache == "redis" %}
+{%- if needs_redis %}
 
   redis:
+{%- if cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "sqs" %}
+    # Production uses Amazon SQS, which has no local equivalent worth running. Point
+    # CELERY_BROKER_URL at this Redis in development instead, and read
+    # docs/03-infrastructure.md: a broker that differs between environments is
+    # acceptable for a queue, but the SQS-specific behaviour (visibility timeout,
+    # redelivery, no remote control) has to be exercised on UAT before go-live.
+{%- endif %}
     image: redis:7-alpine
     ports:
       - "6379:6379"
@@ -26,6 +36,23 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
+      retries: 5
+{%- endif %}
+{%- if cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "rabbitmq" %}
+
+  rabbitmq:
+    # The management plugin is on http://localhost:15672 (guest/guest). It is a
+    # development convenience: a real broker is never exposed like this.
+    image: rabbitmq:4-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
       retries: 5
 {%- endif %}
 
@@ -47,7 +74,62 @@ services:
         condition: service_healthy
     # Migrations run as an explicit deploy step, never on container start:
     #   docker compose run --rm web python manage.py migrate
+{%- if cookiecutter.task_queue == "huey" %}
+
+  worker:
+    # The SAME image as web, deliberately. A worker built from a different commit
+    # runs different code against the same database, and nothing reports it.
+    build: .
+    env_file: .env
+    command: python manage.py run_huey
+    depends_on:
+      db:
+        condition: service_healthy
+{%- if cookiecutter.huey_backend == "redis" %}
+      redis:
+        condition: service_healthy
+{%- endif %}
+    # No beat service: the huey consumer runs the periodic schedule itself.
+{%- elif cookiecutter.task_queue == "celery" %}
+
+  worker:
+    # The SAME image as web, deliberately. A worker built from a different commit
+    # runs different code against the same database, and nothing reports it.
+    build: .
+    env_file: .env
+    command: celery -A {{ cookiecutter.project_slug }} worker --loglevel=INFO --concurrency=2
+    depends_on:
+      db:
+        condition: service_healthy
+{%- if cookiecutter.task_broker == "rabbitmq" %}
+      rabbitmq:
+        condition: service_healthy
+{%- elif needs_redis %}
+      redis:
+        condition: service_healthy
+{%- endif %}
+
+  beat:
+    # Exactly ONE beat process, ever. Two schedulers on one schedule means every
+    # periodic task fires twice.
+    build: .
+    env_file: .env
+    command: celery -A {{ cookiecutter.project_slug }} beat --loglevel=INFO
+    depends_on:
+      db:
+        condition: service_healthy
+{%- if cookiecutter.task_broker == "rabbitmq" %}
+      rabbitmq:
+        condition: service_healthy
+{%- elif needs_redis %}
+      redis:
+        condition: service_healthy
+{%- endif %}
+{%- endif %}
 {%- endif %}
 
 volumes:
   pgdata:
+{%- if cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "rabbitmq" %}
+  rabbitmqdata:
+{%- endif %}

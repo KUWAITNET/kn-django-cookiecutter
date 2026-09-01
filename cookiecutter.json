@@ -29,6 +29,9 @@
   "asset_pipeline": ["none", "compressor"],
   "database": "postgres",
   "cache": ["redis", "locmem"],
+  "task_queue": ["none", "huey", "celery"],
+  "huey_backend": ["postgres", "redis", "sqlite"],
+  "task_broker": ["redis", "rabbitmq", "sqs"],
   "docker": ["yes", "no"],
   "ci": ["bitbucket", "github", "none"],
   "deploy_target": ["gunicorn_nginx", "docker_compose"],
@@ -143,6 +146,24 @@
       "__prompt__": "Cache backend",
       "redis": "Redis (required in production when rate limiting is enabled)",
       "locmem": "Local memory (development only)"
+    },
+    "task_queue": {
+      "__prompt__": "Background task queue (a worker process that runs work outside the request/response cycle)",
+      "none": "No background processing. The right default: a content site that sends a few e-mails inline does not need a worker, and a queue you do not need is another process to deploy, monitor and restart.",
+      "huey": "Small queue with built-in periodic tasks, backed by the database you already run (see huey_backend). Choose when you need real background work, retries and a schedule, but not Celery's routing, priorities or multi-queue scaling. One worker, a handful of task types.",
+      "celery": "The heavyweight. Choose only when you genuinely need routing, priorities, multiple queues, chains/groups, autoscaling or mature monitoring. Costs a broker, a worker, beat for schedules, and the operational surface of all three."
+    },
+    "huey_backend": {
+      "__prompt__": "Huey storage backend (applies to task_queue='huey' only; ignored otherwise)",
+      "postgres": "Uses the database you already run. No new service to deploy, monitor or back up - the queue is backed up with everything else. The right default: choose it unless you have measured a reason not to.",
+      "redis": "Faster and keeps queue churn out of the database. Choose when task volume is high enough that queue writes are a real load on Postgres, and you already run Redis for cache. Queue contents are lost on a Redis restart unless persistence is tuned.",
+      "sqlite": "Development and single-process use only. Do not select it for a deployed site - it does not survive multiple workers, and it contradicts the PostgreSQL-only rule in the standards."
+    },
+    "task_broker": {
+      "__prompt__": "Celery message broker (applies to task_queue='celery' only; ignored otherwise)",
+      "redis": "Simplest, and you almost certainly already run it for cache and rate limiting. NOT a durable message broker: a restart can drop queued tasks unless persistence is tuned, and there are no publisher confirms or dead-letter queues. Fine when tasks are idempotent and losing one is recoverable - resize an image, warm a cache, send a non-critical notification. And no managed option here - you run it.",
+      "rabbitmq": "A real AMQP broker: durable queues, acknowledgements, publisher confirms, dead-letter exchanges, priorities and routing. Choose when losing a task is not acceptable - payment reconciliation, invoicing, anything a customer has been told already happened. Costs another server to run, monitor, back up and upgrade.",
+      "sqs": "Amazon SQS. Durable and redundant like RabbitMQ, but fully managed - no broker server to run, patch, back up or monitor, and IAM instead of broker credentials. Two real costs: Celery's remote control and events do not work over SQS, so 'celery inspect' and Flower's live monitoring go dark; and there are no broker-level priorities. Also set a visibility timeout longer than your slowest task, or SQS redelivers it and the task runs twice. Choose it when the project is already on AWS and you want durability without operating a broker."
     },
     "docker": {
       "__prompt__": "Include a Dockerfile (uv-based multi-stage) and docker-compose for local services?",

@@ -1,0 +1,17 @@
+{% extends "wagtailadmin/404.html" %}
+{% load i18n %}
+{% comment %}
+Branded CMS 404. Extends Wagtail's own template and replaces one block, so a
+Wagtail upgrade that changes the surrounding furniture does not break it.
+
+{% extends %} must be the FIRST tag in a template - a comment above it is a
+TemplateSyntaxError, which is why this note sits here instead.
+{% endcomment %}
+
+{% block furniture %}
+    <main class="kn-admin-404">
+        <h1>{% translate "Page not found" %}</h1>
+        <p>{% translate "The page you requested could not be found in the CMS." %}</p>
+        <p><a href="/">{% translate "Back to the dashboard" %}</a></p>
+    </main>
+{% endblock %}

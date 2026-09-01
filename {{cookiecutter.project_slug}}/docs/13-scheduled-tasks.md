@@ -3,17 +3,83 @@
 Everything that runs without a person triggering it. Undocumented scheduled tasks are the classic
 cause of a migrated site that works perfectly for a week and then quietly stops publishing.
 
+{% if cookiecutter.task_queue == "none" -%}
 **There is no background worker and no task queue in this project.** Everything below is a cron
 entry or a systemd timer on the server. That is a deliberate choice recorded in
 [14-decisions.md](14-decisions.md): a queue is one more process to keep alive, and this project does
 not have work that justifies it.
+{%- else -%}
+This project has **two kinds** of scheduled work, and confusing them is how a job ends up running
+twice or not at all.
+
+1. **Tasks on the queue.** Defined in `apps/*/tasks.py`, run by the background
+   {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker on a schedule fired by beat{% endif %}. They are code, reviewed with the code.
+2. **Cron entries and systemd timers.** Everything the application does not own: backups,
+   certificate renewal, off-server copies.
+
+A job belongs on the queue when it is application logic, and in cron when it is machine
+housekeeping. Putting a backup on the application's queue means a broken application takes the
+backups with it.
+
+**The {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker{% endif %} must be restarted by every deploy.** It is a second process running the same
+code; a deploy that misses it leaves the old code running your tasks against a migrated database,
+silently. See [07-deployment.md](07-deployment.md).
+{%- endif %}
 
 To see what management commands actually exist in the deployed version:
 
 ```bash
 uv run python manage.py help
 ```
+{%- if cookiecutter.task_queue != "none" %}
 
+And what the {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker{% endif %} believes it can run — the authoritative list, because a task that is not
+in it will never fire whatever this document says:
+
+{% if cookiecutter.task_queue == "huey" -%}
+```bash
+# The consumer prints every registered task when it starts.
+journalctl -u {{ cookiecutter.project_slug }}-worker --since '1 hour ago' | head -40
+```
+{%- elif cookiecutter.task_broker == "sqs" -%}
+```bash
+# 'celery inspect' does NOT work over SQS: there is no remote control channel.
+# The worker's own startup log is the list.
+journalctl -u {{ cookiecutter.project_slug }}-worker --since '1 hour ago' | head -40
+```
+{%- else -%}
+```bash
+uv run celery -A {{ cookiecutter.project_slug }} inspect registered
+```
+{%- endif %}
+{%- endif %}
+
+{% if cookiecutter.task_queue != "none" -%}
+## On the queue
+
+These are defined in `apps/tasks/tasks.py` and scheduled {% if cookiecutter.task_queue == "huey" %}by the decorator on each one{% else %}in `CELERY_BEAT_SCHEDULE`
+(`settings/base.py`){% endif %}. They ship with the release, so a new server gets them by starting the
+{% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker and beat{% endif %} — there is nothing to copy across by hand.
+
+| Task | What it does | Schedule | Failure impact |
+|---|---|---|---|
+| `prune_audit_log` | Deletes audit-log entries past `AUDITLOG_RETENTION_DAYS` | Sunday 03:30 | The audit table grows for the life of the site, and "we keep everything" is not a retention policy |
+{%- if cookiecutter.notifications_app == "yes" %}
+| `send_queued_mail` | Delivers anything the inline send could not | Every 10 minutes | Mail that failed once is never retried, and looks to the sender exactly like mail that was never sent |
+{%- endif %}
+
+The retention job refuses to run with a period below 365 days: the security baseline requires at
+least 12 months of audit history, so a mistyped `AUDITLOG_RETENTION_DAYS` stops the job rather than
+quietly destroying evidence.
+
+Run either by hand, against the deployed code, before trusting the schedule:
+
+```bash
+uv run python manage.py prune_audit_log --dry-run   # counts, deletes nothing
+uv run python manage.py prune_audit_log
+```
+
+{% endif -%}
 ## The schedule
 
 TODO: complete every column. A blank "Where failures show up" means the failure shows up when a
@@ -21,6 +87,9 @@ client notices, which is the expensive way to find out.
 
 | Task | What it does | Schedule | Runs as | Failure impact | Where failures show up |
 |---|---|---|---|---|---|
+{%- if cookiecutter.task_queue != "none" %}
+| Audit log prune | On the queue (above), not in cron | Sunday 03:30 | `{{ cookiecutter.project_slug }}` | Retention policy is not applied | TODO: |
+{%- endif %}
 {%- if cookiecutter.stack == "wagtail" %}
 | Scheduled publishing | Publishes and expires pages at their set times | Every 10 minutes | `{{ cookiecutter.project_slug }}` | Pages editors scheduled never appear, silently | TODO: |
 | Revision trimming | Removes old page revisions beyond the retention period | Weekly | `{{ cookiecutter.project_slug }}` | The revision table grows without bound | TODO: |
@@ -116,20 +185,33 @@ Each job must do one of:
 
 TODO: choose one and configure it for every row in the table. Cron mails failures to the local
 user's mailbox by default, which on a modern server means nowhere.
+{%- if cookiecutter.task_queue != "none" %}
 
-## Mail delivery is not scheduled
+For the queued tasks there is a second thing to alert on, and it is the one that actually happens:
+**the {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker or beat{% endif %} not running at all**. A stopped {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker{% endif %} produces no errors,
+no failed runs and no log lines — it produces silence, which is indistinguishable from a quiet
+week. Monitor the process itself, not only its output; see [09-monitoring.md](09-monitoring.md).
+{%- endif %}
+
+## Mail delivery is still not queued
 
 Worth stating explicitly, because it is the first thing an experienced Django administrator will
-look for and it is deliberately absent.
+look for.
 
-Outgoing mail is sent **synchronously** at the moment the application decides to send it. There is
-no `send_queued_mail` cron entry and no worker, so there is nothing to forget on a new server and
-nothing to keep alive. Every send is still recorded in the e-mail log with its outcome, so a failed
-delivery is visible in the administration interface rather than lost.
+Outgoing mail is sent **synchronously** at the moment the application decides to send it
+(`POST_OFFICE["DEFAULT_PRIORITY"]` is `"now"`){% if cookiecutter.task_queue != "none" %}, even though this project has a queue{% endif %}. Every send is
+recorded in the e-mail log with its outcome, so a failed delivery is visible in the administration
+interface rather than lost.
 
 The trade-off is that a slow or unreachable mail relay slows the request that triggered the send.
 That is the accepted cost; see [14-decisions.md](14-decisions.md). If this project later sends bulk
 mail, that decision has to be revisited rather than worked around.
+{%- if cookiecutter.task_queue != "none" and cookiecutter.notifications_app == "yes" %}
+
+What the `send_queued_mail` task above does is narrower, and worth being precise about: it delivers
+what the inline attempt **could not**. A relay that was down leaves a message in the queue with
+nothing to retry it, which looks to everybody involved exactly like a message that was never sent.
+{%- endif %}
 
 {% if cookiecutter.countries_app == "cities" -%}
 ## One-off imports

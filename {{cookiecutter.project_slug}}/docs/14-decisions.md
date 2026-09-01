@@ -205,13 +205,24 @@ once the theme carries no inline style attributes.
 **Context.** "The client says they never got the e-mail" is unanswerable without a record of what
 was sent.
 **Decision.** `django-post-office` wraps whichever real transport is configured. Every send is
-recorded and visible in the administration interface. Delivery is **synchronous**, so there is no
-queue worker and no `send_queued_mail` cron entry.
+recorded and visible in the administration interface. Delivery is **synchronous**{% if cookiecutter.task_queue == "none" %}, so there is no
+queue worker and no `send_queued_mail` cron entry{% else %}, even though this project
+has a queue{% endif %}.
+{%- if cookiecutter.task_queue == "none" %}
 **Alternatives considered.** Celery or a similar queue: a second process to deploy, monitor, restart
 and forget on a new server, for a volume that does not need it.
 **Consequences.** Nothing to keep alive, and nothing to forget when the site moves to a new server.
 The cost is that a slow mail relay slows the request that triggered the send. If this project ever
 sends bulk mail, revisit this decision rather than working around it.
+{%- else %}
+**Alternatives considered.** Enqueuing every send. Rejected as the default: a queued send turns "the
+message was sent" into "the message was accepted for sending", and the failure then surfaces in a
+worker log rather than in front of the person who triggered it. The queue is used only to **retry**
+what an inline send could not deliver.
+**Consequences.** A delivery failure is visible immediately. The cost is that a slow mail relay slows
+the request that triggered the send. If this project ever sends bulk mail, revisit this decision
+rather than working around it — bulk mail is the case the queue is actually for.
+{%- endif %}
 
 {% if cookiecutter.api != "none" -%}
 ### Django REST Framework, RFC 9457 errors, and rotating refresh tokens
@@ -347,6 +358,140 @@ TODO: switch to Redis before go-live, or record the acceptance in writing with t
 stated explicitly.
 {%- endif %}
 
+{% if cookiecutter.task_queue == "none" -%}
+### No background task queue
+
+**Context.** A queue is a second long-lived process: it has to be deployed, restarted on every
+release, monitored, and remembered when the site moves to a new server. It earns that cost only when
+there is work that genuinely cannot happen inside a request.
+**Decision.** No queue. Scheduled work is cron entries and systemd timers
+([13-scheduled-tasks.md](13-scheduled-tasks.md)); everything else happens in the request that asked
+for it.
+**Alternatives considered.** Huey on PostgreSQL — the cheapest real queue available here, since it
+needs no new service — and Celery. Both were rejected for the same reason: nothing in this project's
+scope needs them today.
+**Consequences.** Nothing extra to keep alive, and a deploy cannot leave a stale worker running old
+code. The cost is that anything slow runs inside the request. When the first genuinely slow or
+retryable piece of work appears — a report to generate, an outbound integration that must survive a
+timeout, bulk mail — the answer is to add a queue deliberately, not to move the work into a
+management command triggered by an HTTP request.
+
+{% elif cookiecutter.task_queue == "huey" -%}
+### Huey for background tasks, on {% if cookiecutter.huey_backend == "postgres" %}PostgreSQL{% elif cookiecutter.huey_backend == "redis" %}Redis{% else %}SQLite{% endif %}
+
+**Context.** This project has work that must happen outside a request and on a schedule — the audit
+retention job at minimum. The choice was not "queue or no queue" but *how much machinery* that work
+justifies.
+**Decision.** Huey, with one consumer process that runs both the queue and the periodic schedule.
+{%- if cookiecutter.huey_backend == "postgres" %}
+Storage is **the application's own PostgreSQL database** (four tables, created by
+`manage.py migrate`).
+{%- elif cookiecutter.huey_backend == "redis" %}
+Storage is **Redis**, on a different database number from the cache so that flushing the cache
+cannot empty the queue.
+{%- else %}
+Storage is **SQLite**, in a file on the application host.
+{%- endif %}
+**Alternatives considered.** Celery: it brings routing, priorities, multiple queues, chains and
+groups, and mature monitoring — none of which this project needs — and costs a broker, a worker and
+a separate beat process, three things to run instead of one. Cron alone: no retries, no queue, and
+every job becomes a crontab line that exists on one server.
+{%- if cookiecutter.huey_backend == "postgres" %}
+Redis storage: faster, and it keeps queue churn out of the database, but it is a service to run,
+monitor and persist, and the queue then falls outside the database backup. Choose it when queue
+writes are measurably a load on PostgreSQL — not before.
+{%- endif %}
+**Consequences.**
+{%- if cookiecutter.huey_backend == "postgres" %}
+**No new infrastructure at all.** The queue is backed up with the database, survives a restart
+because PostgreSQL does, and there is nothing extra to patch. The cost is queue traffic on the
+primary database — real, but small at this project's volume, and measurable before it matters.
+{%- elif cookiecutter.huey_backend == "redis" %}
+Queue contents are **lost on a Redis restart** unless persistence is tuned (`appendonly yes`), and
+the queue is not in the database backup. Both are acceptable only while every task is safe to lose.
+{%- else %}
+**This is a development configuration.** SQLite storage does not survive multiple worker processes
+or a move to a second machine, and it contradicts the PostgreSQL-only rule in the standards.
+TODO: switch to the PostgreSQL storage before go-live — it needs no new service — or record the
+acceptance in writing.
+{%- endif %}
+One consumer process must be running and **must be restarted by every deploy**; a deploy that misses
+it leaves the previous release's code executing tasks against a migrated database, silently. See
+[07-deployment.md](07-deployment.md). If this project later needs task routing, priorities or
+several queues scaled independently, that is the point to reconsider Celery — not sooner.
+
+{% elif cookiecutter.task_queue == "celery" -%}
+### Celery for background tasks, over {% if cookiecutter.task_broker == "redis" %}Redis{% elif cookiecutter.task_broker == "rabbitmq" %}RabbitMQ{% else %}Amazon SQS{% endif %}
+
+**Context.** This project has background work that needs more than a cron entry, and enough of it to
+justify real queue machinery.
+**Decision.** Celery, with a worker and exactly one beat process, over
+{% if cookiecutter.task_broker == "redis" %}**Redis** as the broker, on a different database number from the cache{% elif cookiecutter.task_broker == "rabbitmq" %}**RabbitMQ**{% else %}**Amazon SQS**{% endif %}.
+**Alternatives considered.** Huey: one process instead of three, and on PostgreSQL it needs no new
+service at all — but no routing, no priorities, no multiple queues, no chains or groups, and far
+less monitoring. It was rejected because this project needs at least one of those; if that stops
+being true, Celery is the more expensive answer.
+{%- if cookiecutter.task_broker == "redis" %}
+RabbitMQ: durable, acknowledged and dead-letterable, at the cost of another server to run, monitor,
+back up and upgrade. SQS: the same durability with nothing to operate, but no Celery remote control
+or events, and no broker-level priorities.
+{%- elif cookiecutter.task_broker == "rabbitmq" %}
+Redis: simpler, and already running for the cache, but **not a durable message broker** — a restart
+can drop queued tasks unless persistence is tuned, and there are no publisher confirms or
+dead-letter queues. SQS: comparable durability with no server to operate, at the cost of Celery's
+remote control and events, which is how `celery inspect` and Flower work.
+{%- else %}
+RabbitMQ: the same durability guarantees, plus priorities and working remote control — at the cost
+of a server to run, patch, monitor, back up and upgrade. Redis: simplest, already running for the
+cache, but not durable.
+{%- endif %}
+**Consequences.**
+{%- if cookiecutter.task_broker == "redis" %}
+**Redis is not a durable message broker.** An unpersisted restart drops whatever was queued, there
+are no publisher confirms and no dead-letter queue. Every task in this project must therefore be
+safe to lose and safe to run twice. The moment a task appears that a customer has been told already
+happened — a payment reconciled, an invoice issued — this decision has to be revisited rather than
+patched around.
+{%- elif cookiecutter.task_broker == "rabbitmq" %}
+Durable queues, acknowledgements, publisher confirms and dead-lettering, so a task that was accepted
+is not lost to a restart. The cost is a broker to run: its own host, monitoring, upgrade path and
+backup. A RabbitMQ that hits its disk or memory alarm stops accepting publishes, and the symptom is
+a web request that hangs — so its alarms belong in [09-monitoring.md](09-monitoring.md), not in
+somebody's memory.
+{%- else %}
+Durable and redundant, with no broker server to run, patch, back up or monitor, and IAM instead of
+broker credentials. Three costs to keep in view: **`celery inspect` and Flower do not work** (SQS
+carries no remote control or events), there are **no broker-level priorities**, and the **visibility
+timeout is a correctness setting** — SQS redelivers any message not deleted within it, so a task
+that outruns `AWS_SQS_VISIBILITY_TIMEOUT` runs twice. A system check enforces the last one.
+Development runs against a local Redis instead, because there is no SQS to run locally; that
+difference is acceptable for a queue but the SQS-specific behaviour must be exercised on UAT before
+go-live.
+{%- endif %}
+Tasks are acknowledged **after** they complete (`task_acks_late`), so a killed worker returns the
+task to the queue rather than losing it — which means every task must be safe to run twice. Two
+processes must be running and **must be restarted by every deploy**; a deploy that misses the worker
+leaves the previous release's code executing tasks against a migrated database, silently. See
+[07-deployment.md](07-deployment.md).
+
+### The Celery schedule lives in the repository, not in the database
+
+**Context.** `django-celery-beat` is the usual choice, and it puts the schedule in database rows that
+an administrator can edit without a deploy.
+**Decision.** The stock beat scheduler, with the schedule defined in `CELERY_BEAT_SCHEDULE` in
+`settings/base.py`.
+**Alternatives considered.** `django-celery-beat`. Two reasons against it, either sufficient. Its
+current release declares `Django<6.1`, so it cannot be installed alongside {% if cookiecutter.django_version == "6.1" %}the Django this project
+runs{% else %}Django 6.1, which this project will move to{% endif %}. And a schedule in database rows exists on exactly one server, appears in no code
+review, and is lost with the machine — the same failure this documentation warns about for a crontab
+that was never committed.
+**Consequences.** Changing when a job runs is a deploy. Beat keeps its "last run" state in the file
+named by `CELERY_BEAT_SCHEDULE_FILENAME`, which must be writable and must survive a deploy: delete
+it and every periodic task is treated as never run, so they all fire at once on the next start.
+Revisit this if the client genuinely needs to retime jobs themselves, and if upstream has by then
+supported the Django release in use.
+
+{% endif -%}
 {% if cookiecutter.sentry != "yes" -%}
 ### No error monitoring — a known limitation
 

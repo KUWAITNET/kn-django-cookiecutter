@@ -1,0 +1,12 @@
+{% extends "wagtail_2fa/otp_form_v6.html" %}
+{% comment %}
+The one-time-password prompt shown after a correct password.
+
+Overrides a single block so wagtail-2fa keeps ownership of the form itself. Do
+NOT fork the whole template: our reference project forked the device list
+wholesale, and that copy silently drifts from the package on every upgrade.
+{% endcomment %}
+
+{% block branding_logo %}
+  {% include "wagtailadmin/logo.html" with wordmark=1 %}
+{% endblock %}

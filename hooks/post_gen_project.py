@@ -35,6 +35,7 @@ NEWSLETTER = "{{ cookiecutter.newsletter }}"
 FORMS_SUITE = "{{ cookiecutter.forms_suite }}"
 ANALYTICS = "{{ cookiecutter.analytics }}"
 ASSET_PIPELINE = "{{ cookiecutter.asset_pipeline }}"
+TASK_QUEUE = "{{ cookiecutter.task_queue }}"
 DOCKER = "{{ cookiecutter.docker }}"
 CI = "{{ cookiecutter.ci }}"
 BOOTSTRAP = "{{ cookiecutter.bootstrap }}"
@@ -114,6 +115,15 @@ if NEWSLETTER != "yes":
 if FORMS_SUITE != "yes":
     remove(str(APPS / "contact"))
 
+# The background-task app and the Celery application module. With no queue there is
+# no worker, so both would be dead code - and docs/13-scheduled-tasks.md already
+# documents the cron-only arrangement that replaces them.
+if TASK_QUEUE == "none":
+    remove(str(APPS / "tasks"))
+
+if TASK_QUEUE != "celery":
+    remove(str(PKG / "celery.py"))
+
 if API == "none":
     remove(str(APPS / "api"), "docs/12-api.md")
 elif API != "headless":
@@ -175,6 +185,10 @@ if not IS_BILINGUAL:
         str(APPS / "cities" / "translation.py"),
         str(APPS / "contact" / "translation.py"),
     )
+
+# The 2FA screens are only branded when 2FA is actually enabled.
+if USE_2FA != "yes":
+    remove(str(PKG / "templates" / "wagtail_2fa"))
 
 # The site switcher only exists on a multi-site project.
 if MULTISITE != "multi":

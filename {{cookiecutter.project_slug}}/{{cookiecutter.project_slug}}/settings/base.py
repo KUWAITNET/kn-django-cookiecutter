@@ -13,6 +13,9 @@ import os
 {% if cookiecutter.api != "none" or cookiecutter.media_storage == "gcs" %}from datetime import timedelta
 {% endif %}
 import environ
+{%- if cookiecutter.task_queue == "celery" %}
+from celery.schedules import crontab
+{%- endif %}
 from csp.constants import NONCE
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -86,6 +89,11 @@ INSTALLED_APPS = [
 {%- endif %}
     "post_office",
     "auditlog",
+{%- if cookiecutter.task_queue == "huey" %}
+    # Provides 'manage.py run_huey' (the consumer) and the decorators in
+    # apps/tasks/tasks.py. Importing it is what builds the HUEY object below.
+    "huey.contrib.djhuey",
+{%- endif %}
     # Installed in every environment, not just development: shell_plus, show_urls
     # and graph_models are as useful on a server as locally, and an app that is
     # only present in development is an app that breaks production at startup.
@@ -117,6 +125,9 @@ INSTALLED_APPS = [
 {%- endif %}
     # Project
     "apps.core",
+{%- if cookiecutter.task_queue != "none" %}
+    "apps.tasks",
+{%- endif %}
 {%- if cookiecutter.countries_app == "cities" %}
     "apps.cities",
 {%- endif %}
@@ -1129,6 +1140,189 @@ AUDITLOG_INCLUDE_TRACKING_MODELS = (
     "cities.Country",
 {%- endif %}
 )
+{%- if cookiecutter.task_queue != "none" %}
+
+# How long an audit entry is kept before apps.tasks prunes it. The security
+# baseline sets the floor at 12 months; the default is a little over that so a
+# prune job that misses a few weeks does not immediately breach the policy.
+AUDITLOG_RETENTION_DAYS = env.int("AUDITLOG_RETENTION_DAYS", default=400)
+{%- endif %}
+{%- if cookiecutter.task_queue == "huey" %}
+
+
+# Background tasks ---------------------------------------------------------------
+# Huey. One consumer process runs both the queue and the schedule - there is no
+# separate beat process to forget on a new server.
+#
+# The consumer is a SECOND process running the same code as the web application. A
+# deploy that restarts the web process and not the consumer leaves the old code
+# running every scheduled job; see docs/07-deployment.md.
+
+HUEY = {
+    "name": "{{ cookiecutter.project_slug }}",
+{%- if cookiecutter.huey_backend == "postgres" %}
+    # The queue lives in the application database. No broker, no extra service to
+    # deploy, monitor or back up - and the queue is inside the nightly dump with
+    # everything else.
+    "huey_class": "huey.PostgresHuey",
+{%- elif cookiecutter.huey_backend == "redis" %}
+    "huey_class": "huey.RedisHuey",
+{%- else %}
+    "huey_class": "huey.SqliteHuey",
+{%- endif %}
+    # Nothing in this project asks a task what it returned, and a result store is
+    # one more thing to size and expire. Turn it on deliberately, per task.
+    "results": False,
+    "utc": True,
+    # immediate = run the task inline, in the calling process, with no consumer at
+    # all. On in development and under test so a task is just a function call; it
+    # must be off wherever a consumer is actually running.
+    "immediate": env.bool("HUEY_IMMEDIATE", default=DEBUG),
+    "consumer": {
+        "workers": env.int("HUEY_WORKERS", default=2),
+        # Threads, not processes: these tasks are database and network bound, so
+        # they spend their time waiting rather than holding the GIL.
+        "worker_type": "thread",
+        "periodic": True,
+    },
+{%- if cookiecutter.huey_backend == "postgres" %}
+    "connection": {
+        "dbname": DATABASES["default"]["NAME"],
+        "user": DATABASES["default"]["USER"] or None,
+        "password": DATABASES["default"]["PASSWORD"] or None,
+        "host": DATABASES["default"]["HOST"] or None,
+        "port": DATABASES["default"]["PORT"] or None,
+        # Huey creates its own tables, and it would do so while this settings
+        # module is being read. That would make 'manage.py check' require a live
+        # database, which CI does not have. apps/tasks creates them on post_migrate
+        # instead, so 'manage.py migrate' is still the only step anyone runs.
+        "create_tables": False,
+    },
+{%- elif cookiecutter.huey_backend == "redis" %}
+    # A different Redis database from the cache on purpose: flushing the cache is a
+    # routine act, and it must not be able to empty the queue.
+    "connection": {"url": env("HUEY_REDIS_URL", default="redis://127.0.0.1:6379/2")},
+{%- else %}
+    # Single-process, single-machine storage. Fine for development; see
+    # docs/14-decisions.md before this reaches a server.
+    "connection": {
+        "filename": env("HUEY_SQLITE_PATH", default=os.path.join(BASE_DIR, "huey.sqlite3")),
+    },
+{%- endif %}
+}
+{%- elif cookiecutter.task_queue == "celery" %}
+
+
+# Background tasks ---------------------------------------------------------------
+# Celery. THREE processes in production, not one: the web application, a worker,
+# and beat for the schedule. A deploy that restarts the web process and not the
+# worker leaves the old code running every task; see docs/07-deployment.md.
+#
+# Everything below is read by {{ cookiecutter.project_slug }}/celery.py through the
+# CELERY_ namespace, so the settings module stays the single source of truth.
+{%- if cookiecutter.task_broker == "redis" %}
+
+# Redis is not a durable message broker: an unpersisted restart drops whatever was
+# queued, and there are no publisher confirms or dead-letter queues. Every task in
+# this project must therefore be safe to lose and safe to run twice.
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://127.0.0.1:6379/3")
+{%- elif cookiecutter.task_broker == "rabbitmq" %}
+
+# A real AMQP broker: durable queues, acknowledgements and dead-lettering. The
+# credentials are the broker's own, so they rotate independently of everything else.
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="amqp://guest:guest@127.0.0.1:5672//")
+{%- else %}
+
+# Amazon SQS. "sqs://" with no credentials in the URL is deliberate: boto3 resolves
+# them from the instance role (or the environment), so there is no broker password
+# to store, rotate or leak. A local development machine normally overrides this with
+# a redis:// URL - see docs/03-infrastructure.md for why that is acceptable for a
+# queue and what must be re-tested against real SQS before go-live.
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="sqs://")
+{%- endif %}
+
+# One queue. Routing across several is exactly the complexity Celery was chosen for,
+# but it is not free - add a queue when there is a task that must not wait behind
+# another, and give the worker a matching -Q.
+CELERY_TASK_DEFAULT_QUEUE = env(
+    "CELERY_TASK_DEFAULT_QUEUE", default="{{ cookiecutter.project_slug }}"
+)
+{%- if cookiecutter.task_broker == "sqs" %}
+
+if CELERY_BROKER_URL.startswith("sqs://"):
+    CELERY_BROKER_TRANSPORT_OPTIONS = {
+        "region": env("AWS_SQS_REGION", default="me-south-1"),
+        # MUST be longer than the slowest task. SQS makes a message visible again
+        # after this window whether or not the task is still running, so a task that
+        # outlives it is delivered to a second worker and runs twice.
+        "visibility_timeout": env.int("AWS_SQS_VISIBILITY_TIMEOUT", default=3600),
+        # Namespaces the queues so several environments can share one account.
+        "queue_name_prefix": env(
+            "AWS_SQS_QUEUE_PREFIX", default="{{ cookiecutter.project_slug }}-"
+        ),
+        "polling_interval": env.float("AWS_SQS_POLLING_INTERVAL", default=1.0),
+    }
+    # Naming the queue URL outright lets the IAM policy drop ListQueues and
+    # GetQueueUrl, so the worker can reach exactly one queue and discover nothing.
+    _sqs_queue_url = env("AWS_SQS_QUEUE_URL", default="")
+    if _sqs_queue_url:
+        CELERY_BROKER_TRANSPORT_OPTIONS["predefined_queues"] = {
+            CELERY_TASK_DEFAULT_QUEUE: {"url": _sqs_queue_url}
+        }
+{%- endif %}
+
+# No result backend by default. Nothing here waits on a task's return value, and a
+# result store is another datastore to size, expire and back up. Set
+# CELERY_RESULT_BACKEND deliberately if a task ever needs to report back.
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="") or None
+CELERY_TASK_IGNORE_RESULT = CELERY_RESULT_BACKEND is None
+
+# Acknowledge a task AFTER it finishes, not when it is picked up, so a worker that
+# is killed mid-task gives the task back to the queue instead of losing it. The
+# price is that every task must be safe to run twice - which is the right
+# constraint to design under anyway.
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+# A task with no time limit is a worker that never comes back. The soft limit
+# raises SoftTimeLimitExceeded inside the task so it can clean up; the hard limit
+# kills the process.
+CELERY_TASK_SOFT_TIME_LIMIT = env.int("CELERY_TASK_SOFT_TIME_LIMIT", default=300)
+CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT", default=360)
+
+# Run tasks inline in the calling process. Off in every deployed environment; the
+# test settings turn it on so a task is just a function call.
+CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=False)
+CELERY_TASK_EAGER_PROPAGATES = True
+
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+
+# The schedule lives here, in the repository, reviewed with the code that runs. It
+# is deliberately NOT django-celery-beat: a schedule in database rows exists on one
+# server, is absent from every code review, and is lost with the machine. The cost
+# is that changing a time is a deploy. See docs/14-decisions.md.
+#
+# beat keeps its "when did I last run this" state in a small file. It must be on a
+# writable, PERSISTENT path: delete it and every periodic task is treated as never
+# run, so they all fire at once on the next start.
+CELERY_BEAT_SCHEDULE_FILENAME = env(
+    "CELERY_BEAT_SCHEDULE_FILENAME", default=os.path.join(BASE_DIR, "celerybeat-schedule")
+)
+CELERY_BEAT_SCHEDULE = {
+    "prune-audit-log": {
+        "task": "tasks.prune_audit_log",
+        "schedule": crontab(hour=3, minute=30, day_of_week="sunday"),
+    },
+{%- if cookiecutter.notifications_app == "yes" %}
+    "send-queued-mail": {
+        "task": "tasks.send_queued_mail",
+        "schedule": crontab(minute="*/10"),
+    },
+{%- endif %}
+}
+{%- endif %}
 
 # Admin ------------------------------------------------------------------------
 

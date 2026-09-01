@@ -42,6 +42,56 @@ nobody pastes one into a ticket, a chat message or a screenshot.
 |---|---|---|---|---|
 | `REDIS_URL` | Shared cache. **Required in production**: rate-limit{% if cookiecutter.api != "none" %} and throttle{% endif %} counters live here, and a per-process cache multiplies every limit by the number of workers. | Yes in production | `redis://127.0.0.1:6379/1` | No |
 {% endif %}
+{%- if cookiecutter.task_queue == "huey" %}
+## Background tasks
+
+One consumer process (`make worker`) runs both the queue and the periodic schedule. It must be
+restarted by every deploy — see [07-deployment.md](07-deployment.md).
+
+| Variable | Purpose | Required | Example | Secret |
+|---|---|---|---|---|
+| `HUEY_IMMEDIATE` | `True` runs every task inline in the calling process, with no consumer at all. Defaults to `DEBUG`, so development needs no worker. **Leave unset in production**: with it on, the schedule never runs and the audit log is never pruned. A system check warns. | No | `False` | No |
+| `HUEY_WORKERS` | Consumer threads. Each holds a database connection, so count them against PostgreSQL's `max_connections`. Default 2. | No | `2` | No |
+{%- if cookiecutter.huey_backend == "redis" %}
+| `HUEY_REDIS_URL` | Queue storage. A **different database number** from the cache on purpose: flushing the cache must not be able to empty the queue. | No | `redis://127.0.0.1:6379/2` | No |
+{%- elif cookiecutter.huey_backend == "sqlite" %}
+| `HUEY_SQLITE_PATH` | Queue storage file. Single-process only; a development configuration. | No | `huey.sqlite3` | No |
+{%- endif %}
+| `AUDITLOG_RETENTION_DAYS` | How long audit entries are kept before the scheduled prune deletes them. **The job refuses to run below 365**: the security baseline requires at least 12 months of audit history. | No | `400` | No |
+{%- if cookiecutter.huey_backend == "postgres" %}
+
+The queue itself needs no configuration: it is four tables in `DATABASE_URL`'s database, created by
+`manage.py migrate`.
+{%- endif %}
+
+{% elif cookiecutter.task_queue == "celery" %}
+## Background tasks
+
+Two processes besides the web application: a worker (`make worker`) and exactly one beat
+(`make beat`). Both must be restarted by every deploy — see [07-deployment.md](07-deployment.md).
+
+| Variable | Purpose | Required | Example | Secret |
+|---|---|---|---|---|
+{%- if cookiecutter.task_broker == "redis" %}
+| `CELERY_BROKER_URL` | The broker. A **different database number** from the cache on purpose: flushing the cache must not be able to empty the queue. | Yes in production | `redis://127.0.0.1:6379/3` | No |
+{%- elif cookiecutter.task_broker == "rabbitmq" %}
+| `CELERY_BROKER_URL` | The broker. Carries the AMQP credentials, so it is a secret in every environment. | Yes | `amqp://user:password@broker:5672//` | **Yes** |
+{%- else %}
+| `CELERY_BROKER_URL` | `sqs://` with **no credentials in the URL**: boto3 resolves them from the instance role. Development points this at the local Redis instead — see [03-infrastructure.md](03-infrastructure.md). | Yes | `sqs://` | No |
+| `AWS_SQS_REGION` | The queue's region. | Yes with SQS | `me-south-1` | No |
+| `AWS_SQS_VISIBILITY_TIMEOUT` | Seconds SQS hides a message while it is being processed. **Must exceed `CELERY_TASK_TIME_LIMIT`**, or a slow task becomes visible again and a second worker runs it. A system check enforces this. | Yes with SQS | `3600` | No |
+| `AWS_SQS_QUEUE_PREFIX` | Namespaces the queue names, so several environments can share one AWS account. | No | `{{ cookiecutter.project_slug }}-` | No |
+| `AWS_SQS_QUEUE_URL` | Names the queue outright. Setting it lets the IAM policy drop `sqs:ListQueues` and `sqs:GetQueueUrl`. | No | | No |
+{%- endif %}
+| `CELERY_TASK_DEFAULT_QUEUE` | The one queue this project uses. | No | `{{ cookiecutter.project_slug }}` | No |
+| `CELERY_RESULT_BACKEND` | Where task return values are stored. **Unset by default**: nothing here waits on a result, and a result store is another datastore to size and expire. | No | | No |
+| `CELERY_TASK_SOFT_TIME_LIMIT` | Seconds before `SoftTimeLimitExceeded` is raised inside the task, so it can clean up. | No | `300` | No |
+| `CELERY_TASK_TIME_LIMIT` | Seconds before the worker process is killed outright. | No | `360` | No |
+| `CELERY_TASK_ALWAYS_EAGER` | `True` runs every task inline in the calling process. **Never in a deployed environment**: the worker sits idle and beat's schedule has no effect. A system check warns. | No | `False` | No |
+| `CELERY_BEAT_SCHEDULE_FILENAME` | Where beat records what it last ran. Must be writable and must **persist across deploys** — delete it and every periodic task is treated as never run, so they all fire at once on the next start. | No | `/var/lib/{{ cookiecutter.project_slug }}/celerybeat-schedule` | No |
+| `AUDITLOG_RETENTION_DAYS` | How long audit entries are kept before the scheduled prune deletes them. **The job refuses to run below 365**: the security baseline requires at least 12 months of audit history. | No | `400` | No |
+
+{% endif %}
 ## Outgoing mail
 
 Mail always goes through `django-post-office`, which logs every send. These variables configure the

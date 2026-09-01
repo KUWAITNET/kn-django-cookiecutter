@@ -124,6 +124,9 @@ Answer the prompts, or accept the defaults — the defaults are the KUWAITNET st
 | `analytics` | `ga4_gtm` | `ga4_gtm`, `none` | GA4 / Tag Manager hooks with IDs read from the environment |
 | `database` | `postgres` | fixed | PostgreSQL is the only supported database |
 | `cache` | `redis` | `redis`, `locmem` | Redis is required in production wherever a counter lives in the cache |
+| `task_queue` | `none` | `none`, `huey`, `celery` | Background work. `none` is the right default: a queue is a second process to deploy, monitor and restart. `huey` = one consumer running the queue **and** the schedule. `celery` = routing, priorities, several queues, chains and groups — at the cost of a broker, a worker and beat |
+| `huey_backend` | `postgres` | `postgres`, `redis`, `sqlite` | `task_queue=huey` only. `postgres` needs **no new service**: four tables in the application database, created by `migrate` and backed up with everything else. `redis` keeps queue churn off the database but is a service to run and persist. `sqlite` is development only |
+| `task_broker` | `redis` | `redis`, `rabbitmq`, `sqs` | `task_queue=celery` only, and it is a **durability** decision. `redis` is not a durable broker — a restart can drop queued tasks. `rabbitmq` gives durable queues, publisher confirms and dead-lettering, for a server to run and back up. `sqs` gives the same durability fully managed, but `celery inspect` and Flower do not work over it, there are no broker-level priorities, and `celery[sqs]` pulls `pycurl`, which is compiled at install time |
 | `docker` | `yes` | `yes`, `no` | A multi-stage uv Dockerfile and a compose file for local services |
 | `ci` | `bitbucket` | `bitbucket`, `github`, `none` | A pipeline running ruff, bandit, `pip-audit`, the missing-migration check, the coverage gate and `check --deploy` |
 | `deploy_target` | `gunicorn_nginx` | `gunicorn_nginx`, `docker_compose` | Which runbook `docs/07-deployment.md` is written for |
@@ -143,6 +146,7 @@ Generation is aborted, before any file is written, when:
 | `frontend=api_only` with `api=none` | An API-only project with no API |
 | `frontend=api_only` with `forms_suite=yes` or `newsletter=yes` | Both need server-rendered templates; in an API project the serializers do that work |
 | `deploy_target=docker_compose` with `docker=no` | The runbook would document a deployment whose Dockerfile was never generated |
+| `task_broker` is `rabbitmq` or `sqs` without `task_queue=celery` | Only Celery talks to an external broker. Huey is backed by PostgreSQL, Redis or SQLite, and `task_queue=none` has nothing to broker. The default `redis` value is ignored silently, so a project with no queue never has to answer a broker question |
 | `domain_name` is not a hostname, or `python_version` is not `3.x` | Caught here rather than at boot |
 
 It also **warns without blocking** — each of these is a documented exception under the security
@@ -156,6 +160,14 @@ baseline, and the generated `docs/14-decisions.md` carries a pre-written entry s
 - `api != none` with `cache=locmem` — the same problem for throttles.
 - `notifications_app=no` with forms or a newsletter enabled — no admin-editable templates and no
   e-mail log.
+- `huey_backend=redis` or `task_broker=redis` with `cache=locmem` — the queue needs a real Redis and
+  this project configures none, so the URL falls back to a localhost default that has to exist
+  wherever the worker runs.
+- `huey_backend=sqlite` — single-process storage; it contradicts the PostgreSQL-only rule and does
+  not survive a second worker.
+- `task_broker=sqs` — `celery[sqs]` pulls `pycurl`, a C extension that needs libcurl and OpenSSL
+  headers to build, so `uv sync` fails on a machine without them. SQS also carries no Celery remote
+  control or events, so `celery inspect` and Flower do not work.
 
 ## What the post-generation hook does
 

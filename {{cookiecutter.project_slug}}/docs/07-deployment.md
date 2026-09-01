@@ -66,6 +66,10 @@ At least one engineer stays available for two hours after a production deploy.
 - [ ] Client UAT sign-off recorded (releases, not hotfixes).
 - [ ] The release is tagged, and `CHANGELOG.md` includes any Deploy notes.
 - [ ] Every new environment variable is in `.env.example` **and** set on the server.
+{%- if cookiecutter.task_queue != "none" %}
+- [ ] Any task whose arguments changed in this release is still callable with the **old** signature.
+      During the deploy, old and new code are both in flight against the same queue.
+{%- endif %}
 - [ ] No destructive migration in this release; expand-and-contract respected
       ([05-database.md](05-database.md)).
 - [ ] Any migration expected to exceed about 30 seconds has been identified and scheduled.
@@ -117,10 +121,22 @@ uv run python manage.py migrate --noinput
 # 5. Full restart. A reload (SIGHUP) is not enough after 'uv sync' changed a dependency.
 sudo systemctl restart {{ cookiecutter.project_slug }}-gunicorn
 sudo systemctl status {{ cookiecutter.project_slug }}-gunicorn --no-pager
+{%- if cookiecutter.task_queue != "none" %}
+
+# 6. Restart the background {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker AND beat{% endif %}. NOT optional, and not a tidy-up step:
+#    see "The worker is a second process" below.
+{%- if cookiecutter.task_queue == "huey" %}
+sudo systemctl restart {{ cookiecutter.project_slug }}-worker
+sudo systemctl status {{ cookiecutter.project_slug }}-worker --no-pager
+{%- else %}
+sudo systemctl restart {{ cookiecutter.project_slug }}-worker {{ cookiecutter.project_slug }}-beat
+sudo systemctl status {{ cookiecutter.project_slug }}-worker {{ cookiecutter.project_slug }}-beat --no-pager
+{%- endif %}
+{%- endif %}
 ```
 
 Numbered step titles, for the release ticket: 0 snapshot, 1 fetch the approved commit, 2
-dependencies from the lockfile, 3 static{% if cookiecutter.asset_pipeline == "compressor" %}, compression{% endif %}{% if cookiecutter.languages == "en_ar" %} and translations{% endif %}, 4 migrations, 5 restart, then verify.
+dependencies from the lockfile, 3 static{% if cookiecutter.asset_pipeline == "compressor" %}, compression{% endif %}{% if cookiecutter.languages == "en_ar" %} and translations{% endif %}, 4 migrations, 5 restart{% if cookiecutter.task_queue != "none" %}, 6 restart the background {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker and beat{% endif %}{% endif %}, then verify.
 
 Why each of those is written the way it is:
 
@@ -180,10 +196,22 @@ docker compose build web
 #    must stop a deploy rather than crash-loop a container.
 docker compose run --rm web python manage.py migrate --noinput
 
-# 4. Replace the running container.
+# 4. Replace the running container{% if cookiecutter.task_queue != "none" %}S. The {% if cookiecutter.task_queue == "huey" %}worker is{% else %}worker and beat are{% endif %} listed here on purpose:
+#    'up -d web' alone leaves {% if cookiecutter.task_queue == "huey" %}it{% else %}them{% endif %} running the previous image. See "The worker is a
+#    second process" below{% endif %}.
+{%- if cookiecutter.task_queue == "none" %}
 docker compose up -d web
 docker compose ps
 docker compose logs --tail=50 web
+{%- elif cookiecutter.task_queue == "huey" %}
+docker compose up -d web worker
+docker compose ps
+docker compose logs --tail=50 web worker
+{%- else %}
+docker compose up -d web worker beat
+docker compose ps
+docker compose logs --tail=50 web worker beat
+{%- endif %}
 ```
 
 Why each of those is written the way it is:
@@ -203,6 +231,59 @@ Why each of those is written the way it is:
 - The image is built from a tag, not from a working copy with local edits.
 - The deploy account has no git push credentials and no database superuser rights.
 {%- endif %}
+{%- if cookiecutter.task_queue != "none" %}
+
+## The {% if cookiecutter.task_queue == "huey" %}worker is a second process{% else %}worker and beat are second and third processes{% endif %}
+
+{% if cookiecutter.task_queue == "huey" -%}
+The task consumer runs the same code as the web application, in a **separate long-lived process**.
+It is started once and then stays up for weeks.
+{%- else -%}
+The Celery worker and beat run the same code as the web application, in **separate long-lived
+processes**. They are started once and then stay up for weeks.
+{%- endif %}
+
+**A deploy that restarts the web process and not the {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker{% endif %} leaves the old code running your
+tasks.** This is a real and common outage, not a theoretical one, and it is nasty because everything
+looks fine: the site serves the new release, the deploy log is green, CI was green, and nobody gets
+an error. Meanwhile the {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker{% endif %} is executing last release's code against a database the
+new release has already migrated. The usual shapes it takes:
+
+- The migration added a non-null column. The old task's `INSERT` omits it and every run fails —
+  in a process nobody is watching.
+- The migration removed or renamed a field the old task still reads, so the task raises on every
+  message and the queue backs up silently.
+- The task's logic changed — a corrected VAT rate, a fixed e-mail template, a tightened permission
+  check — and the old version keeps producing the wrong output for as long as the process lives.
+  Nothing fails. The results are simply wrong, and they are wrong for days, because the process is
+  only noticed the next time somebody reboots the machine.
+
+So the restart is a numbered step in the runbook above, not a note at the end. Two rules follow
+from it:
+
+1. **Restart {% if cookiecutter.task_queue == "huey" %}it{% else %}both{% endif %} in the same deploy, immediately after the web process** — never "later", never
+   "when convenient".
+2. **Write tasks so that both versions can be in flight at once.** During any deploy there is a
+   window where a message enqueued by the new code is picked up by the old worker, or the reverse.
+   The same expand-and-contract discipline that applies to migrations ([05-database.md](05-database.md))
+   applies to task signatures: add arguments with defaults, do not remove or reorder them in the
+   same release that starts using them.
+{%- if cookiecutter.deploy_target == "gunicorn_nginx" %}
+
+TODO: create the systemd unit{% if cookiecutter.task_queue == "celery" %}s{% endif %} and commit {% if cookiecutter.task_queue == "celery" %}them{% else %}it{% endif %} alongside this document. {% if cookiecutter.task_queue == "huey" %}The unit runs
+`manage.py run_huey` as the `{{ cookiecutter.project_slug }}` user, with the same environment file as gunicorn,
+`Restart=always`, and `WantedBy=multi-user.target` so it comes back after a reboot.{% else %}One unit runs
+`celery -A {{ cookiecutter.project_slug }} worker`, the other `celery -A {{ cookiecutter.project_slug }} beat`, both as the
+`{{ cookiecutter.project_slug }}` user with the same environment file as gunicorn, `Restart=always`, and
+`WantedBy=multi-user.target` so they come back after a reboot.
+
+**Exactly one beat process per environment.** Two schedulers on one schedule make every periodic
+task fire twice; if the application ever runs on two servers, beat belongs on one of them only.{% endif %}
+
+A worker that is not under a process manager is a worker that disappears at the next reboot, and
+the first sign of it is a scheduled job that stopped months ago.
+{%- endif %}
+{%- endif %}
 
 ## Post-deploy verification
 
@@ -220,6 +301,14 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://{{ cookiecutter.domain_name }}
 ```
 
 - [ ] {% if cookiecutter.deploy_target == "gunicorn_nginx" %}`systemctl status`{% else %}`docker compose ps`{% endif %} shows the new release running.
+{%- if cookiecutter.task_queue != "none" %}
+- [ ] The background {% if cookiecutter.task_queue == "huey" %}consumer is{% else %}worker and beat are{% endif %} running, and {% if cookiecutter.task_queue == "huey" %}its start time is{% else %}their start times are{% endif %} **after** this deploy — not
+      before it. A start time that predates the deploy means old code is still running tasks.
+- [ ] The {% if cookiecutter.task_queue == "huey" %}consumer's{% else %}worker's{% endif %} startup log lists every expected task. A task missing from that list will
+      never run.
+- [ ] One task has actually executed since the restart (enqueue one, or wait for a scheduled run and
+      read the log). A process that started is not the same as a process that is working.
+{%- endif %}
 {%- if cookiecutter.frontend != "api_only" %}
 - [ ] Homepage returns 200{% if cookiecutter.languages == "en_ar" %} in both languages{% endif %}, plus one form page and one detail page.
 {%- endif %}

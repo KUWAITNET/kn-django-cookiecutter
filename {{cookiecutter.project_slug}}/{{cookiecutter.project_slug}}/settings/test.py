@@ -42,6 +42,20 @@ COMPRESS_OFFLINE = False
 {%- endif %}
 
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+{%- if cookiecutter.task_queue == "huey" %}
+
+# Tasks run inline, in this process, against an in-memory store: the suite tests
+# what the task does, not that huey can talk to {% if cookiecutter.huey_backend == "postgres" %}Postgres{% elif cookiecutter.huey_backend == "redis" %}Redis{% else %}SQLite{% endif %}. Rebinds rather than
+# mutates, because a star import shares the dict with settings/base.py.
+HUEY = {**HUEY, "immediate": True}  # noqa: F405
+{%- elif cookiecutter.task_queue == "celery" %}
+
+# Tasks run inline, in this process, with no broker: the suite tests what the task
+# does, not that Celery can reach {% if cookiecutter.task_broker == "redis" %}Redis{% elif cookiecutter.task_broker == "rabbitmq" %}RabbitMQ{% else %}SQS{% endif %}. EAGER_PROPAGATES means a task that
+# raises fails the test instead of being swallowed into a result.
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+{%- endif %}
 
 DATABASES["default"] = env.db(  # noqa: F405
     "TEST_DATABASE_URL",

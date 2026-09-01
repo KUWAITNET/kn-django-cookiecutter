@@ -11,6 +11,13 @@
 | Application errors | Application log (below). **No error monitor is configured** — see the note at the end of this page | Nobody, until someone looks |
 {%- endif %}
 | Application log | TODO: `journalctl -u {{ cookiecutter.project_slug }}-gunicorn`{% if cookiecutter.deploy_target == "docker_compose" %} / `docker compose logs web`{% endif %} | — |
+{%- if cookiecutter.task_queue != "none" %}
+| Background {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker{% endif %} | TODO: `journalctl -u {{ cookiecutter.project_slug }}-worker`{% if cookiecutter.deploy_target == "docker_compose" %} / `docker compose logs worker`{% endif %}. Its own log, **not** the web process's — a task that fails appears here and nowhere else | TODO: |
+{%- if cookiecutter.task_queue == "celery" %}
+| Schedule (beat) | TODO: `journalctl -u {{ cookiecutter.project_slug }}-beat`{% if cookiecutter.deploy_target == "docker_compose" %} / `docker compose logs beat`{% endif %} | TODO: |
+{%- endif %}
+| Queue depth | {% if cookiecutter.task_queue == "huey" %}TODO: `manage.py shell` → `from huey.contrib.djhuey import HUEY; HUEY.pending_count()`{% elif cookiecutter.task_broker == "sqs" %}CloudWatch: `ApproximateNumberOfMessagesVisible` and `ApproximateAgeOfOldestMessage` on the queue{% elif cookiecutter.task_broker == "rabbitmq" %}RabbitMQ management UI, or `rabbitmqctl list_queues`{% else %}`celery -A {{ cookiecutter.project_slug }} inspect stats`, or `redis-cli llen {{ cookiecutter.project_slug }}`{% endif %} | TODO: |
+{%- endif %}
 | Web server access and error log | TODO: e.g. `/var/log/nginx/{{ cookiecutter.domain_name }}.*.log` | — |
 | Database log | TODO: | — |
 | Outgoing mail | The e-mail log in the administration interface, plus the relay's own dashboard | — |
@@ -65,6 +72,14 @@ has never fired is an alert you are trusting without evidence.
 | Restore test overdue | No successful test in the agreed period | P3 | Project lead |
 | Scheduled job not running | No completion within its interval plus 50 % | P2 | Alert channel |
 | Queued e-mail backlog | Unsent queue > 100, or anything unsent for > 30 minutes | P2 | Alert channel |
+{%- if cookiecutter.task_queue != "none" %}
+| **Background {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker{% endif %} not running** | Process absent for 2 minutes | P1 | Alert channel, project lead |
+{%- if cookiecutter.task_queue == "celery" %}
+| **beat not running** | Process absent for 2 minutes | P1 | Alert channel, project lead |
+{%- endif %}
+| Task queue depth growing | Depth rising for 15 minutes with no completions | P2 | Alert channel |
+| Task failing on every attempt | Any task, 3 consecutive failures | P2 | Alert channel |
+{%- endif %}
 {%- if cookiecutter.rate_limiting == "yes" %}
 | Login lockout spike | > 20 lockouts in 10 minutes | P2 | Alert channel, project lead |
 {%- endif %}
@@ -216,6 +231,19 @@ Also specific to this project:
 {%- endif %}
 {%- if cookiecutter.spam_protection == "turnstile_honeypot" %}
 | **Every form submission is rejected as spam** | Outbound access to the verification endpoint is blocked, or the secret key is wrong or missing | Check outbound connectivity to the verification host and the configured keys. With no key the protection degrades to honeypot-only rather than rejecting everyone, so total rejection means a key is present but wrong |
+{%- endif %}
+{%- if cookiecutter.task_queue != "none" %}
+| **A scheduled job silently stopped happening** | The background {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker or beat{% endif %} is not running, or was not restarted by a deploy | Check the process first, then its log. A stopped worker produces silence, not errors, so nothing else will have told you |
+| **Tasks run the previous release's behaviour** | The deploy restarted the web process but not the {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker{% endif %} | Compare the process start time with the deploy time. Restart it; see [07-deployment.md](07-deployment.md) |
+| **A task is enqueued but never executes** | It is not registered with the worker — usually because it is not in an app's `tasks.py` | Read the worker's startup log: it lists everything it can run. A task absent from that list will never fire |
+{%- if cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "sqs" %}
+| **A task appears to run twice** | `AWS_SQS_VISIBILITY_TIMEOUT` is shorter than the task takes, so SQS redelivered it to a second worker | Raise the visibility timeout above `CELERY_TASK_TIME_LIMIT`. `manage.py check` reports this as `tasks.W003` |
+| **`celery inspect` and Flower show nothing** | Working as designed: SQS carries no Celery remote control or events | Use CloudWatch for queue depth and message age, and the worker's own log for what it is doing |
+{%- endif %}
+{%- if cookiecutter.task_queue == "celery" %}
+| **Every periodic task fires twice** | Two beat processes are running | There is exactly one beat per environment, not one per application server |
+| **Every periodic task fires at once after a restart** | The beat schedule file was deleted, so every task looks "never run" | Restore or accept the one-off burst, then put `CELERY_BEAT_SCHEDULE_FILENAME` somewhere a deploy does not wipe |
+{%- endif %}
 {%- endif %}
 
 For each incident, also record: whether it affects all visitors or one, who to escalate to, and the

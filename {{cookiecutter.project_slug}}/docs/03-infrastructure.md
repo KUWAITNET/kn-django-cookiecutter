@@ -30,8 +30,14 @@ Requirements the application makes of it:
 
 | Resource | Minimum | Recommended | Notes |
 |---|---|---|---|
-| CPU | 2 vCPU | 4 vCPU | gunicorn runs 3 workers by default; raise workers only with cores |
+| CPU | 2 vCPU | 4 vCPU | gunicorn runs 3 workers by default; raise workers only with cores{% if cookiecutter.task_queue != "none" %}. The background {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker and beat{% endif %} share these cores with the web process{% endif %} |
+{%- if cookiecutter.task_queue == "huey" %}
+| Memory | 2 GB | 4 GB | Django workers plus PostgreSQL{% if cookiecutter.cache == "redis" %} plus Redis{% endif %} on one host, **plus the task consumer**: it loads the whole Django application, so budget roughly what one gunicorn worker costs (200–300 MB) |
+{%- elif cookiecutter.task_queue == "celery" %}
+| Memory | 2 GB | 4 GB | Django workers plus PostgreSQL{% if cookiecutter.cache == "redis" %} plus Redis{% endif %} on one host, **plus a Celery worker and beat**. Each loads the whole Django application: budget one gunicorn worker's memory per worker process (200–300 MB), and about half that for beat{% if cookiecutter.task_broker == "rabbitmq" %}. RabbitMQ adds ~300 MB again if it runs here, which it should not{% endif %} |
+{%- else %}
 | Memory | 2 GB | 4 GB | Django workers plus PostgreSQL{% if cookiecutter.cache == "redis" %} plus Redis{% endif %} on one host |
+{%- endif %}
 {%- if cookiecutter.media_storage == "filesystem" %}
 | Disk (application + media) | 20 GB | 40 GB | TODO: media is currently ___ GB, growing ~___ GB/year |
 {%- else %}
@@ -77,8 +83,12 @@ df -h
 | 80 | HTTP, redirects to HTTPS only | Internet |
 | 22 | Administrative access (SSH, key authentication only) | TODO: restrict to the office/VPN range |
 | 5432 | PostgreSQL | Localhost only |
-{%- if cookiecutter.cache == "redis" %}
+{%- if cookiecutter.cache == "redis" or (cookiecutter.task_queue == "huey" and cookiecutter.huey_backend == "redis") or (cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "redis") %}
 | 6379 | Redis | Localhost only |
+{%- endif %}
+{%- if cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "rabbitmq" %}
+| 5672 | RabbitMQ (AMQP) | The application host only. Never the internet: the broker holds every task's arguments |
+| 15672 | RabbitMQ management UI | TODO: restrict to the office/VPN range, or leave the plugin disabled |
 {%- endif %}
 | 8000 | gunicorn | Localhost only, behind the reverse proxy |
 
@@ -89,7 +99,7 @@ internet bypasses TLS, the request size limits and the access log.
 
 | Account | Runs | Notes |
 |---|---|---|
-| `{{ cookiecutter.project_slug }}` | gunicorn, management commands, cron jobs | No login shell required for the service itself; no sudo |
+| `{{ cookiecutter.project_slug }}` | gunicorn, management commands, cron jobs{% if cookiecutter.task_queue == "huey" %}, the task consumer{% elif cookiecutter.task_queue == "celery" %}, the Celery worker and beat{% endif %} | No login shell required for the service itself; no sudo |
 {%- if cookiecutter.deploy_target == "gunicorn_nginx" %}
 | `www-data` | nginx | Needs read access to `staticfiles/` and `media/` only |
 {%- endif %}
@@ -255,10 +265,117 @@ so it costs one bucket egress and no application time.
 {%- if cookiecutter.sentry == "yes" %}
 | Sentry ingest host (TODO: from the DSN) | 443 | Error reports | Errors are logged locally only, no alerts |
 {%- endif %}
+{%- if cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "sqs" %}
+| `sqs.<region>.amazonaws.com` | 443 | Every task enqueue and every worker poll | Nothing is queued and nothing runs. The web request that enqueues will block on the SDK's retries first, so a blocked broker looks like a slow site |
+{%- elif cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "rabbitmq" %}
+| RabbitMQ host (TODO: hostname) | 5672 | Every task enqueue and every worker poll | Nothing is queued and nothing runs |
+{%- endif %}
 | Package index and git host | 443 | Deploys and dependency installation | Deploys fail |
 
 Nothing else is required at runtime. If an outbound rule has to be opened for a new integration,
 add it to this table and to the third-party services register in the same change.
+{%- if cookiecutter.task_queue != "none" %}
+
+## The background {% if cookiecutter.task_queue == "huey" %}consumer{% else %}worker{% endif %}
+
+{% if cookiecutter.task_queue == "huey" -%}
+**One extra long-lived process**, started as `python manage.py run_huey`. It runs the queue and the
+periodic schedule together, so there is no second scheduler to set up and nothing to forget on a new
+machine.
+
+It is the same code as the web application, running under the same account, with the same
+environment. Three consequences worth stating before somebody discovers them:
+
+- It **must be restarted by every deploy**. A worker that was not restarted keeps running the code
+  it started with, against a database the new code has already migrated. See
+  [07-deployment.md](07-deployment.md).
+- It holds its own database connections. Add the consumer's worker count (`HUEY_WORKERS`) to the
+  gunicorn worker count when sizing PostgreSQL's `max_connections`.
+- If it is not running, nothing fails loudly. Tasks accumulate and scheduled work silently does not
+  happen — which is why [09-monitoring.md](09-monitoring.md) treats "the worker is alive" as a
+  monitored fact rather than an assumption.
+{%- if cookiecutter.huey_backend == "postgres" %}
+
+**No new service.** The queue is four tables in the application database, created by
+`manage.py migrate`. It is backed up with everything else, it survives a restart because Postgres
+does, and there is nothing extra to patch or monitor.
+{%- elif cookiecutter.huey_backend == "redis" %}
+
+**Redis holds the queue.** Two things follow. Queued tasks are lost on a Redis restart unless
+persistence is configured (`appendonly yes`), and the queue is *not* in the database backup — a
+restore brings back the data but not the work that was pending. Both are acceptable only if every
+task is safe to lose.
+{%- else %}
+
+**SQLite holds the queue**, in a file on this host. It does not survive more than one worker process
+and it does not survive a move to a second machine. This is a development configuration; see
+[14-decisions.md](14-decisions.md).
+{%- endif %}
+{%- else -%}
+**Two extra long-lived processes:** a Celery worker
+(`celery -A {{ cookiecutter.project_slug }} worker`) and exactly one beat
+(`celery -A {{ cookiecutter.project_slug }} beat`). Beat is the schedule; the worker executes.
+Running two beat processes makes every periodic task fire twice, so it is one per environment, not
+one per application server.
+
+Both are the same code as the web application, running under the same account, with the same
+environment. Consequences worth stating before somebody discovers them:
+
+- They **must be restarted by every deploy**. A worker that was not restarted keeps running the code
+  it started with, against a database the new code has already migrated. See
+  [07-deployment.md](07-deployment.md).
+- Each holds its own database connections. Add the worker's concurrency to the gunicorn worker count
+  when sizing PostgreSQL's `max_connections`.
+- Beat keeps "when did I last run this" in the file named by `CELERY_BEAT_SCHEDULE_FILENAME`. It
+  must be writable and it must survive a deploy: delete it and every periodic task is treated as
+  never run, so they all fire at once on the next start.
+- If they are not running, nothing fails loudly. See [09-monitoring.md](09-monitoring.md).
+{%- if cookiecutter.task_broker == "rabbitmq" %}
+
+**RabbitMQ is another service to run.** It needs its own host or container, its own monitoring, its
+own upgrade path, and its own backup story — the broker holds tasks that have been accepted but not
+yet run, so losing it loses committed work. TODO: record where it runs, who patches it, what its
+memory and disk high-water marks are set to, and whether its definitions (users, vhosts, policies)
+are exported anywhere. A RabbitMQ that hits its disk alarm stops accepting publishes, and the
+symptom is a web request that hangs.
+{%- elif cookiecutter.task_broker == "sqs" %}
+
+**There is no broker server.** SQS is managed: nothing to patch, monitor, back up or upgrade, and
+IAM replaces broker credentials. What it costs instead:
+
+- **The queue is not in any backup you control.** Messages live in SQS with its own retention
+  (14 days maximum). A database restore does not bring back work that was in flight.
+- **`celery inspect` and Flower do not work.** SQS carries no Celery remote control or events, so
+  the usual "what is the worker doing right now" tools go dark. Monitor the queue depth and message
+  age in CloudWatch, and the worker through its logs; see [09-monitoring.md](09-monitoring.md).
+- **No broker-level priorities.** A task that must not wait behind another needs its own queue and a
+  worker dedicated to it.
+- **Visibility timeout is a correctness setting, not a tuning knob.** SQS makes a message visible
+  again once `AWS_SQS_VISIBILITY_TIMEOUT` expires, whether or not the task is still running, and a
+  second worker then picks it up. Keep it above `CELERY_TASK_TIME_LIMIT`; a system check enforces
+  this.
+- **IAM, not passwords.** The instance role needs `sqs:SendMessage`, `sqs:ReceiveMessage`,
+  `sqs:DeleteMessage` and `sqs:GetQueueAttributes` on the project's queues. Setting
+  `AWS_SQS_QUEUE_URL` lets you drop `sqs:ListQueues` and `sqs:GetQueueUrl` as well, so the worker
+  can reach exactly one queue and discover nothing. TODO: record the queue ARNs and the role.
+
+**Development does not use SQS.** `docker-compose.yml` provides a Redis, and `.env` points
+`CELERY_BROKER_URL` at it. That is a deliberate difference between environments: for a queue the
+application code is identical either way, and running a local SQS emulator costs more than it
+proves. What it does **not** prove is the SQS-specific behaviour above — visibility timeout,
+redelivery, and the absence of remote control. Exercise those on UAT against a real SQS queue
+before go-live; it is an item on the go-live checklist, not an optional nicety.
+{%- else %}
+
+**Redis is the broker as well as the cache**, on a separate database number so that flushing the
+cache cannot empty the queue. Redis is not a durable message broker: an unpersisted restart drops
+whatever was queued, and there are no publisher confirms or dead-letter queues. That is acceptable
+only while every task is safe to lose and safe to run twice. If a task appears that a customer has
+been told already happened, the broker choice has to be revisited — see
+[14-decisions.md](14-decisions.md).
+{%- endif %}
+{%- endif %}
+{%- endif %}
 
 ## TLS
 

@@ -29,6 +29,9 @@ PYTHON_VERSION = "{{ cookiecutter.python_version }}"
 MEDIA_STORAGE = "{{ cookiecutter.media_storage }}"
 STATIC_STORAGE = "{{ cookiecutter.static_storage }}"
 ASSET_PIPELINE = "{{ cookiecutter.asset_pipeline }}"
+TASK_QUEUE = "{{ cookiecutter.task_queue }}"
+HUEY_BACKEND = "{{ cookiecutter.huey_backend }}"
+TASK_BROKER = "{{ cookiecutter.task_broker }}"
 
 errors: list[str] = []
 warnings: list[str] = []
@@ -148,6 +151,22 @@ if ASSET_PIPELINE == "compressor" and FRONTEND == "api_only":
     )
 
 
+# --- Background task queue ----------------------------------------------------
+# task_broker and huey_backend are only read by the queue that owns them, and the
+# unused one keeps its default value. That is deliberately not an error: nobody
+# should have to answer a Celery question to generate a project with no queue.
+# A NON-default broker is different - it is a choice that will silently not happen.
+
+if TASK_BROKER in {"rabbitmq", "sqs"} and TASK_QUEUE != "celery":
+    errors.append(
+        f"task_broker='{TASK_BROKER}' requires task_queue='celery'.\n"
+        "    Only Celery speaks to an external broker here. Huey is backed by PostgreSQL,\n"
+        "    Redis or SQLite (see huey_backend) and cannot use AMQP or SQS, and\n"
+        "    task_queue='none' has nothing to broker. Either set task_queue='celery', or\n"
+        "    leave task_broker at its default."
+    )
+
+
 # --- Misc -------------------------------------------------------------------
 
 if not re.match(r"^[a-z0-9.\-]+\.[a-z]{2,}$", DOMAIN_NAME):
@@ -161,6 +180,39 @@ if not re.match(r"^3\.\d{1,2}$", PYTHON_VERSION):
 
 
 # --- Warnings (do not block generation) --------------------------------------
+
+if TASK_QUEUE == "huey" and HUEY_BACKEND == "redis" and CACHE == "locmem":
+    warnings.append(
+        "task_queue='huey' with huey_backend='redis' but cache='locmem': nothing in this\n"
+        "    project configures a real Redis, so HUEY_REDIS_URL falls back to a localhost\n"
+        "    default that must exist on every machine that runs the worker. If you are not\n"
+        "    already running Redis, huey_backend='postgres' needs no new service at all."
+    )
+
+if TASK_QUEUE == "huey" and HUEY_BACKEND == "sqlite":
+    warnings.append(
+        "huey_backend='sqlite': development and single-process use only. It does not\n"
+        "    survive multiple workers, and a deployed site on SQLite contradicts the\n"
+        "    PostgreSQL-only rule in the standards. Switch to 'postgres' before go-live."
+    )
+
+if TASK_QUEUE == "celery" and TASK_BROKER == "redis" and CACHE == "locmem":
+    warnings.append(
+        "task_queue='celery' with task_broker='redis' but cache='locmem': the broker needs\n"
+        "    a real Redis server, and this project configures none - CELERY_BROKER_URL falls\n"
+        "    back to a localhost default that must exist wherever the worker runs. Set\n"
+        "    cache='redis' so one configured server serves both, or point CELERY_BROKER_URL\n"
+        "    at a Redis you actually operate."
+    )
+
+if TASK_QUEUE == "celery" and TASK_BROKER == "sqs":
+    warnings.append(
+        "task_broker='sqs': celery[sqs] pulls in pycurl, which is a C extension built\n"
+        "    against libcurl. 'uv sync' fails on a machine without libcurl and OpenSSL\n"
+        "    headers, and the Docker builder stage installs them for exactly this reason.\n"
+        "    Also: SQS carries no Celery remote control or events, so 'celery inspect' and\n"
+        "    Flower's live monitoring do not work. See docs/06-installation.md."
+    )
 
 if SPAM_PROTECTION == "none":
     warnings.append(

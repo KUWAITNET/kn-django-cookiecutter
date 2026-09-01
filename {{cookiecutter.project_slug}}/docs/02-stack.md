@@ -126,7 +126,20 @@ decoration; each has a job.
 | `django-filter` | Query filtering on list endpoints |
 {%- endif %}
 {%- if cookiecutter.cache == "redis" %}
-| `redis` | Client for the shared cache |
+| `redis` | Client for the shared cache{% if cookiecutter.task_queue == "huey" and cookiecutter.huey_backend == "redis" %}, and for the task queue{% elif cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "redis" %}, and for the task broker{% endif %} |
+{%- elif cookiecutter.task_queue == "huey" and cookiecutter.huey_backend == "redis" %}
+| `redis` | Client for the task queue's storage |
+{%- endif %}
+{%- if cookiecutter.task_queue == "huey" %}
+| `huey` | Background task queue and periodic schedule, stored in {% if cookiecutter.huey_backend == "postgres" %}PostgreSQL{% elif cookiecutter.huey_backend == "redis" %}Redis{% else %}SQLite{% endif %}. One consumer process runs both — see [13-scheduled-tasks.md](13-scheduled-tasks.md) |
+{%- elif cookiecutter.task_queue == "celery" %}
+{%- if cookiecutter.task_broker == "redis" %}
+| `celery[redis]` | Background task queue. The `[redis]` extra installs kombu's Redis transport; celery alone speaks only AMQP |
+{%- elif cookiecutter.task_broker == "rabbitmq" %}
+| `celery` + `amqp` | Background task queue over AMQP. `amqp` (py-amqp) is already a kombu dependency; it is declared so the broker choice is visible in the dependency list |
+{%- else %}
+| `celery[sqs]` | Background task queue over Amazon SQS. The `[sqs]` extra pulls `boto3`, `kombu[sqs]`, `urllib3` **and `pycurl`** — a C extension compiled at install time, so the machine needs libcurl and OpenSSL headers. See [06-installation.md](06-installation.md) |
+{%- endif %}
 {%- endif %}
 {%- if cookiecutter.sentry == "yes" %}
 | `sentry-sdk[django]` | Error monitoring, active only when `SENTRY_DSN` is set |
@@ -134,8 +147,16 @@ decoration; each has a job.
 
 Development-only tooling (`[dependency-groups] dev`): `ruff` (lint and format, including the
 flake8-bandit security rules), `pytest` + `pytest-django` + `pytest-cov`, `factory-boy`,
-`django-debug-toolbar`, `bandit`, `pre-commit`, `pip-audit`. None of these are installed in a
-production image (`uv sync --no-dev`).
+`django-debug-toolbar`, `bandit`, `pre-commit`, `pip-audit`{% if cookiecutter.task_queue == "celery" and cookiecutter.task_broker != "sqs" %}, `flower`{% endif %}. None of these are installed
+in a production image (`uv sync --no-dev`).
+{%- if cookiecutter.task_queue == "celery" %}
+
+**`django-celery-beat` is deliberately not installed.** Its current release declares
+`Django<6.1`, so it cannot be installed alongside {% if cookiecutter.django_version == "6.1" %}the Django this project runs{% else %}Django 6.1, which this project will move to{% endif %} — and,
+independently of that, a schedule kept in database rows is a schedule that exists on one server,
+never appears in a code review and is lost with the machine. The schedule lives in
+`CELERY_BEAT_SCHEDULE` in `settings/base.py`; see [14-decisions.md](14-decisions.md).
+{%- endif %}
 
 ## Reproducing the exact dependency set
 
@@ -176,6 +197,10 @@ against production between releases, and who acts on a finding.
 | `libmagic1` | `python-magic` upload content sniffing — **without it, upload validation cannot verify file types** |
 {%- if cookiecutter.languages == "en_ar" %}
 | `gettext` | Compiling translation catalogues at deploy time |
+{%- endif %}
+{%- if cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "sqs" %}
+| libcurl (runtime) | `pycurl`, which `celery[sqs]` requires. Present already on any host with `curl` installed |
+| `libcurl4-openssl-dev`, `libssl-dev`, a C compiler (**build time only**) | Compiling `pycurl` during `uv sync`. Not needed on a host that only receives a built virtualenv or image |
 {%- endif %}
 | PostgreSQL client libraries | Provided by `psycopg[binary]`; a separate `libpq` is not required |
 

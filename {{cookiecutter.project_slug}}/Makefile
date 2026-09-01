@@ -5,7 +5,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help setup run migrate migrations superuser test test-ci lint format check \
         check-deploy check-migrations security audit messages compile static seed \
-        shell clean schema schema-check
+        shell clean schema schema-check worker beat monitor
 
 help:  ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -17,6 +17,37 @@ setup:  ## Install dependencies, create migrations, install git hooks
 
 run:  ## Run the development server
 	uv run python manage.py runserver
+{%- if cookiecutter.task_queue == "huey" %}
+
+# The consumer runs the schedule as well as the queue, so this one process is the
+# whole background story. Tasks run inline while DEBUG is on, so set HUEY_IMMEDIATE=False
+# in .env before starting this, or it will sit there with nothing to do.
+worker:  ## Run the task consumer (queue + periodic schedule)
+	uv run python manage.py run_huey
+
+beat:  ## The schedule is part of the consumer - run 'make worker'
+	@echo "No separate scheduler: 'make worker' runs the periodic tasks too."
+{%- elif cookiecutter.task_queue == "celery" %}
+
+# Two processes, and both must be running. Set CELERY_TASK_ALWAYS_EAGER=False in
+# .env first, or tasks run inline in the web process and the worker sees nothing.
+worker:  ## Run a Celery worker
+	uv run celery -A {{ cookiecutter.project_slug }} worker --loglevel=INFO --concurrency=2
+
+# Exactly one beat process, ever. Two schedulers means every periodic task fires twice.
+beat:  ## Run the Celery scheduler (periodic tasks)
+	uv run celery -A {{ cookiecutter.project_slug }} beat --loglevel=INFO
+{%- if cookiecutter.task_broker != "sqs" %}
+
+monitor:  ## Flower, the Celery monitoring UI, on http://localhost:5555
+	uv run celery -A {{ cookiecutter.project_slug }} flower --port=5555
+{%- else %}
+
+monitor:  ## Not available on SQS - see docs/09-monitoring.md
+	@echo "SQS carries no Celery events or remote control, so Flower has nothing to read."
+	@echo "Monitor the queue in CloudWatch and the worker through its logs instead."
+{%- endif %}
+{%- endif %}
 
 migrations:  ## Create migrations for model changes
 	uv run python manage.py makemigrations

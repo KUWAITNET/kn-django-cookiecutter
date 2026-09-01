@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Placeholder CMS logo. Replace with the client's mark; keep the filename so
+     no template changes are needed. SVG keeps it crisp at both sidebar and
+     login sizes and adds nothing to the page weight budget. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 48" role="img" aria-label="Administration">
+  <rect width="240" height="48" rx="6" fill="none"/>
+  <text x="0" y="32" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif"
+        font-size="22" font-weight="600" fill="currentColor">Administration</text>
+</svg>

@@ -126,6 +126,40 @@ dependencies = [
 {%- if cookiecutter.cache == "redis" %}
     "redis>=5.0",
 {%- endif %}
+{%- if cookiecutter.task_queue == "huey" %}
+    # Background task queue. Periodic tasks are built into the consumer, so there
+    # is no second scheduler process to deploy and keep alive.
+    "huey>=3.3",
+{%- if cookiecutter.huey_backend == "redis" and cookiecutter.cache != "redis" %}
+    # Queue storage. Declared here rather than left to the cache: this project uses
+    # Redis for nothing else, so nothing else would install the client.
+    "redis>=5.0",
+{%- endif %}
+{%- elif cookiecutter.task_queue == "celery" %}
+{%- if cookiecutter.task_broker == "redis" %}
+    # Background task queue. The [redis] extra is what installs kombu's Redis
+    # transport; celery on its own speaks only AMQP.
+    "celery[redis]>=5.5",
+{%- elif cookiecutter.task_broker == "rabbitmq" %}
+    # Background task queue. RabbitMQ needs no extra - py-amqp is already a kombu
+    # dependency - but it is named explicitly so the broker choice is visible in
+    # this list rather than implied by an absence.
+    "celery>=5.5",
+    "amqp>=5.3",
+{%- else %}
+    # Background task queue. The [sqs] extra pulls boto3, kombu[sqs], urllib3 AND
+    # pycurl, which is a C extension built against libcurl. A machine without
+    # libcurl and OpenSSL headers fails at 'uv sync', not at runtime - which is why
+    # the Dockerfile builder stage installs them. See docs/06-installation.md.
+    "celery[sqs]>=5.5",
+{%- endif %}
+    # NOT django-celery-beat. Two reasons, either of which is enough. Its current
+    # release pins "Django<6.1", so it cannot be installed here at all{% if cookiecutter.django_version == "6.1" %} - this
+    # project is on 6.1{% else %} - this project is
+    # on 5.2, so it would install today and block the next upgrade{% endif %}. And a schedule stored in
+    # database rows is a schedule that exists on one server, is absent from the
+    # repository, and is lost with the machine. See docs/14-decisions.md.
+{%- endif %}
 {%- if cookiecutter.sentry == "yes" %}
     "sentry-sdk[django]>=2.0",
 {%- endif %}
@@ -144,6 +178,12 @@ dev = [
     "pip-audit>=2.7",
     # shell_plus is much better with a real REPL; it degrades gracefully without.
     "ipython>=8.30",
+{%- if cookiecutter.task_queue == "celery" and cookiecutter.task_broker != "sqs" %}
+    # Celery monitoring UI. A dev dependency on purpose: it is an unauthenticated
+    # web server unless you put auth in front of it, so it is a debugging tool run
+    # against a broker you can already reach, not something exposed in production.
+    "flower>=2.0",
+{%- endif %}
 ]
 
 [tool.uv]
