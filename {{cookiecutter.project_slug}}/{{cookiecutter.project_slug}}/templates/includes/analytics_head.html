@@ -12,7 +12,7 @@ The inline bootstrap carries the CSP nonce - there is no 'unsafe-inline' in
 script-src. GTM injects gtm.js itself, so the nonce is copied onto the injected
 element too; without that line every tag in the container is silently blocked and
 nothing reports it.
-{% endcomment %}{% if GTM_CONTAINER_ID %}<script nonce="{{ request.csp_nonce }}">
+{% endcomment %}{% if GTM_CONTAINER_ID %}<script nonce="{{ csp_nonce }}">
 (function (w, d, s, l, i, n) {
     w[l] = w[l] || [];
     w[l].push({'gtm.start': new Date().getTime(), event: 'gtm.js'});
@@ -23,10 +23,10 @@ nothing reports it.
     j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
     if (n) { j.setAttribute('nonce', n); }
     f.parentNode.insertBefore(j, f);
-})(window, document, 'script', 'dataLayer', '{{ GTM_CONTAINER_ID|escapejs }}', '{{ request.csp_nonce|escapejs }}');
+})(window, document, 'script', 'dataLayer', '{{ GTM_CONTAINER_ID|escapejs }}', '{{ csp_nonce|escapejs }}');
 </script>
 {% elif GA4_MEASUREMENT_ID %}<script async src="https://www.googletagmanager.com/gtag/js?id={{ GA4_MEASUREMENT_ID|urlencode }}"></script>
-<script nonce="{{ request.csp_nonce }}">
+<script nonce="{{ csp_nonce }}">
 window.dataLayer = window.dataLayer || [];
 function gtag() { window.dataLayer.push(arguments); }
 gtag('js', new Date());

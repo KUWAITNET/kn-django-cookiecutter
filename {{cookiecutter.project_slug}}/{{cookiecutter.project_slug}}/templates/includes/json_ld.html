@@ -30,7 +30,7 @@ Context it reads:
 Entities are declared once and referenced by @id, so a content type that adds an
 Article node references BASE_URL/#organization as its publisher rather than
 repeating the whole organisation block.
-{% endcomment %}{% autoescape off %}{# firstof HTML-escapes; resolve raw so |escapejs escapes exactly once. #}{% firstof seo.organization_name CLIENT_NAME SITE_NAME as organization_name %}{% endautoescape %}{% if not seo.noindex %}<script type="application/ld+json" nonce="{{ request.csp_nonce }}">
+{% endcomment %}{% autoescape off %}{# firstof HTML-escapes; resolve raw so |escapejs escapes exactly once. #}{% firstof seo.organization_name CLIENT_NAME SITE_NAME as organization_name %}{% endautoescape %}{% if not seo.noindex %}<script type="application/ld+json" nonce="{{ csp_nonce }}">
 [
 {
 "@context": "https://schema.org",

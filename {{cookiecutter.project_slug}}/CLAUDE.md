@@ -76,7 +76,7 @@ If a task appears to require breaking one of these, stop and say so instead.
   under `/api/`. Never a rate limiter on a DRF view{% endif %}.
 {%- endif %}
 - **Content-Security-Policy.** No `'unsafe-inline'` and no `'unsafe-eval'` in `script-src`. An
-  inline script carries `{% raw %}nonce="{{ request.csp_nonce }}"{% endraw %}`. A new third-party script means adding
+  inline script carries `{% raw %}nonce="{{ csp_nonce }}"{% endraw %}`. A new third-party script means adding
   its origin to the policy — never relaxing the policy.
 - **No `fields = "__all__"`** on any public `ModelForm` or serializer. List the fields.
 - **Server-side validation on every field**, always, regardless of what the browser does.

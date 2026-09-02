@@ -18,11 +18,7 @@ uv run python -c "import django; print(django.get_version())"
 | Component | Version in use | Vendor support until | Notes |
 |---|---|---|---|
 | Python | {{ cookiecutter.python_version }} | {% if cookiecutter.python_version == '3.14' %}October 2030{% else %}October 2029{% endif %} (security support) | Pinned in `.python-version` and `requires-python` |
-{%- if cookiecutter.django_version == '6.1' %}
-| Django | 6.1 | December 2027 | Current release, not LTS. Chosen so the move to the 6.2 LTS in April 2027 is a single step rather than a jump across two release cycles. `django>=6.1,<6.2` |
-{%- else %}
-| Django | 5.2 LTS | April 2028 | Long-term support release. `django>=5.2,<5.3` |
-{%- endif %}
+| Django | 6.1 | December 2027 | Current release, not LTS. We track 6.x so the move to the 6.2 LTS in April 2027 is a single step rather than a jump across two release cycles. `django>=6.1,<6.2` |
 {%- if cookiecutter.stack == "wagtail" %}
 | Wagtail (content management system) | 7.4 LTS | November 2027 | Long-term support release. `wagtail>=7.4,<7.5` |
 {%- endif %}
@@ -51,7 +47,7 @@ months out is a sprint; the same upgrade started after support ends is an incide
 
 ## Why LTS releases
 
-{% if cookiecutter.django_version == '6.1' %}Django is pinned to one minor release, and{% if cookiecutter.stack == "wagtail" %} Wagtail to its long-term support line,{% endif %} with a narrow upper bound{% else %}Both Django and{% if cookiecutter.stack == "wagtail" %} Wagtail{% else %} the supporting libraries{% endif %} are pinned to long-term support releases with a narrow upper bound{% endif %}
+Django is pinned to one minor release, and{% if cookiecutter.stack == "wagtail" %} Wagtail to its long-term support line,{% endif %} with a narrow upper bound
 (`<5.3`{% if cookiecutter.stack == "wagtail" %}, `<7.5`{% endif %}). A minor release is picked up by `uv lock --upgrade`; a feature release is a
 deliberate, tested, scheduled piece of work. This is recorded as a decision in
 [14-decisions.md](14-decisions.md); do not widen the bound to make an unrelated dependency resolve.
@@ -83,7 +79,6 @@ decoration; each has a job.
 | `django-compressor` | Concatenates and minifies CSS/JS at build time. **Offline compression: `manage.py compress --force` must run on every deploy** — see [07-deployment.md](07-deployment.md) |
 {%- endif %}
 | `django-unfold` | Administration interface skin — the KUWAITNET standard wherever `django.contrib.admin` is mounted |
-| `django-csp` | Content-Security-Policy with a per-request nonce |
 | `django-permissions-policy` | `Permissions-Policy` response header |
 | `argon2-cffi` | Argon2 password hashing |
 | `python-magic` | Content sniffing on uploads: the real file type must match the extension |
@@ -157,7 +152,7 @@ in a production image (`uv sync --no-dev`).
 {%- if cookiecutter.task_queue == "celery" %}
 
 **`django-celery-beat` is deliberately not installed.** Its current release declares
-`Django<6.1`, so it cannot be installed alongside {% if cookiecutter.django_version == "6.1" %}the Django this project runs{% else %}Django 6.1, which this project will move to{% endif %} — and,
+`Django<6.1`, so it cannot be installed alongside the Django this project runs — and,
 independently of that, a schedule kept in database rows is a schedule that exists on one server,
 never appears in a code review and is lost with the machine. The schedule lives in
 `CELERY_BEAT_SCHEDULE` in `settings/base.py`; see [14-decisions.md](14-decisions.md).

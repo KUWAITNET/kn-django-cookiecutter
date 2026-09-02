@@ -9,7 +9,6 @@
   "description": "A KUWAITNET web project.",
   "timezone": "Asia/Kuwait",
   "python_version": "3.14",
-  "django_version": ["6.1", "5.2"],
   "languages": ["en_ar", "en"],
   "frontend": ["server_rendered", "api_only"],
   "multisite": ["single", "multi"],
@@ -51,11 +50,6 @@
     "description": "One-line project description",
     "timezone": "TIME_ZONE",
     "python_version": "Python version",
-    "django_version": {
-      "__prompt__": "Django release",
-      "6.1": "6.1 - current release; a one-step upgrade to the 6.2 LTS in April 2027",
-      "5.2": "5.2 LTS - security support to April 2028; a two-cycle jump to 6.2"
-    },
     "languages": {
       "__prompt__": "Languages",
       "en_ar": "Bilingual English + Arabic (RTL support, translated fields)",

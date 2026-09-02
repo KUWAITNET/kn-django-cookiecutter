@@ -16,7 +16,7 @@ import environ
 {%- if cookiecutter.task_queue == "celery" %}
 from celery.schedules import crontab
 {%- endif %}
-from csp.constants import NONCE
+from django.utils.csp import CSP
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE_DIR = os.path.dirname(PROJECT_DIR)
@@ -197,7 +197,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Security response headers.
-    "csp.middleware.CSPMiddleware",
+    "django.middleware.csp.ContentSecurityPolicyMiddleware",
     "django_permissions_policy.PermissionsPolicyMiddleware",
 {%- if cookiecutter.rate_limiting == "yes" %}
     # AxesMiddleware must come last: it needs the authenticated user.
@@ -222,6 +222,10 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "django.template.context_processors.i18n",
+                # Supplies the csp_nonce template variable. Django keeps the
+                # nonce private on the request, so without this processor every
+                # inline script loses its nonce silently and the browser drops it.
+                "django.template.context_processors.csp",
 {%- if cookiecutter.stack == "wagtail" %}
                 "wagtail.contrib.settings.context_processors.settings",
 {%- if cookiecutter.multisite == "multi" %}
@@ -832,62 +836,60 @@ SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_AGE = env.int("SESSION_COOKIE_AGE", default=60 * 60 * 12)
 CSRF_COOKIE_SAMESITE = "Lax"
 
-# Content-Security-Policy (django-csp 4.x).
+# Content-Security-Policy (Django built-in, 6.0+).
 #
-# Inline scripts use the per-request nonce ({% raw %}{{ request.csp_nonce }}{% endraw %}); there is no
+# Inline scripts use the per-request nonce ({% raw %}{{ csp_nonce }}{% endraw %}); there is no
 # 'unsafe-inline' and no 'unsafe-eval' in script-src. If a vendored theme library
 # needs eval, that is a finding to fix or a documented, time-boxed exception - not
 # a permanent setting.
-CONTENT_SECURITY_POLICY = {
-    "DIRECTIVES": {
-        "default-src": ["'self'"],
-        "script-src": [
-            "'self'",
-            # django-csp 4.x replaces this sentinel with the per-request nonce.
-            NONCE,
+SECURE_CSP = {
+    "default-src": ["'self'"],
+    "script-src": [
+        "'self'",
+        # Replaced with the per-request nonce by the CSP middleware.
+        CSP.NONCE,
 {%- if cookiecutter.analytics == "ga4_gtm" %}
-            "https://www.googletagmanager.com",
-            "https://www.google-analytics.com",
+        "https://www.googletagmanager.com",
+        "https://www.google-analytics.com",
 {%- endif %}
 {%- if cookiecutter.spam_protection == "turnstile_honeypot" %}
-            "https://challenges.cloudflare.com",
+        "https://challenges.cloudflare.com",
 {%- endif %}
-        ],
-        # Styles are self-hosted. Inline style attributes still require this;
-        # remove it once the theme has none.
-        "style-src": ["'self'", "'unsafe-inline'"],
-        "font-src": ["'self'", "data:"],
-        "img-src": [
-            "'self'",
-            "data:",
+    ],
+    # Styles are self-hosted. Inline style attributes still require this;
+    # remove it once the theme has none.
+    "style-src": ["'self'", "'unsafe-inline'"],
+    "font-src": ["'self'", "data:"],
+    "img-src": [
+        "'self'",
+        "data:",
 {%- if cookiecutter.analytics == "ga4_gtm" %}
-            "https://www.googletagmanager.com",
-            "https://www.google-analytics.com",
+        "https://www.googletagmanager.com",
+        "https://www.google-analytics.com",
 {%- endif %}
-        ],
-        "connect-src": [
-            "'self'",
+    ],
+    "connect-src": [
+        "'self'",
 {%- if cookiecutter.analytics == "ga4_gtm" %}
-            "https://www.google-analytics.com",
-            "https://analytics.google.com",
+        "https://www.google-analytics.com",
+        "https://analytics.google.com",
 {%- endif %}
-        ],
-        "frame-src": [
-            "'self'",
+    ],
+    "frame-src": [
+        "'self'",
 {%- if cookiecutter.spam_protection == "turnstile_honeypot" %}
-            "https://challenges.cloudflare.com",
+        "https://challenges.cloudflare.com",
 {%- endif %}
 {%- if cookiecutter.analytics == "ga4_gtm" %}
-            # The GTM <noscript> fallback is an iframe. Allowing it here is far
-            # cheaper than loosening script-src.
-            "https://www.googletagmanager.com",
+        # The GTM <noscript> fallback is an iframe. Allowing it here is far
+        # cheaper than loosening script-src.
+        "https://www.googletagmanager.com",
 {%- endif %}
-        ],
-        "frame-ancestors": ["'self'"],
-        "base-uri": ["'self'"],
-        "form-action": ["'self'"],
-        "object-src": ["'none'"],
-    },
+    ],
+    "frame-ancestors": ["'self'"],
+    "base-uri": ["'self'"],
+    "form-action": ["'self'"],
+    "object-src": ["'none'"],
 }
 
 # Deny every browser feature the site does not use. Enable explicitly, with a reason.

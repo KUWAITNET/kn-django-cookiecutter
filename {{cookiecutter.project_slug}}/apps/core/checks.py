@@ -121,8 +121,9 @@ def check_script_src_is_strict(app_configs, **kwargs):
     Not gated on production: the policy is defined once, in base settings, and a
     developer loosening it locally is exactly the change that then ships.
     """
-    policy = getattr(settings, "CONTENT_SECURITY_POLICY", {}) or {}
-    directives = policy.get("DIRECTIVES", {})
+    # Django's own CSP setting is flat: the directives are the mapping, with no
+    # "DIRECTIVES" wrapper the way django-csp had.
+    directives = getattr(settings, "SECURE_CSP", {}) or {}
     sources = directives.get("script-src") or directives.get("default-src") or []
     found = [
         source
@@ -133,12 +134,12 @@ def check_script_src_is_strict(app_configs, **kwargs):
         return []
     return [
         Error(
-            f"CONTENT_SECURITY_POLICY script-src allows {', '.join(found)}.",
+            f"SECURE_CSP script-src allows {', '.join(found)}.",
             hint=(
                 "The browser stops distinguishing our script from injected script, which "
                 "is the one thing the policy exists to do - and the nonce becomes "
                 "decoration. Move the inline code into a static file, or give the tag "
-                "nonce=\"{% raw %}{{ request.csp_nonce }}{% endraw %}\". If a vendored "
+                "nonce=\"{% raw %}{{ csp_nonce }}{% endraw %}\". If a vendored "
                 "library needs eval, replace the library."
             ),
             id="core.E005",

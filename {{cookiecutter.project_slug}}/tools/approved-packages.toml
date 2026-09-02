@@ -72,9 +72,8 @@ reason = "The admin skin, wherever django.contrib.admin is mounted."
 
 [[packages]]
 name = "django-csp"
-tier = "shipped"
-scope = "always"
-reason = "Content-Security-Policy with a per-request nonce. There is no 'unsafe-inline'."
+tier = "rejected"
+reason = "Superseded by Django's built-in CSP in 6.0. Use SECURE_CSP and django.middleware.csp.ContentSecurityPolicyMiddleware. Note the nonce moved from request.csp_nonce to the csp_nonce context processor, and the old expression fails silently."
 
 [[packages]]
 name = "django-permissions-policy"

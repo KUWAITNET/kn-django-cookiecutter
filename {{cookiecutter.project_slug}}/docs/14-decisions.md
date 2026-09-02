@@ -192,7 +192,7 @@ URL is not a credential.
 **Context.** A CSP containing `'unsafe-inline'` and `'unsafe-eval'` in `script-src` grants exactly
 what CSP exists to deny.
 **Decision.** `script-src` has no `'unsafe-inline'` and no `'unsafe-eval'`. Inline scripts carry a
-per-request nonce: `{% raw %}<script nonce="{{ request.csp_nonce }}">{% endraw %}`.
+per-request nonce: `{% raw %}<script nonce="{{ csp_nonce }}">{% endraw %}`.
 **Alternatives considered.** Allowing inline scripts "temporarily". Temporary CSP relaxations
 outlive everyone who agreed to them.
 **Consequences.** A vendored library that requires `eval` cannot simply be dropped in; it is either
@@ -481,8 +481,8 @@ an administrator can edit without a deploy.
 **Decision.** The stock beat scheduler, with the schedule defined in `CELERY_BEAT_SCHEDULE` in
 `settings/base.py`.
 **Alternatives considered.** `django-celery-beat`. Two reasons against it, either sufficient. Its
-current release declares `Django<6.1`, so it cannot be installed alongside {% if cookiecutter.django_version == "6.1" %}the Django this project
-runs{% else %}Django 6.1, which this project will move to{% endif %}. And a schedule in database rows exists on exactly one server, appears in no code
+current release declares `Django<6.1`, so it cannot be installed alongside the Django this project
+runs. And a schedule in database rows exists on exactly one server, appears in no code
 review, and is lost with the machine — the same failure this documentation warns about for a crontab
 that was never committed.
 **Consequences.** Changing when a job runs is a deploy. Beat keeps its "last run" state in the file

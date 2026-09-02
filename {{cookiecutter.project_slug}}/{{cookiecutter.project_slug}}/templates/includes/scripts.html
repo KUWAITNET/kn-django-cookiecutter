@@ -11,4 +11,4 @@ The nonce is carried here so the pattern is copied correctly the day a page
 genuinely needs an inline script: there is no 'unsafe-inline' in script-src, and
 a nonce-less inline script is dropped silently.
 {% endcomment %}
-<script src="{% static 'js/forms.js' %}" defer nonce="{{ request.csp_nonce }}"></script>
+<script src="{% static 'js/forms.js' %}" defer nonce="{{ csp_nonce }}"></script>

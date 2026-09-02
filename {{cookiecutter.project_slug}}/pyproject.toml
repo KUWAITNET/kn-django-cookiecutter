@@ -14,14 +14,10 @@ dependencies = [
     # with its own test run rather than something a re-resolve does silently.
     # See docs/14-decisions.md.
 {%- endif %}
-{%- if cookiecutter.django_version == "6.1" %}
-    # 6.1 is the current release. Chosen so the April 2027 move to the 6.2 LTS is
-    # a single-step upgrade rather than a jump across two release cycles.
+    # 6.1 is the current release. We track the 6.x line rather than the 5.2 LTS
+    # so the April 2027 move to the 6.2 LTS is a single-step upgrade rather than
+    # a jump across two release cycles and their accumulated deprecations.
     "django>=6.1,<6.2",
-{%- else %}
-    # 5.2 LTS: security support to April 2028.
-    "django>=5.2,<5.3",
-{%- endif %}
 {%- if cookiecutter.stack == "wagtail" %}
     "wagtail>=7.4,<7.5",
 {%- endif %}
@@ -60,7 +56,6 @@ dependencies = [
     # Admin skin: the KUWAITNET standard wherever django.contrib.admin is mounted.
     "django-unfold>=0.40",
     # Security baseline.
-    "django-csp>=4.0",
     "django-permissions-policy>=4.25",
     "argon2-cffi>=23.1",
     "python-magic>=0.4.27",
@@ -168,9 +163,7 @@ dependencies = [
     "celery[sqs]>=5.5",
 {%- endif %}
     # NOT django-celery-beat. Two reasons, either of which is enough. Its current
-    # release pins "Django<6.1", so it cannot be installed here at all{% if cookiecutter.django_version == "6.1" %} - this
-    # project is on 6.1{% else %} - this project is
-    # on 5.2, so it would install today and block the next upgrade{% endif %}. And a schedule stored in
+    # release pins "Django<6.1", so it cannot be installed here at all. And a schedule stored in
     # database rows is a schedule that exists on one server, is absent from the
     # repository, and is lost with the machine. See docs/14-decisions.md.
 {%- endif %}

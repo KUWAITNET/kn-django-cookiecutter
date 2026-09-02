@@ -10,7 +10,7 @@ called it from a single page, so the stale-token 403 stayed live everywhere else
 No nonce on this tag, unlike the uncompressed variant: compressor rewrites the
 tag from its own output template and only carries defer/async across, and an
 external same-origin script is allowed by 'self' in script-src anyway. An INLINE
-script still needs nonce="{{ request.csp_nonce }}" and must stay outside this
+script still needs nonce="{{ csp_nonce }}" and must stay outside this
 block - the offline manifest is keyed on the rendered block, so a per-request
 value would never match the key that was built.
 

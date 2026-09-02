@@ -149,7 +149,7 @@ Adding a subtitle to a page type, end to end.
 {% if cookiecutter.languages == "en_ar" %}3{% else %}2{% endif %}. **Migration.** `make migrations`, then read the generated file before committing it.
 {% if cookiecutter.languages == "en_ar" %}4{% else %}3{% endif %}. **Template.** Render it. Every `<img>` needs explicit `width` and `height`,
    `loading="lazy"` and `decoding="async"` — except the largest above-the-fold image, which is eager
-   and preloaded. Any inline `<script>` needs `{% raw %}nonce="{{ request.csp_nonce }}"{% endraw %}`.
+   and preloaded. Any inline `<script>` needs `{% raw %}nonce="{{ csp_nonce }}"{% endraw %}`.
 {% if cookiecutter.languages == "en_ar" %}5{% else %}4{% endif %}. **Test.** A test that the field saves and renders, and one for whatever it changes.
 {% if cookiecutter.languages == "en_ar" %}6{% else %}5{% endif %}. **Create the page in the admin once** before opening the pull request. A field that cannot
    be edited in practice passes every automated check.
@@ -169,7 +169,7 @@ Adding a field to an editorial model, end to end.
 {% if cookiecutter.languages == "en_ar" %}5{% else %}4{% endif %}. {% if cookiecutter.frontend == "api_only" %}**Serializer.** Expose it explicitly, by name. Never `fields = "__all__"` — it publishes
    every field added to the model afterwards.{% else %}**Template.** Render it. Every `<img>` needs explicit `width` and `height`,
    `loading="lazy"` and `decoding="async"` — except the largest above-the-fold image, which is eager
-   and preloaded. Any inline `<script>` needs `{% raw %}nonce="{{ request.csp_nonce }}"{% endraw %}`.{% endif %}
+   and preloaded. Any inline `<script>` needs `{% raw %}nonce="{{ csp_nonce }}"{% endraw %}`.{% endif %}
 {% if cookiecutter.languages == "en_ar" %}6{% else %}5{% endif %}. **Test.** A test that the field saves and appears where it should, and one for whatever it
    changes.
 {% if cookiecutter.languages == "en_ar" %}7{% else %}6{% endif %}. **Deploy.** [07-deployment.md](07-deployment.md).
