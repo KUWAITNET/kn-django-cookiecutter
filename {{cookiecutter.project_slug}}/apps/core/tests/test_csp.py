@@ -39,7 +39,11 @@ INLINE_SCRIPT = f'<script nonce="{OPEN} csp_nonce {CLOSE}">1;</script>'
 
 def render_with_nonce(request):
     template = engines["django"].from_string(INLINE_SCRIPT)
-    return HttpResponse(template.render(csp_context_processor(request), request))
+    # Rendered without passing `request`, so this is a plain Context rather than a
+    # RequestContext. That skips the project's own context processors - one of
+    # which reads the database - and keeps the test about the nonce and nothing
+    # else. The nonce still comes from the real processor, called directly.
+    return HttpResponse(template.render(csp_context_processor(request)))
 
 
 @pytest.fixture

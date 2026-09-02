@@ -7,6 +7,8 @@ from pathlib import Path
 from pathlib import PurePosixPath
 {%- endif %}
 
+from datetime import timedelta
+
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.db import DatabaseError, connections
@@ -16,6 +18,7 @@ from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 {%- endif %}
 from django.shortcuts import render
+from django.utils import timezone
 from django.template import TemplateDoesNotExist
 {%- if cookiecutter.frontend != "api_only" %}
 from django.urls import NoReverseMatch, reverse
@@ -58,6 +61,29 @@ def robots_txt(request):
     }
     return render(request, "robots.txt", context, content_type="text/plain")
 {%- endif %}
+
+
+@require_safe
+def security_txt(request):
+    """``/.well-known/security.txt`` - RFC 9116.
+
+    How someone reports a vulnerability in this site without having to guess.
+    The alternative to publishing a contact is not silence; it is a disclosure
+    that arrives by whatever route the finder improvises.
+
+    ``Expires`` is mandatory in the RFC and is computed here rather than written
+    into the template, because a hand-written date is a date that goes stale
+    silently - and a parser may ignore an expired file completely, leaving the
+    site looking as though it publishes nothing at all. A year ahead, recomputed
+    on every request, so it is always valid and always honest.
+    """
+    context = {
+        "SECURITY_CONTACT": settings.SECURITY_CONTACT_EMAIL,
+        "EXPIRES": (timezone.now() + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+        "BASE_URL": settings.BASE_URL.rstrip("/"),
+    }
+    return render(request, "security.txt", context, content_type="text/plain")
+
 
 
 @never_cache

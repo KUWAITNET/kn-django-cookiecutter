@@ -1,0 +1,20 @@
+{% comment %}
+Served by apps.core.views.security_txt at /.well-known/security.txt, per RFC 9116.
+
+It answers one question: somebody has found a vulnerability in this site - who do
+they tell? Without it the answer is a guess, and the usual guesses are a public
+tweet, a LinkedIn message to whoever looks technical, or the client's general
+enquiries inbox where it sits unread for a fortnight.
+
+Expires is mandatory in RFC 9116 and is computed by the view rather than written
+here, so the file cannot quietly go stale. A parser is entitled to ignore an
+expired file entirely, which would leave the site looking as though it publishes
+no contact at all.
+
+Deliberately not listed: the admin prefix, software versions, or anything about
+the stack. This file is world-readable and its whole audience is people probing
+the site.
+{% endcomment %}Contact: mailto:{{ SECURITY_CONTACT }}
+Expires: {{ EXPIRES }}
+Preferred-Languages: en, ar
+Canonical: {{ BASE_URL }}/.well-known/security.txt

@@ -5,6 +5,8 @@ throttles cover ``/api/``, django-ratelimit covers public non-DRF POSTs, and
 django-axes covers authentication (a lockout is not a rate cap).
 """
 
+from unittest import mock
+
 import pytest
 from django.conf import settings
 {%- if cookiecutter.frontend != "api_only" %}
@@ -79,4 +81,49 @@ def test_reads_are_not_capped_by_a_post_only_rule(settings):
     factory = RequestFactory()
     for _ in range(5):
         assert submit(factory.get("/submit/")).status_code == 200
+{%- endif %}
+
+
+def test_rate_limiting_fails_closed():
+    """A cache outage must cost availability, not the rate limit.
+
+    django-ratelimit defaults to this, but the setting is asserted rather than
+    assumed: with FAIL_OPEN a Redis outage silently removes the limit from every
+    endpoint that most needed it, and nothing in the logs mentions it.
+    """
+    assert getattr(settings, "RATELIMIT_FAIL_OPEN", False) is False
+{%- if cookiecutter.frontend != "api_only" %}
+
+
+def test_unreadable_cache_blocks_rather_than_allows(rf, settings):
+    """The behaviour behind the setting, not just the setting.
+
+    A cache whose reads return None is what django-ratelimit sees when the
+    backend is unreachable. The request must be refused.
+    """
+
+    # The test settings disable rate limiting, as the other tests here do too.
+    settings.RATELIMIT_ENABLE = True
+
+    class DeadCache:
+        def get(self, *args, **kwargs):
+            return None
+
+        def set(self, *args, **kwargs):
+            return None
+
+        def incr(self, *args, **kwargs):
+            raise ValueError("cache unavailable")
+
+        def add(self, *args, **kwargs):
+            return False
+
+    @ratelimit(key="ip", rate="1/h", block=True)
+    def view(request):
+        return HttpResponse("should not be reached")
+
+    request = rf.post("/")
+    with mock.patch("django_ratelimit.core.caches", {"default": DeadCache()}):
+        with pytest.raises(Ratelimited):
+            view(request)
 {%- endif %}

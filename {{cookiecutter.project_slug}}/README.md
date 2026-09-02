@@ -37,7 +37,35 @@ Exact versions of everything: `uv.lock`. Platform support dates: [`docs/02-stack
 
 ## Quick start
 
-Prerequisites: `git`, `uv`, PostgreSQL 17{% if cookiecutter.cache == "redis" %}, Redis 7{% endif %}, `libmagic`{% if cookiecutter.languages == "en_ar" %}, `gettext`{% endif %}.
+### Prerequisites
+
+`git` and [`uv`](https://docs.astral.sh/uv/) on every platform. `uv` installs Python itself, so
+no system Python is needed.
+
+The rest is easiest from containers — `docker compose up -d` brings up
+PostgreSQL{% if cookiecutter.cache == "redis" %}, Redis{% endif %} and the mail catcher, and the
+application still runs on the host. If you would rather install them locally:
+
+| | macOS | Debian/Ubuntu | Windows |
+|---|---|---|---|
+| PostgreSQL 17 | `brew install postgresql@17` | `apt install postgresql-17` | [installer](https://www.postgresql.org/download/windows/), or the container |
+{%- if cookiecutter.cache == "redis" %}
+| Redis 7 | `brew install redis` | `apt install redis` | **no official build** — use the container or WSL2 |
+{%- endif %}
+| `libmagic` (upload checks) | `brew install libmagic` | `apt install libmagic1` | **no maintained build** — use WSL2 |
+{%- if cookiecutter.languages == "en_ar" %}
+| `gettext` (translations) | `brew install gettext` | `apt install gettext` | **not packaged** — use WSL2 |
+{%- endif %}
+| `make` (task shortcuts) | preinstalled | `apt install make` | not present; see below |
+
+**On Windows, develop inside WSL2.** Two things the project needs have no maintained native
+Windows build: `libmagic`, which the upload content-sniffing depends on, and
+`gettext`, which the translation workflow needs. WSL2 gives you a normal Linux
+environment where both are one `apt install` away, and Docker Desktop integrates with it, so this
+costs a one-time setup rather than an ongoing tax. Everything below then works unchanged.
+
+`make` is a convenience, not a requirement: every target is a short command you can run directly,
+and both are shown in the table at the end of this file.
 
 ```bash
 make setup                    # uv sync, generate migrations, install git hooks
@@ -53,10 +81,13 @@ make run
 ```
 
 {% if cookiecutter.docker == "yes" -%}
-Supporting services can run in containers while the application runs on the host:
+Supporting services run in containers while the application runs on the host — the default, and
+the fastest loop on macOS and Windows, where a bind mount into a Linux VM is markedly slower than
+the host filesystem:
 
 ```bash
-docker compose up -d db{% if cookiecutter.cache == "redis" %} redis{% endif %} mail
+docker compose up -d          # db{% if cookiecutter.cache == "redis" %}, redis{% endif %}, mail - infrastructure only
+docker compose --profile app up   # the full stack, application included
 ```
 
 The mail catcher's web interface is at `http://localhost:8025`; nothing reaches a real address in
@@ -249,6 +280,37 @@ request with a reason, not a quiet edit.
 `make check-deploy` must report zero issues, and
 [`docs/security-pass.md`](docs/security-pass.md) must be signed with no open Critical or High
 finding, before this project goes live.
+
+## Without `make`
+
+`make` is a convenience wrapper, never the only way in. Every target is one short command, so a
+platform without `make` — Windows outside WSL2, most notably — is inconvenient rather than blocked.
+`make help` lists everything; these are the ones used daily.
+
+| Target | The command it runs |
+|---|---|
+| `make setup` | `uv sync` then `uv run python manage.py makemigrations` then `uv run pre-commit install` |
+| `make run` | `uv run python manage.py runserver` |
+| `make migrate` | `uv run python manage.py migrate` |
+| `make migrations` | `uv run python manage.py makemigrations` |
+| `make superuser` | `uv run python manage.py createsuperuser` |
+| `make seed` | `uv run python manage.py seed_content` |
+| `make shell` | `uv run python manage.py shell` |
+| `make test` | `uv run pytest` |
+| `make lint` | `uv run ruff check .` |
+| `make format` | `uv run ruff format .` then `uv run ruff check --fix .` |
+| `make check` | `uv run python manage.py check` |
+| `make check-deploy` | `uv run python manage.py check --deploy` |
+| `make audit` | `uv run pip-audit` |
+| `make sbom` | `uv export --format cyclonedx1.5 -o sbom.json` |
+{%- if cookiecutter.languages == "en_ar" %}
+| `make messages` | `uv run python manage.py makemessages -a` |
+| `make compile` | `uv run python manage.py compilemessages` |
+{%- endif %}
+
+The deploy runbook uses `make` deliberately, because it is present on every server and CI image
+we use and needs nothing installed over SSH.
+
 
 ## Contributing
 

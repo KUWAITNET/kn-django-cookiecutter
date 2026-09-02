@@ -20,6 +20,13 @@ jobs:
       - run: uv run bandit -c pyproject.toml -r apps {{ cookiecutter.project_slug }}
       # Fails the build on a known-vulnerable dependency.
       - run: uv run pip-audit
+      # The SBOM is evidence, not a gate: it records what this build contains so
+      # "are we affected?" can be answered later without re-resolving anything.
+      - run: uv export --format cyclonedx1.5 -o sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
 
   standards:
     name: KUWAITNET standards checker

@@ -47,6 +47,13 @@ urlpatterns = [
 {%- endif %}
 {%- if cookiecutter.frontend != "api_only" %}
     path("robots.txt", core_views.robots_txt, name="robots_txt"),
+    # RFC 9116. Outside the i18n patterns on purpose: it is read by scanners and
+    # researchers, not browsers, and must answer at exactly one address.
+    path(
+        ".well-known/security.txt",
+        core_views.security_txt,
+        name="security_txt",
+    ),
 {%- if cookiecutter.stack == "wagtail" %}
     path("sitemap.xml", sitemap, name="sitemap"),
 {%- else %}

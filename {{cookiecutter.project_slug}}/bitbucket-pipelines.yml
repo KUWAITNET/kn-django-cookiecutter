@@ -31,6 +31,11 @@ definitions:
           - uv run bandit -c pyproject.toml -r apps {{ cookiecutter.project_slug }}
           # Fails the build on a known-vulnerable dependency.
           - uv run pip-audit
+          # The SBOM is evidence, not a gate: it records what this build contains
+          # so "are we affected?" can be answered later without re-resolving.
+          - uv export --format cyclonedx1.5 -o sbom.json
+        artifacts:
+          - sbom.json
 
     # The KUWAITNET rules no linter has a rule for. Stdlib only, so there is no
     # dependency install here at all - the step runs in seconds and cannot fail

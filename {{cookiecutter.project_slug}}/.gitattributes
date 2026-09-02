@@ -1,0 +1,35 @@
+# Line endings are normalised to LF in the repository, on every platform.
+#
+# Without this, a Windows checkout commits CRLF and the whole team then sees
+# phantom whole-file diffs, `ruff format --check` disagrees between machines,
+# and a shell script with CRLF fails on the server with the famously unhelpful
+# "bad interpreter: no such file or directory".
+#
+# Files are still checked out with the platform's native endings where git
+# decides that is right; what is stored is always LF.
+* text=auto eol=lf
+
+# Explicitly binary, so git never tries to normalise or diff them as text.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.avif  binary
+*.ico   binary
+*.pdf   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+*.mo    binary
+*.zip   binary
+
+# Must be LF whatever the platform: these are read by a Linux kernel or shell.
+*.sh        text eol=lf
+Makefile    text eol=lf
+Dockerfile  text eol=lf
+
+# Generated, and noisy in review. Still diffable on request with `git diff --text`.
+uv.lock linguist-generated=true -diff

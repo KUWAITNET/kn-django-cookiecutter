@@ -4,7 +4,7 @@
 
 .DEFAULT_GOAL := help
 .PHONY: help setup run migrate migrations superuser test test-ci lint format check \
-        check-deploy check-migrations security audit messages compile static seed \
+        check-deploy check-migrations security audit sbom messages compile static seed \
         shell clean schema schema-check worker beat monitor
 
 help:  ## Show this help
@@ -93,6 +93,10 @@ security:  ## Static security analysis
 
 audit:  ## Check dependencies for known vulnerabilities
 	uv run pip-audit
+
+sbom:  ## Write a CycloneDX software bill of materials for this release
+	uv export --format cyclonedx1.5 -o sbom.json
+	@echo "sbom.json written - attach it to the release and the handover pack"
 {% if cookiecutter.languages == "en_ar" %}
 messages:  ## Extract translatable strings
 	uv run python manage.py makemessages -l ar --ignore=.venv

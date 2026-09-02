@@ -364,6 +364,10 @@ LOCALE_REDIRECT_EXEMPT_PREFIXES = [
     "/healthz",
     "/robots.txt",
     "/sitemap.xml",
+    # RFC 9116 names exactly one location, and researchers and scanners request
+    # it verbatim. Redirecting it into /en/ makes it 404 for every caller that
+    # matters, which looks like "they publish no contact".
+    "/.well-known/",
     "/private-media/",
 ]
 {%- endif %}
@@ -924,6 +928,18 @@ SPAM_PROTECTION = "none"
 # django-ratelimit budgets for non-DRF public POST endpoints. Endpoints that send
 # e-mail or write files get the tightest budgets: each request costs an external
 # resource.
+# Fail CLOSED when the counter cannot be read. django-ratelimit already defaults
+# to this, but it is written out because the consequence of the other value is
+# severe and silent: with FAIL_OPEN, a Redis outage removes the rate limit from
+# every endpoint that needed it most, and nothing in the logs says the protection
+# is gone. A cache outage should cost availability, not the control.
+# Where a vulnerability report should go (RFC 9116, /.well-known/security.txt).
+# A monitored address, not an individual: a personal mailbox stops being read the
+# day that person changes role, and the file is public for years.
+SECURITY_CONTACT_EMAIL = env("SECURITY_CONTACT_EMAIL", default="{{ cookiecutter.author_email }}")
+
+RATELIMIT_FAIL_OPEN = False
+
 RATELIMIT_FORM_SUBMIT = env("RATELIMIT_FORM_SUBMIT", default="5/h")
 RATELIMIT_NEWSLETTER = env("RATELIMIT_NEWSLETTER", default="3/h")
 RATELIMIT_SEARCH = env("RATELIMIT_SEARCH", default="30/m")
