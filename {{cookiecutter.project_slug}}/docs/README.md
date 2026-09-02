@@ -51,7 +51,12 @@ Everything that only the project team can know is marked **`TODO:`**. Search for
 
 ```bash
 grep -rn "TODO:" docs/
+uv run python tools/check_standards.py --verbose   # the same search, as a reported rule (KN007)
 ```
+
+The standards checker counts these on every run and in CI, so the number is visible from the first
+week rather than discovered at handover. It is a warning, not a failure — an unfinished document
+during development is normal, and an unfinished document at handover is not.
 
 A `TODO:` left in this set at handover is an incomplete delivery. Sections 03, 04 and 07 are
 written the first time the project is deployed, not the week before handover. Section 14 is written

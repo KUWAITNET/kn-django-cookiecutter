@@ -108,6 +108,29 @@ def main() -> int:
                     f"'{match.group(1)}' - not declared in cookiecutter.json."
                 )
 
+    # Django's {# #} comment is SINGLE-LINE ONLY. A multi-line one is not
+    # tokenised as a comment: it renders verbatim into the page. We shipped
+    # exactly that bug twice - once it wrapped a live {% include %} of the
+    # template itself, which 500'd the newsletter sign-up with a RecursionError.
+    for path in sorted(TEMPLATE_DIR.rglob("*.html")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        relative = path.relative_to(TEMPLATE_DIR)
+        for match in re.finditer(r"\{#", text):
+            rest = text[match.start():]
+            close = rest.find("#}")
+            if close == -1:
+                continue
+            if "\n" in rest[:close]:
+                line = text[: match.start()].count("\n") + 1
+                problems.append(
+                    f"{relative}:{line}: multi-line {{# #}} comment. Django's is "
+                    f"single-line only, so this renders verbatim into the page. "
+                    f"Use {{% comment %}}...{{% endcomment %}}."
+                )
+
     print(f"rendered files checked: {rendered_count}")
     print(f"verbatim files checked: {copied_count}")
 

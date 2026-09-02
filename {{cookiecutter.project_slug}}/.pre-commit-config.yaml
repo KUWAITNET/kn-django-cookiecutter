@@ -29,3 +29,17 @@ repos:
         args: ["-c", "pyproject.toml", "-r", "apps", "{{ cookiecutter.project_slug }}"]
         additional_dependencies: ["bandit[toml]"]
         pass_filenames: false
+
+  # The KUWAITNET rules no linter has a rule for: serializers that publish every
+  # column, upload fields with no validators, unexplained csrf_exempt, committed
+  # secrets, rejected dependencies. Stdlib only, so there is nothing to install.
+  # Whole-project by design - a violation is a violation whether or not this
+  # commit touched the file.
+  - repo: local
+    hooks:
+      - id: kuwaitnet-standards
+        name: KUWAITNET standards
+        entry: uv run python tools/check_standards.py
+        language: system
+        pass_filenames: false
+        always_run: true

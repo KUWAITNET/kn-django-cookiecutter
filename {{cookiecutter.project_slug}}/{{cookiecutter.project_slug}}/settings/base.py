@@ -1327,6 +1327,31 @@ CELERY_BEAT_SCHEDULE = {
 }
 {%- endif %}
 
+{%- if cookiecutter.use_2fa != "yes" or cookiecutter.rate_limiting != "yes" or cookiecutter.spam_protection == "none" %}
+
+# Recorded exceptions to the security baseline ---------------------------------
+
+# Each id below belongs to a check in apps/core/checks.py describing a control
+# this project was generated WITHOUT. The check still exists and still says what
+# is missing; this list is the acknowledgement that somebody chose it, and it is
+# what a reviewer greps for when asking why the standard does not apply here.
+#
+# It is not a way to quieten a check you disagree with. Delete the entry the
+# moment the control is turned on, and record the reason for every line that
+# remains in docs/14-decisions.md - the go-live security pass asks for it.
+SILENCED_SYSTEM_CHECKS = [
+{%- if cookiecutter.use_2fa != "yes" %}
+    "core.W007",  # no second factor on administrative accounts
+{%- endif %}
+{%- if cookiecutter.spam_protection == "none" %}
+    "core.W008",  # no spam or bot protection on public forms
+{%- endif %}
+{%- if cookiecutter.rate_limiting != "yes" %}
+    "core.W009",  # no rate limiting and no login lockout
+{%- endif %}
+]
+{%- endif %}
+
 # Admin ------------------------------------------------------------------------
 
 # The admin is not mounted at /admin/. This is defence in depth (it removes scanner

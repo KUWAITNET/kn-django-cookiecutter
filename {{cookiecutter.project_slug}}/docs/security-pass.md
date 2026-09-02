@@ -23,12 +23,21 @@ TODO: this record is unsigned. Complete it before go-live.
 | 5 | Security response headers | A headers scanner against staging | CSP, HSTS, nosniff, frame-ancestors, referrer-policy and permissions-policy all present and restrictive | TODO: |
 | 6 | TLS configuration | An SSL grading service against the production hostname | Grade A or better; TLS 1.2 minimum; no weak ciphers | TODO: |
 | 7 | Secret leakage | `detect-private-key` (pre-commit) plus a repository **history** scan | No credential in the repository or its history | TODO: |
+| 8 | KUWAITNET standards checker | `python tools/check_standards.py` | Zero errors, and every warning either resolved or answered in writing | TODO: |
+
+Check 8 covers the rules no linter has a rule for: a serializer that publishes every column, an
+upload field with no validators, `csrf_exempt` with nothing recorded about why, `|safe` on
+model-authored markup, a tracked `.env` or private key, a rejected or undecided dependency, and
+documentation still full of TODO markers. Which mechanism enforces which rule — and which rules
+rest on the signatures below rather than on a machine — is tabulated in `enforcement.md` in the
+KUWAITNET web standards repository.
 
 ```bash
 make check-deploy
 make audit
 make lint
 make security
+python tools/check_standards.py
 
 docker run --rm -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
   -t https://staging.{{ cookiecutter.domain_name }} -r zap-report.html

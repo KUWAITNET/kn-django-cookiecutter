@@ -21,6 +21,17 @@ jobs:
       # Fails the build on a known-vulnerable dependency.
       - run: uv run pip-audit
 
+  standards:
+    name: KUWAITNET standards checker
+    runs-on: ubuntu-latest
+    steps:
+      # Full history is not needed, but the working tree must be a git
+      # repository: the checker asks git which files are tracked.
+      - uses: actions/checkout@v4
+      # No uv sync: the checker is stdlib-only on purpose, so this step stays
+      # under ten seconds and cannot be broken by a dependency resolution.
+      - run: python3 tools/check_standards.py
+
   tests:
     name: Tests and coverage gate
     runs-on: ubuntu-latest
@@ -64,16 +75,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # libmagic is what content sniffing on uploads runs on, and its absence is
+      # itself one of the checks. Without it this job fails on a missing system
+      # package rather than on a misconfiguration.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libmagic1
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
       - run: uv sync --frozen
       # Must report zero issues. This is a gate, not advice.
+      #
+      # The values below are a realistic dummy environment, not secrets: the job
+      # asks whether the settings are correct GIVEN an environment, so anything
+      # that is merely absent here (a short key, a missing site key) would fail
+      # the gate for a reason that has nothing to do with the code.
       - run: uv run python manage.py check --deploy --fail-level WARNING
         env:
           DJANGO_SETTINGS_MODULE: {{ cookiecutter.project_slug }}.settings.production
-          SECRET_KEY: ci-only-not-a-secret
+          SECRET_KEY: ci-only-not-a-secret-but-long-enough-to-pass-the-length-check
           ALLOWED_HOSTS: {{ cookiecutter.domain_name }}
+{%- if cookiecutter.spam_protection == "turnstile_honeypot" %}
+          TURNSTILE_SITE_KEY: ci-only-not-a-site-key
+          TURNSTILE_SECRET_KEY: ci-only-not-a-secret-key
+{%- endif %}
 
 # Before go-live, run the ZAP baseline scan against staging as part of the
 # security pass (security-baseline.md section 18).

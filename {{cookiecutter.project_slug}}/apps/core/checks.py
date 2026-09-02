@@ -4,26 +4,21 @@
 this template adds, and they fire under the production settings module so a
 misconfiguration is caught by CI or the deploy step rather than at go-live.
 
-They are warnings, not errors: a warning is loud enough to be seen and does not
-stop an emergency deploy. Anything that must be impossible is enforced in
-settings, not here.
-{%- if cookiecutter.media_storage != "filesystem" %}
+Severity follows the standard's own language. A rule the security baseline states
+as a **must** is an ``Error``, so ``manage.py check`` exits non-zero and the
+deploy stops. A rule it states as a **should**, and anything this file can only
+infer, is a ``Warning``: loud enough to be seen in CI, and not something that
+blocks an emergency deploy at 2am.
 
-The one exception is a media bucket configured to be world-readable. That is an
-ERROR, so ``manage.py check`` exits non-zero and the deploy stops: it publishes
-every CV and ID copy the site has ever received, and no deploy is urgent enough
-to be worth that.
-{%- endif %}
+Which rule is enforced where - here, in CI, in a lint rule, in
+``tools/check_standards.py``, or only by somebody signing a checklist - is
+tabulated in ``docs/enforcement.md`` in the KUWAITNET web standards repository.
 """
 
 import os
 
 from django.conf import settings
-{%- if cookiecutter.media_storage == "filesystem" %}
-from django.core.checks import Tags, Warning, register
-{%- else %}
 from django.core.checks import Error, Tags, Warning, register
-{%- endif %}
 
 #: Values that mean "nobody set a real key".
 PLACEHOLDER_SECRET_KEY_PREFIXES = ("django-insecure", "change-me", "changeme", "secret")
@@ -79,6 +74,226 @@ def check_secret_key(app_configs, **kwargs):
             id="core.W002",
         )
     ]
+
+
+@register(Tags.security)
+def check_allowed_hosts(app_configs, **kwargs):
+    """A wildcard host is what makes Host-header poisoning work."""
+    if not _is_production_settings() or "*" not in settings.ALLOWED_HOSTS:
+        return []
+    return [
+        Error(
+            "ALLOWED_HOSTS accepts any Host header under the production settings.",
+            hint=(
+                "Django then trusts whatever a request claims the site is called, so a "
+                "password-reset link can be built pointing at an attacker's domain and "
+                "cache keys can be poisoned. Set ALLOWED_HOSTS in the environment to the "
+                "real hostnames, and nothing else."
+            ),
+            id="core.E003",
+        )
+    ]
+
+
+@register(Tags.security)
+def check_admin_url_prefix(app_configs, **kwargs):
+    """Not gated on production: the prefix is the same value in every environment."""
+    if settings.ADMIN_URL_PREFIX.strip("/") != "admin":
+        return []
+    return [
+        Error(
+            "The admin is mounted at /admin/.",
+            hint=(
+                "It is the first path every automated scanner tries, so the login form - "
+                "and the account lockout behind it - is found by everyone. Set "
+                "ADMIN_URL_PREFIX to a project-specific value and update the deploy "
+                "documentation. This is defence in depth, not a substitute for 2FA."
+            ),
+            id="core.E004",
+        )
+    ]
+
+
+@register(Tags.security)
+def check_script_src_is_strict(app_configs, **kwargs):
+    """A nonce-based CSP that also allows inline script protects nothing.
+
+    Not gated on production: the policy is defined once, in base settings, and a
+    developer loosening it locally is exactly the change that then ships.
+    """
+    policy = getattr(settings, "CONTENT_SECURITY_POLICY", {}) or {}
+    directives = policy.get("DIRECTIVES", {})
+    sources = directives.get("script-src") or directives.get("default-src") or []
+    found = [
+        source
+        for source in sources
+        if isinstance(source, str) and source in ("'unsafe-inline'", "'unsafe-eval'")
+    ]
+    if not found:
+        return []
+    return [
+        Error(
+            f"CONTENT_SECURITY_POLICY script-src allows {', '.join(found)}.",
+            hint=(
+                "The browser stops distinguishing our script from injected script, which "
+                "is the one thing the policy exists to do - and the nonce becomes "
+                "decoration. Move the inline code into a static file, or give the tag "
+                "nonce=\"{% raw %}{{ request.csp_nonce }}{% endraw %}\". If a vendored "
+                "library needs eval, replace the library."
+            ),
+            id="core.E005",
+        )
+    ]
+
+
+@register(Tags.security)
+def check_audit_log_retention(app_configs, **kwargs):
+    """Twelve months is the standard, and an audit log is only useful in hindsight.
+
+    An unset AUDITLOG_RETENTION_DAYS is not a finding: it means this project has
+    no prune job at all, so nothing deletes an entry. Too short a retention is
+    the failure mode worth catching, because it looks configured.
+    """
+    days = getattr(settings, "AUDITLOG_RETENTION_DAYS", None)
+    if days is None or days >= 365:
+        return []
+    return [
+        Error(
+            f"AUDITLOG_RETENTION_DAYS is {days}, below the 365-day minimum.",
+            hint=(
+                "Administrative changes are usually questioned months later - who changed "
+                "this price, who deleted this page, which account was used. A log pruned "
+                "before then answers nothing. Raise AUDITLOG_RETENTION_DAYS to at least "
+                "365; if storage is the concern, that is a conversation about archiving, "
+                "not about retention."
+            ),
+            id="core.E006",
+        )
+    ]
+{%- if cookiecutter.use_2fa == "yes" %}
+
+
+@register(Tags.security)
+def check_two_factor_is_enforced(app_configs, **kwargs):
+    """The second factor can be switched off by an environment variable."""
+{%- if cookiecutter.stack == "wagtail" %}
+    required = getattr(settings, "WAGTAIL_2FA_REQUIRED", False)
+{%- else %}
+    required = getattr(settings, "OTP_ADMIN_REQUIRED", False)
+{%- endif %}
+    if not _is_production_settings() or required:
+        return []
+    return [
+        Error(
+            "Two-factor authentication is installed but not required.",
+            hint=(
+                "A stolen or reused password is then a working administrative session, "
+                "and every admin view - accounts, content, the e-mail log, uploaded "
+                "files - is reachable from it. Unset the environment variable that "
+                "disabled it; the test settings are the only place it may be off."
+            ),
+            id="core.E007",
+        )
+    ]
+{%- else %}
+
+
+@register(Tags.security)
+def check_two_factor_exception_is_visible(app_configs, **kwargs):
+    """This project was generated without 2FA, which is a documented exception.
+
+    It stays a warning rather than an error because it was chosen deliberately.
+    It is emitted on every production check anyway, because an exception nobody
+    is reminded of is indistinguishable from an oversight - and this one has to
+    be defended at the go-live security pass by whoever signs it.
+    """
+    if not _is_production_settings():
+        return []
+    return [
+        Warning(
+            "Administrative accounts have no second factor.",
+            hint=(
+                "The KUWAITNET standard is 2FA on every administrative account; this "
+                "project was generated with use_2fa=no. Record the exception and its "
+                "reason in docs/14-decisions.md, and expect it as a finding on the "
+                "go-live checklist. Adding django-otp later is a smaller job than "
+                "explaining a compromised admin account."
+            ),
+            id="core.W007",
+        )
+    ]
+{%- endif %}
+{%- if cookiecutter.frontend != "api_only" %}
+
+
+@register(Tags.security)
+def check_spam_protection(app_configs, **kwargs):
+    """A public form with no bot protection fills the inbox and the database."""
+    if not _is_production_settings() or settings.SPAM_PROTECTION != "none":
+        return []
+    return [
+        Warning(
+            "Public forms have no spam or bot protection under the production settings.",
+            hint=(
+                "Every public form becomes a mail relay and an unbounded write path, and "
+                "it is discovered by scanners within days of go-live. The standard is "
+                "Turnstile with a honeypot behind it. If this was a deliberate choice, "
+                "record it in docs/14-decisions.md - it is a go-live finding either way."
+            ),
+            id="core.W008",
+        )
+    ]
+{%- endif %}
+{%- if cookiecutter.rate_limiting != "yes" %}
+
+
+@register(Tags.security)
+def check_rate_limiting_exception_is_visible(app_configs, **kwargs):
+    """Generated with rate limiting off, which is a documented exception."""
+    if not _is_production_settings():
+        return []
+    return [
+        Warning(
+            "There is no rate limiting and no login lockout.",
+            hint=(
+                "Credential stuffing against the admin login, and automated submission of "
+                "every public form, both run until something else stops them. The "
+                "standard is django-axes on authentication and django-ratelimit on public "
+                "POST endpoints. Record the exception in docs/14-decisions.md."
+            ),
+            id="core.W009",
+        )
+    ]
+{%- else %}
+
+
+@register(Tags.security)
+def check_rate_limiting_is_enabled(app_configs, **kwargs):
+    """RATELIMIT_ENABLE and AXES_ENABLED are both one environment variable away."""
+    if not _is_production_settings():
+        return []
+    disabled = [
+        name
+        for name, value in (
+            ("RATELIMIT_ENABLE", getattr(settings, "RATELIMIT_ENABLE", True)),
+            ("AXES_ENABLED", getattr(settings, "AXES_ENABLED", True)),
+        )
+        if not value
+    ]
+    if not disabled:
+        return []
+    return [
+        Warning(
+            f"Rate limiting is installed but switched off ({', '.join(disabled)}).",
+            hint=(
+                "The decorators still run and do nothing, so the protection reads as "
+                "present in code review and is absent in production. It is off in the "
+                "test settings on purpose; nowhere else."
+            ),
+            id="core.W010",
+        )
+    ]
+{%- endif %}
 {%- if cookiecutter.rate_limiting == "yes" %}
 
 

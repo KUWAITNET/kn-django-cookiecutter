@@ -32,6 +32,14 @@ definitions:
           # Fails the build on a known-vulnerable dependency.
           - uv run pip-audit
 
+    # The KUWAITNET rules no linter has a rule for. Stdlib only, so there is no
+    # dependency install here at all - the step runs in seconds and cannot fail
+    # for a reason unrelated to the code.
+    - step: &standards
+        name: KUWAITNET standards checker
+        script:
+          - python3 tools/check_standards.py
+
     - step: &tests
         name: Tests and coverage gate
         caches: [uv]
@@ -54,25 +62,40 @@ definitions:
         name: Production configuration checks
         caches: [uv]
         script:
+          # libmagic is what content sniffing on uploads runs on, and its absence
+          # is itself one of the checks. Without it this step fails on a missing
+          # system package rather than on a misconfiguration.
+          - apt-get update && apt-get install -y --no-install-recommends libmagic1
           - pip install --quiet uv
           - uv sync --frozen
           # Must report zero issues. This is a gate, not advice.
+          #
+          # The values below are a realistic dummy environment, not secrets: the
+          # step asks whether the settings are correct GIVEN an environment, so
+          # anything merely absent here would fail the gate for a reason that has
+          # nothing to do with the code.
           - >
             DJANGO_SETTINGS_MODULE={{ cookiecutter.project_slug }}.settings.production
-            SECRET_KEY=ci-only-not-a-secret
+            SECRET_KEY=ci-only-not-a-secret-but-long-enough-to-pass-the-length-check
             ALLOWED_HOSTS={{ cookiecutter.domain_name }}
+{%- if cookiecutter.spam_protection == "turnstile_honeypot" %}
+            TURNSTILE_SITE_KEY=ci-only-not-a-site-key
+            TURNSTILE_SECRET_KEY=ci-only-not-a-secret-key
+{%- endif %}
             uv run python manage.py check --deploy --fail-level WARNING
 
 pipelines:
   default:
     - parallel:
         - step: *quality
+        - step: *standards
         - step: *tests
         - step: *deploy_checks
   branches:
     main:
       - parallel:
           - step: *quality
+          - step: *standards
           - step: *tests
           - step: *deploy_checks
 
