@@ -63,6 +63,7 @@ WARNING = "warning"
 #: twice trains people to stop reading the output.
 SKIP_DIRS = {
     ".git",
+    ".claude",
     ".venv",
     "venv",
     "node_modules",
