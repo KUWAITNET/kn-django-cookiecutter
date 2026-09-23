@@ -3,7 +3,7 @@
 from .base import *  # noqa: F403
 
 DEBUG = False
-SECRET_KEY = "django-insecure-test-key"  # noqa: S105
+SECRET_KEY = "django-insecure-test-key"  # noqa: S105  # nosec B105
 ALLOWED_HOSTS = ["*"]
 
 # Fast hashing: the KDF is not under test.

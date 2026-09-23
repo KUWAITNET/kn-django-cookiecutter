@@ -112,7 +112,7 @@ class ReadOnlyRichTextPanel(FieldPanel):
     def format_value_for_display(self, value):
         if not value:
             return "-"
-        return mark_safe(expand_db_html(value))  # noqa: S308
+        return mark_safe(expand_db_html(value))  # noqa: S308  # nosec B308 B703
 
 
 class ReadOnlyM2MPanel(FieldPanel):

@@ -226,8 +226,8 @@ class ContactPage(BasePage):
         # template stays a plain Django template that either stack can render and
         # needs no CMS tag library. Admin-authored markup from a restricted
         # feature set, so marking it safe is the same trust the filter applies.
-        context["intro_html"] = mark_safe(expand_db_html(self.intro))  # noqa: S308
-        context["thank_you_html"] = mark_safe(expand_db_html(self.thank_you_text))  # noqa: S308
+        context["intro_html"] = mark_safe(expand_db_html(self.intro))  # noqa: S308  # nosec B308 B703
+        context["thank_you_html"] = mark_safe(expand_db_html(self.thank_you_text))  # noqa: S308  # nosec B308 B703
         return context
 
     def serve(self, request, *args, **kwargs):

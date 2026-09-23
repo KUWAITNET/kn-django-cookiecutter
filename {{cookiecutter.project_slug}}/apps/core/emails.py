@@ -78,7 +78,7 @@ def render_branded_email(subject, body_text=None, body_html=None, context=None) 
     render_context = {
         "subject": subject,
         "body_lines": body_text.splitlines() if body_text is not None else None,
-        "body_html": mark_safe(body_html) if body_html is not None else None,  # noqa: S308
+        "body_html": mark_safe(body_html) if body_html is not None else None,  # noqa: S308  # nosec B308 B703
         "logo_url": _logo_url(),
         "base_url": settings.BASE_URL,
         "site_name": settings.SITE_NAME,
