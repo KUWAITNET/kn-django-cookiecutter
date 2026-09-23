@@ -43,6 +43,9 @@ Wait, or ask an administrator to clear it — do not keep trying.
 | Images | Uploaded photographs and graphics |
 | Documents | PDFs and other downloadable files |
 | Snippets | Reusable pieces of content that are not pages |
+{%- if cookiecutter.stack == "wagtail" and cookiecutter.newsroom == "yes" %}
+| Newsroom → Articles, Categories | News articles. **Articles are not pages**: they are never created in the page tree. Save draft, Preview, Publish, scheduled publishing and History work exactly as on pages, and each article appears under the newsroom page's address |
+{%- endif %}
 {%- if cookiecutter.newsletter == "yes" %}
 | Newsletter | Subscribers and sending |
 {%- endif %}

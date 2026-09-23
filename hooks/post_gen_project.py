@@ -32,6 +32,7 @@ RATE_LIMITING = "{{ cookiecutter.rate_limiting }}"
 COUNTRIES_APP = "{{ cookiecutter.countries_app }}"
 NOTIFICATIONS_APP = "{{ cookiecutter.notifications_app }}"
 NEWSLETTER = "{{ cookiecutter.newsletter }}"
+NEWSROOM = "{{ cookiecutter.newsroom }}"
 FORMS_SUITE = "{{ cookiecutter.forms_suite }}"
 ANALYTICS = "{{ cookiecutter.analytics }}"
 ASSET_PIPELINE = "{{ cookiecutter.asset_pipeline }}"
@@ -115,6 +116,13 @@ if NEWSLETTER != "yes":
 if FORMS_SUITE != "yes":
     remove(str(APPS / "contact"))
 
+# The newsroom is Wagtail-only: a routable page serves articles that are models.
+if NEWSROOM != "yes" or not IS_WAGTAIL:
+    remove(
+        str(APPS / "newsroom"),
+        str(PKG / "templates" / "blocks" / "latest_articles.html"),
+    )
+
 # The background-task app and the Celery application module. With no queue there is
 # no worker, so both would be dead code - and docs/13-scheduled-tasks.md already
 # documents the cron-only arrangement that replaces them.
@@ -184,6 +192,7 @@ if not IS_BILINGUAL:
         str(APPS / "search" / "indexing.py"),
         str(APPS / "cities" / "translation.py"),
         str(APPS / "contact" / "translation.py"),
+        str(APPS / "newsroom" / "translation.py"),
     )
 
 # The 2FA screens are only branded when 2FA is actually enabled.

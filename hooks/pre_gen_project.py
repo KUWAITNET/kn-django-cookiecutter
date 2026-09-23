@@ -23,6 +23,7 @@ RATE_LIMITING = "{{ cookiecutter.rate_limiting }}"
 SPAM_PROTECTION = "{{ cookiecutter.spam_protection }}"
 USE_2FA = "{{ cookiecutter.use_2fa }}"
 NEWSLETTER = "{{ cookiecutter.newsletter }}"
+NEWSROOM = "{{ cookiecutter.newsroom }}"
 FORMS_SUITE = "{{ cookiecutter.forms_suite }}"
 NOTIFICATIONS = "{{ cookiecutter.notifications_app }}"
 DOMAIN_NAME = "{{ cookiecutter.domain_name }}"
@@ -288,6 +289,13 @@ if MEDIA_STORAGE != "filesystem":
         "    data goes to a separate private storage and is streamed through a\n"
         "    permission-checked view. 'backup' also changes meaning - see\n"
         "    docs/08-backup-restore.md before go-live."
+    )
+
+if NEWSROOM == "yes" and STACK != "wagtail":
+    warnings.append(
+        "newsroom='yes' with stack='django': the newsroom app is Wagtail-only for now\n"
+        "    (a routable page plus snippet admin), so it is not generated. Model news in a\n"
+        "    project app with an Unfold ModelAdmin - as a model, never as a page."
     )
 
 if NOTIFICATIONS == "no" and (FORMS_SUITE == "yes" or NEWSLETTER == "yes"):

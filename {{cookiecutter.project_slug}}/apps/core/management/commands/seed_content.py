@@ -81,6 +81,9 @@ class Command(BaseCommand):
         home = self._home_page()
         if home is not None:
             self._default_site(home)
+{%- if cookiecutter.newsroom == "yes" %}
+            self._newsroom_page(home)
+{%- endif %}
 {%- endif %}
         self._report(f"Seed complete for {settings.SITE_NAME}.")
 
@@ -189,4 +192,23 @@ class Command(BaseCommand):
         site.site_name = settings.SITE_NAME
         site.save()
         self._report(f"Default site '{site.hostname}' points at the home page.")
+{%- if cookiecutter.newsroom == "yes" %}
+
+    def _newsroom_page(self, home):
+        """Create the newsroom page under the home page if there is none.
+
+        Articles are models served by this page, so without it they have no
+        address at all. An existing newsroom is left exactly as the editors made it.
+        """
+        from apps.newsroom.models import NewsIndexPage
+
+        if NewsIndexPage.objects.exists():
+            return
+        newsroom = NewsIndexPage()
+        _set_trans(newsroom, "title", t("News"{% if cookiecutter.languages == "en_ar" %}, "الأخبار"{% endif %}))
+        _set_trans(newsroom, "slug", t("news"{% if cookiecutter.languages == "en_ar" %}, "news"{% endif %}))
+        home.add_child(instance=newsroom)
+        newsroom.save_revision().publish()
+        self._report("Newsroom page created.", created=True)
+{%- endif %}
 {%- endif %}

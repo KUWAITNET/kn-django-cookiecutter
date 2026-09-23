@@ -306,6 +306,27 @@ a country library directly. Until then a visitor must type the country calling c
 a submission records no country.
 {%- endif %}
 
+{% if cookiecutter.stack == "wagtail" -%}
+### News, events and media items are models, never pages
+
+**Context.** A dated feed - news, press releases, events, a media room - modelled as one Wagtail page
+per item fills the page tree with nodes editors scroll past, gives every item a slug that moves
+when someone drags it, and offers a place to nest content nobody designed.
+**Decision.** Feed items are Django models edited through a Wagtail `SnippetViewSet` (the successor
+to the retired `wagtail-modeladmin`). The item model carries `DraftStateMixin`, `RevisionMixin` and
+`PreviewableMixin`, so editors keep drafts, preview, scheduled publishing and history. One index
+page per feed stays in the tree - for the menu, the SEO fields and the address - and serves the
+listing and every item through `RoutablePageMixin`; its `get_sitemap_urls` lists the items, and
+site search queries them alongside pages.{% if cookiecutter.newsroom == "yes" %} `apps/newsroom` is the reference implementation;
+copy its shape for events or a media room.{% endif %}
+**Alternatives considered.** A page per item - rejected for the reasons above. Plain Django views
+outside the page tree - rejected: the feed would lose its editor-owned copy, SEO fields and menu
+entry.
+**Consequences.** A feed item's URL is resolved through its index page, so moving the page moves
+every item. Listing templates build item links with `routablepageurl` against the index page
+looked up once, never with `item.url`, which costs a query per item.
+
+{% endif -%}
 ### Migrations are generated at bootstrap, not shipped by the template
 
 **Context.** The model set depends on which options the project was generated with, so a shipped

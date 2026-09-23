@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load i18n wagtailcore_tags wagtailimages_tags %}
+{% comment %}
+One article, served by NewsIndexPage.article_detail and by the admin preview.
+`page` is the newsroom page; `article` is the NewsArticle; `seo` carries the
+article's own title, description and share image to includes/meta.html.
+{% endcomment %}
+
+{% block body_class %}template-article{% endblock %}
+
+{% block content %}
+<article class="container section article">
+    {% if article.category %}<p class="article__category">{{ article.category.name }}</p>{% endif %}
+    <h1>{{ article.title }}</h1>
+    <p class="article__date"><time datetime="{{ article.date|date:'Y-m-d' }}">{{ article.date|date:"j F Y" }}</time></p>
+    {% if article.introduction %}<p class="page-introduction">{{ article.introduction }}</p>{% endif %}
+    {% if article.image %}
+        <figure class="article__image">
+            {% image article.image width-1200 format-webp decoding="async" fetchpriority="high" alt="" %}
+            {% if article.image.caption %}<figcaption>{{ article.image.caption }}</figcaption>{% endif %}
+        </figure>
+    {% endif %}
+    <div class="article__body">
+        {% for block in article.body %}{% include_block block %}{% endfor %}
+    </div>
+    {% if page %}<p class="article__back"><a href="{% pageurl page %}">{% blocktranslate with title=page.title %}Back to {{ title }}{% endblocktranslate %}</a></p>{% endif %}
+</article>
+{% endblock %}

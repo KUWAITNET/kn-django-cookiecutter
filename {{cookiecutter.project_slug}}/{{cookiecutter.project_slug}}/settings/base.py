@@ -140,6 +140,9 @@ INSTALLED_APPS = [
 {%- if cookiecutter.stack == "wagtail" %}
     "apps.navigation",
     "apps.home",
+{%- if cookiecutter.newsroom == "yes" %}
+    "apps.newsroom",
+{%- endif %}
 {%- if cookiecutter.frontend != "api_only" %}
     "apps.search",
 {%- endif %}

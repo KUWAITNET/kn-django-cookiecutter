@@ -119,6 +119,7 @@ Answer the prompts, or accept the defaults — the defaults are the KUWAITNET st
 | `countries_app` | `django_countries` | `django_countries`, `cities`, `none` | Which country backend `apps/core/countries.py` implements. `django_countries` = the KUWAITNET fork, installed from git: a country field and choices with no tables and no import, and the country-list policy applied in the data. `cities` = `django-cities-light` in `apps/cities`: editor-toggleable countries, dial codes, nationalities, translated names, regions and cities — empty until the GeoNames import has run |
 | `notifications_app` | `yes` | `yes`, `no` | Admin-editable e-mail templates, per-language sending, and an e-mail log |
 | `newsletter` | `yes` | `yes`, `no` | Subscribers, unsubscribe tokens, an admin composer |
+| `newsroom` | `yes` | `yes`, `no` | [wagtail] Articles and categories as **models, never pages**, edited through a `SnippetViewSet` with drafts, preview, scheduling and history, and served by one `RoutablePageMixin` newsroom page that also feeds the sitemap and site search. Ignored with a warning on `stack=django` |
 | `forms_suite` | `yes` | `yes`, `no` | An example contact form: validated, rate-limited, spam-protected, with secure uploads |
 | `api` | `none` | `none`, `rest`, `headless` | `rest` = the DRF pack (`/api/v1/`, OpenAPI, JWT, throttles, RFC 9457 errors); `headless` adds the Wagtail API v2 endpoints |
 | `sentry` | `yes` | `yes`, `no` | Sentry, initialised only when `SENTRY_DSN` is set |

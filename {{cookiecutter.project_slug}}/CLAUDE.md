@@ -129,6 +129,11 @@ planned before the deploy, not improvised after it.
 
 - Do not add a dependency without a reason in the commit message, and never widen the Django{% if cookiecutter.stack == "wagtail" %} or
   Wagtail{% endif %} version bound to make an unrelated package resolve.
+{%- if cookiecutter.stack == "wagtail" %}
+- Do not model news, press releases, events or media-room items as Wagtail pages. They are models
+  edited through a `SnippetViewSet`, served by one routable index page{% if cookiecutter.newsroom == "yes" %} - copy `apps/newsroom`{% endif %}
+  ([docs/14-decisions.md](docs/14-decisions.md)).
+{%- endif %}
 - Do not add a background worker, task queue or scheduler. Mail is sent synchronously on purpose
   ([docs/14-decisions.md](docs/14-decisions.md)).
 - Do not add a JavaScript build step or a Node toolchain.

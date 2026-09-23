@@ -185,6 +185,9 @@ apps/                       every first-party app; a Django app never sits at th
 {%- if cookiecutter.forms_suite == "yes" %}
   contact/                  the example public form
 {%- endif %}
+{%- if cookiecutter.stack == "wagtail" and cookiecutter.newsroom == "yes" %}
+  newsroom/                 articles and categories (models, not pages), served by the newsroom page
+{%- endif %}
 {%- if cookiecutter.newsletter == "yes" %}
   newsletter/               subscribers and sending
 {%- endif %}

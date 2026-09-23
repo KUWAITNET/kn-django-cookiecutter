@@ -20,6 +20,7 @@
   "countries_app": ["django_countries", "cities", "none"],
   "notifications_app": ["yes", "no"],
   "newsletter": ["yes", "no"],
+  "newsroom": ["yes", "no"],
   "forms_suite": ["yes", "no"],
   "api": ["none", "rest", "headless"],
   "sentry": ["yes", "no"],
@@ -99,6 +100,11 @@
     },
     "newsletter": {
       "__prompt__": "Include the newsletter app (subscribers, unsubscribe tokens, admin composer)?",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "newsroom": {
+      "__prompt__": "Include the newsroom app (articles as models with drafts and preview, served by one routable newsroom page)? [wagtail only]",
       "yes": "Yes",
       "no": "No"
     },

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load i18n wagtailcore_tags wagtailroutablepage_tags %}
+{% comment %}
+The newsroom listing, served by NewsIndexPage.article_list. Articles are
+models, not child pages. Category filters are links with a query string, so
+filtering works without JavaScript, can be shared, and keeps pagination.
+{% endcomment %}
+
+{% block body_class %}template-news-index-page{% endblock %}
+
+{% block content %}
+<div class="container section newsroom">
+    <h1>{{ page.title }}</h1>
+    {% if page.introduction %}<p class="page-introduction">{{ page.introduction }}</p>{% endif %}
+
+    {% if categories|length > 1 %}
+        <ul class="newsroom__filters" aria-label="{% translate 'Filter by category' %}">
+            <li><a class="newsroom__filter" href="?"{% if not current_category %} aria-current="true"{% endif %}>{% translate "All" %}</a></li>
+            {% for category in categories %}
+                <li><a class="newsroom__filter" href="?category={{ category.slug }}"{% if category == current_category %} aria-current="true"{% endif %}>{{ category.name }}</a></li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    {% if featured %}
+        <div class="newsroom__featured">
+            {% include "newsroom/includes/article_card.html" with article=featured newsroom=page %}
+        </div>
+    {% endif %}
+
+    {% if articles %}
+        <ul class="newsroom__list">
+            {% for article in articles %}
+                <li>{% include "newsroom/includes/article_card.html" with article=article newsroom=page %}</li>
+            {% endfor %}
+        </ul>
+
+        {% if articles.has_other_pages %}
+            <nav class="newsroom__pagination" aria-label="{% translate 'Pagination' %}">
+                {% if articles.has_previous %}<a href="?{% if current_category %}category={{ current_category.slug }}&amp;{% endif %}page={{ articles.previous_page_number }}" rel="prev">{% translate "Previous" %}</a>{% endif %}
+                <span>{% blocktranslate with number=articles.number total=articles.paginator.num_pages %}Page {{ number }} of {{ total }}{% endblocktranslate %}</span>
+                {% if articles.has_next %}<a href="?{% if current_category %}category={{ current_category.slug }}&amp;{% endif %}page={{ articles.next_page_number }}" rel="next">{% translate "Next" %}</a>{% endif %}
+            </nav>
+        {% endif %}
+    {% elif not featured %}
+        <p>{% translate "Nothing published yet." %}</p>
+    {% endif %}
+</div>
+{% endblock %}

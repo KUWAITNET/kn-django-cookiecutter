@@ -22,8 +22,10 @@ from wagtail.blocks.struct_block import StructBlockValidationError
 from wagtail.documents.blocks import DocumentChooserBlock
 from wagtail.embeds.blocks import EmbedBlock
 from wagtail.images.blocks import ImageChooserBlock
-{%- if cookiecutter.multisite == "multi" %}
+{%- if cookiecutter.multisite == "multi" or cookiecutter.newsroom == "yes" %}
 from wagtail.snippets.blocks import SnippetChooserBlock
+{%- endif %}
+{%- if cookiecutter.multisite == "multi" %}
 from wagtail.snippets.widgets import AdminSnippetChooser
 
 from apps.core.site_context import current_editing_site
@@ -387,6 +389,45 @@ class HeroCarouselBlock(ToggleableStructBlock):
         template = "blocks/hero_carousel.html"
 
 
+{% if cookiecutter.newsroom == "yes" -%}
+class LatestArticlesBlock(ToggleableStructBlock):
+    """The newest newsroom articles, pulled automatically.
+
+    Articles are models in a feature app, and apps/core must stay importable on
+    its own, so the models are resolved by name inside get_context rather than
+    imported at module scope.
+    """
+
+    heading = blocks.CharBlock(max_length=255, required=False)
+    count = blocks.IntegerBlock(default=3, min_value=1, max_value=12)
+    category = SnippetChooserBlock(
+        "newsroom.NewsCategory",
+        required=False,
+        help_text=_("Leave empty to show every category."),
+    )
+
+    class Meta:
+        collapsed = True
+        icon = "doc-full-inverse"
+        label = _("Latest articles")
+        template = "blocks/latest_articles.html"
+
+    def get_context(self, value, parent_context=None):
+        from django.apps import apps
+
+        context = super().get_context(value, parent_context)
+        articles = apps.get_model("newsroom", "NewsArticle").objects.published()
+        articles = articles.select_related("category", "image")
+        if value["category"]:
+            articles = articles.filter(category=value["category"])
+        context["articles"] = articles[: value["count"]]
+        # Looked up once here so each card builds its link without a query.
+        request = (parent_context or {}).get("request")
+        context["newsroom"] = apps.get_model("newsroom", "NewsIndexPage").for_request(request)
+        return context
+
+
+{% endif -%}
 #: The blocks available on a generic content page.
 CONTENT_BLOCKS = [
     ("section_title", SectionTitleBlock()),
@@ -397,6 +438,9 @@ CONTENT_BLOCKS = [
     ("cta_banner", CTABannerBlock()),
     ("gallery", GalleryBlock()),
     ("embed", EmbedMediaBlock()),
+{%- if cookiecutter.newsroom == "yes" %}
+    ("latest_articles", LatestArticlesBlock()),
+{%- endif %}
 ]
 
 #: Caps, so one page cannot become a performance problem on its own. A page that
@@ -410,6 +454,9 @@ CONTENT_BLOCKS_COUNTS = {
     "cta_banner": {"max_num": 2},
     "gallery": {"max_num": 3},
     "embed": {"max_num": 6},
+{%- if cookiecutter.newsroom == "yes" %}
+    "latest_articles": {"max_num": 2},
+{%- endif %}
 }
 
 #: The home page: its own lead band, plus everything a content page can do.

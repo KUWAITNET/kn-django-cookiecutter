@@ -34,10 +34,11 @@
                     {% for result in search_results %}
                         <li class="search__result">
                             <h2 class="search__result-title">
-                                <a href="{% pageurl result %}">{{ result }}</a>
+                                <a href="{{ result.url }}">{{ result.title }}</a>
                             </h2>
-                            {% if result.search_description %}
-                                <p class="search__result-description">{{ result.search_description }}</p>
+                            {% firstof result.description result.search_description as description %}
+                            {% if description %}
+                                <p class="search__result-description">{{ description }}</p>
                             {% endif %}
                         </li>
                     {% endfor %}
