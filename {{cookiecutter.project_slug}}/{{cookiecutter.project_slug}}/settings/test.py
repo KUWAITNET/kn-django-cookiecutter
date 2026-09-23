@@ -95,3 +95,8 @@ STORAGES = {  # noqa: F405
     },
 }
 {%- endif %}
+
+# WhiteNoise indexes STATIC_ROOT at startup, and a test run never builds one, so
+# every test emitted "No directory at: staticfiles/" and buried the real warnings.
+# Autorefresh resolves files per request instead of indexing up front.
+WHITENOISE_AUTOREFRESH = True
