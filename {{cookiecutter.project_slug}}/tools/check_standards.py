@@ -144,7 +144,13 @@ def parse(path: Path):
     """
     try:
         source = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    # The trailing comma holds these parentheses open. Ruff's formatter removes
+    # them when target-version is py314, and the bare `except A, B:` that leaves
+    # behind is a parse error for a project generated on an older python_version.
+    except (
+        OSError,
+        UnicodeDecodeError,
+    ):
         return None, []
     try:
         return ast.parse(source, filename=str(path)), source.splitlines()
@@ -411,7 +417,10 @@ def check_unescaped_templates(path: Path) -> list[Finding]:
     """
     try:
         original = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    except (
+        OSError,
+        UnicodeDecodeError,
+    ):
         return []
 
     # Blank the comments rather than dropping them, so line numbers survive and
@@ -455,7 +464,10 @@ def check_tracked_secrets(root: Path) -> list[Finding]:
             text=True,
             timeout=30,
         )
-    except (OSError, subprocess.SubprocessError):
+    except (
+        OSError,
+        subprocess.SubprocessError,
+    ):
         return []
     if result.returncode != 0:
         return []
@@ -516,7 +528,10 @@ def load_approved(packages_file: Path) -> dict[str, dict]:
         return {}
     try:
         data = tomllib.loads(packages_file.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError):
+    except (
+        OSError,
+        tomllib.TOMLDecodeError,
+    ):
         return {}
     return {normalise_package(entry["name"]): entry for entry in data.get("packages", [])}
 
@@ -526,7 +541,10 @@ def _declared_requirements(pyproject: Path) -> list[str]:
         return []
     try:
         data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError):
+    except (
+        OSError,
+        tomllib.TOMLDecodeError,
+    ):
         return []
     requirements = list(data.get("project", {}).get("dependencies", []))
     for group in data.get("dependency-groups", {}).values():
@@ -592,7 +610,10 @@ def check_documentation_todos(root: Path, verbose: bool) -> list[Finding]:
     for path in walk(docs, ".md"):
         try:
             text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+        except (
+            OSError,
+            UnicodeDecodeError,
+        ):
             continue
         for number, line in enumerate(text.splitlines(), start=1):
             if TODO_MARKER.search(line):

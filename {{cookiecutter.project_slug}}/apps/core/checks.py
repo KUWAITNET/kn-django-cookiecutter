@@ -151,7 +151,7 @@ def check_script_src_is_strict(app_configs, **kwargs):
                 "The browser stops distinguishing our script from injected script, which "
                 "is the one thing the policy exists to do - and the nonce becomes "
                 "decoration. Move the inline code into a static file, or give the tag "
-                "nonce=\"{% raw %}{{ csp_nonce }}{% endraw %}\". If a vendored "
+                'nonce="{% raw %}{{ csp_nonce }}{% endraw %}". If a vendored '
                 "library needs eval, replace the library."
             ),
             id="core.E005",

@@ -34,8 +34,7 @@ class SingletonAdmin(SingletonModelAdmin, ModelAdmin):
     change_form_template = ModelAdmin.change_form_template
     object_history_template = ModelAdmin.object_history_template
 
-{% if cookiecutter.stack == "wagtail" -%}
-
+{% if cookiecutter.stack == "wagtail" %}
 @admin.register(OperationalSettings)
 class OperationalSettingsAdmin(SingletonAdmin):
     """Installation-wide operational configuration.
@@ -57,8 +56,7 @@ class OperationalSettingsAdmin(SingletonAdmin):
         ),
         (_("Operations"), {"fields": ["technical_alert_email"]}),
     ]
-{%- else -%}
-
+{%- else %}
 @admin.register(SiteConfiguration)
 class SiteConfigurationAdmin(SingletonAdmin):
     """The site's own settings: branding, contact details and social profiles."""

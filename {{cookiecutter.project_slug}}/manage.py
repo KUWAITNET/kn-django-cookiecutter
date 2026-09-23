@@ -7,7 +7,8 @@ import sys
 
 def main():
     os.environ.setdefault(
-        "DJANGO_SETTINGS_MODULE", "{{ cookiecutter.project_slug }}.settings.dev"
+        "DJANGO_SETTINGS_MODULE",
+        "{{ cookiecutter.project_slug }}.settings.dev",
     )
     try:
         from django.core.management import execute_from_command_line

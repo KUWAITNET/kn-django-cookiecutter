@@ -12,15 +12,16 @@ aliases back at local directories so the suite can run offline. ``base`` is what
 the project ships.
 """
 
-{%- if cookiecutter.media_storage != "filesystem" %}
+{% if cookiecutter.media_storage != "filesystem" -%}
 import copy
 
-{% endif %}
+{% endif -%}
 import pytest
 from django.urls import reverse
 
-{% if cookiecutter.media_storage != "filesystem" %}from apps.core import checks
-{% endif %}
+{% if cookiecutter.media_storage != "filesystem" -%}
+from apps.core import checks
+{% endif -%}
 from apps.core.storage import PrivateMediaStorage, private_media_storage
 from {{ cookiecutter.project_slug }}.settings import base
 
@@ -154,7 +155,8 @@ def test_a_public_acl_is_reported_as_an_error(settings):
 
 def test_missing_credentials_warn_under_production_settings(monkeypatch, settings):
     monkeypatch.setenv(
-        "DJANGO_SETTINGS_MODULE", "{{ cookiecutter.project_slug }}.settings.production"
+        "DJANGO_SETTINGS_MODULE",
+        "{{ cookiecutter.project_slug }}.settings.production",
     )
 {%- if cookiecutter.media_storage == "s3" %}
     settings.AWS_STORAGE_BUCKET_NAME = ""

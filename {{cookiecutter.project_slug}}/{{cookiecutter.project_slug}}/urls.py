@@ -23,9 +23,9 @@ from wagtail.contrib.sitemaps.views import sitemap
 from wagtail.documents import urls as wagtaildocs_urls
 {%- endif %}
 
-{%- if cookiecutter.api == "headless" %}
+{% if cookiecutter.api == "headless" -%}
 from apps.api.wagtail_api import api_router
-{%- endif %}
+{% endif -%}
 from apps.core import views as core_views
 {%- if cookiecutter.stack != "wagtail" and cookiecutter.frontend != "api_only" %}
 from apps.core.sitemaps import SITEMAPS

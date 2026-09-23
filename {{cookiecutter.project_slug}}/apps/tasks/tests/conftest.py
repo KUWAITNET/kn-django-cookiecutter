@@ -17,9 +17,7 @@ def audit_entry(django_user_model, db):
     from django.contrib.contenttypes.models import ContentType
     from django.utils import timezone
 
-    subject = django_user_model.objects.create_user(
-        username="audited", email="audited@example.com"
-    )
+    subject = django_user_model.objects.create_user(username="audited", email="audited@example.com")
     content_type = ContentType.objects.get_for_model(subject)
 
     def _build(days_old: int):

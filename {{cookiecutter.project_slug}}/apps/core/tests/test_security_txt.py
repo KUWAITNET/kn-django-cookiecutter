@@ -9,7 +9,7 @@ handled.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone as dt_timezone
+from datetime import UTC, datetime
 
 import pytest
 from django.conf import settings
@@ -54,10 +54,8 @@ class TestContent:
             ln for ln in security_txt.content.decode().splitlines() if ln.startswith("Expires:")
         )
         value = line.split(":", 1)[1].strip()
-        expires = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.000Z").replace(
-            tzinfo=dt_timezone.utc
-        )
-        assert expires > datetime.now(dt_timezone.utc), (
+        expires = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.000Z").replace(tzinfo=UTC)
+        assert expires > datetime.now(UTC), (
             "security.txt has expired; parsers are entitled to ignore the whole file"
         )
 

@@ -17,7 +17,8 @@ from celery import Celery
 # default settings module of its own. Production is the right default for a process
 # that only ever runs on a server; a developer overrides it in the environment.
 os.environ.setdefault(
-    "DJANGO_SETTINGS_MODULE", "{{ cookiecutter.project_slug }}.settings.production"
+    "DJANGO_SETTINGS_MODULE",
+    "{{ cookiecutter.project_slug }}.settings.production",
 )
 
 app = Celery("{{ cookiecutter.project_slug }}")

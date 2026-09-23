@@ -68,8 +68,7 @@ class TestNonce:
         body_nonce = NONCE_ATTR.search(response_with_inline_script.content.decode()).group(1)
         header = response_with_inline_script.headers["Content-Security-Policy"]
         assert f"'nonce-{body_nonce}'" in header, (
-            "the script's nonce is not in the policy, so the browser will "
-            "refuse to run it"
+            "the script's nonce is not in the policy, so the browser will refuse to run it"
         )
 
     def test_sentinel_never_reaches_the_browser(self, response_with_inline_script):

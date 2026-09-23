@@ -83,8 +83,8 @@ def upload_file():
         return SimpleUploadedFile(name, content, content_type=content_type)
 
     return _build
-
 {% if cookiecutter.languages == "en_ar" %}
+
 @pytest.fixture(autouse=True)
 def _restore_active_language():
     """Undo the language a request left active on this thread.

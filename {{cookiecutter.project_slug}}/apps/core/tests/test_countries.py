@@ -6,8 +6,10 @@ backend it got. What differs below is only what genuinely differs between the
 two: what a country is stored as, and where a dial code comes from.
 """
 
+{% if cookiecutter.countries_app != "django_countries" -%}
 import pytest
 
+{% endif -%}
 {% if cookiecutter.countries_app == "cities" -%}
 from apps.cities.models import Country
 {% endif -%}

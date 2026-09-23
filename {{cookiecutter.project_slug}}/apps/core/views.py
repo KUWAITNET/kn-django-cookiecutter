@@ -1,13 +1,12 @@
 """Project-level views: operational endpoints, protected media and error pages."""
 
 import logging
+from datetime import timedelta
 {%- if cookiecutter.media_storage == "filesystem" %}
 from pathlib import Path
 {%- else %}
 from pathlib import PurePosixPath
 {%- endif %}
-
-from datetime import timedelta
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
@@ -18,11 +17,11 @@ from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 {%- endif %}
 from django.shortcuts import render
-from django.utils import timezone
 from django.template import TemplateDoesNotExist
 {%- if cookiecutter.frontend != "api_only" %}
 from django.urls import NoReverseMatch, reverse
 {%- endif %}
+from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_safe
 {%- if cookiecutter.media_storage != "filesystem" %}
@@ -83,7 +82,6 @@ def security_txt(request):
         "BASE_URL": settings.BASE_URL.rstrip("/"),
     }
     return render(request, "security.txt", context, content_type="text/plain")
-
 
 
 @never_cache

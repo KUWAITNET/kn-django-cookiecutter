@@ -5,8 +5,10 @@ throttles cover ``/api/``, django-ratelimit covers public non-DRF POSTs, and
 django-axes covers authentication (a lockout is not a rate cap).
 """
 
+{% if cookiecutter.frontend != "api_only" -%}
 from unittest import mock
 
+{% endif -%}
 import pytest
 from django.conf import settings
 {%- if cookiecutter.frontend != "api_only" %}

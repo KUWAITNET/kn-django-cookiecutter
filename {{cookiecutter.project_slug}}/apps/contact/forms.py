@@ -79,8 +79,7 @@ class ContactForm({% if cookiecutter.spam_protection != "none" %}SpamProtectedFo
 
     Copy this class for the next form. What matters is the shape, not the fields.
     """
-
-{%- if cookiecutter.countries_app != "none" %}
+{% if cookiecutter.countries_app != "none" %}
     # Not model fields: `phone` is one column, and the visitor fills in two
     # inputs. clean() recombines them and stores E.164 in cleaned_data["phone"].
     #

@@ -46,18 +46,14 @@ def prune_audit_log(days: int | None = None, batch_size: int = DELETE_BATCH_SIZE
     total = 0
     while True:
         batch = list(
-            LogEntry.objects.filter(timestamp__lt=cutoff).values_list("pk", flat=True)[
-                :batch_size
-            ]
+            LogEntry.objects.filter(timestamp__lt=cutoff).values_list("pk", flat=True)[:batch_size]
         )
         if not batch:
             break
         _, per_model = LogEntry.objects.filter(pk__in=batch).delete()
         total += per_model.get("auditlog.LogEntry", 0)
 
-    logger.info(
-        "Pruned %s audit log entries older than %s days (before %s).", total, days, cutoff
-    )
+    logger.info("Pruned %s audit log entries older than %s days (before %s).", total, days, cutoff)
     return total
 
 
@@ -87,9 +83,7 @@ def send_queued_mail() -> tuple[int, int, int]:
 
     sent, failed, requeued = send_queued()
     if failed or requeued:
-        logger.warning(
-            "Queued mail run: %s sent, %s failed, %s requeued.", sent, failed, requeued
-        )
+        logger.warning("Queued mail run: %s sent, %s failed, %s requeued.", sent, failed, requeued)
     else:
         logger.info("Queued mail run: %s sent.", sent)
     return sent, failed, requeued

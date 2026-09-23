@@ -1,4 +1,4 @@
-{%- if cookiecutter.task_queue == "huey" %}
+{%- if cookiecutter.task_queue == "huey" -%}
 """Scheduled and background tasks.
 
 The module name matters: 'manage.py run_huey' autodiscovers ``tasks`` in every
@@ -36,7 +36,7 @@ def send_queued_mail():
     """Retry anything left in the post-office queue. See apps/tasks/retention.py."""
     return retention.send_queued_mail()
 {%- endif %}
-{%- else %}
+{%- else -%}
 """Scheduled and background tasks.
 
 The module name matters: ``app.autodiscover_tasks()`` imports ``tasks`` from every

@@ -80,11 +80,11 @@ class PrivateFileSystemStorage(FileSystemStorage):
 @deconstructible
 class PrivateMediaStorage(
 {%- if cookiecutter.media_storage == "s3" %}
-    S3Storage
+    S3Storage,
 {%- elif cookiecutter.media_storage == "gcs" %}
-    GoogleCloudStorage
+    GoogleCloudStorage,
 {%- else %}
-    AzureStorage
+    AzureStorage,
 {%- endif %}
 ):
     """Object storage for personal data: private prefix, signed URLs, no ACL.
