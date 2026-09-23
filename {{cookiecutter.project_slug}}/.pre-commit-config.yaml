@@ -1,5 +1,9 @@
 # Install with: make setup  (or: uv run pre-commit install)
 # Run over everything: uv run pre-commit run --all-files
+# Nothing under static/vendor is ours to reformat: the whitespace fixers would
+# rewrite minified libraries nobody has reviewed.
+exclude: ^{{ cookiecutter.project_slug }}/static/vendor/
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

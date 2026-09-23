@@ -99,9 +99,9 @@ sbom:  ## Write a CycloneDX software bill of materials for this release
 	@echo "sbom.json written - attach it to the release and the handover pack"
 {% if cookiecutter.languages == "en_ar" %}
 messages:  ## Extract translatable strings
-	uv run python manage.py makemessages -l ar --ignore=.venv
+	uv run python manage.py makemessages -l ar --ignore=.venv --ignore=staticfiles
 {%- if cookiecutter.frontend != "api_only" %}
-	uv run python manage.py makemessages -l ar -d djangojs --ignore=.venv --ignore=static/vendor
+	uv run python manage.py makemessages -l ar -d djangojs --ignore=.venv --ignore=staticfiles --ignore={{ cookiecutter.project_slug }}/static/vendor
 {%- endif %}
 
 compile:  ## Compile translations (.mo files are NOT committed; build them here)
