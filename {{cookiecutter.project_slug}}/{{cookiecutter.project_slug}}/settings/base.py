@@ -757,6 +757,13 @@ UPLOAD_IMAGE_MAX_PIXELS = env.int("UPLOAD_IMAGE_MAX_PIXELS", default=50_000_000)
 # logs every send (visible in the admin) and supplies the admin-editable template
 # model. Django's own EMAIL_BACKEND is always post_office's, so every send in the
 # codebase goes through it unchanged.
+#
+# Django 6.1 deprecates these EMAIL_* settings in favour of MAILERS, and this
+# block should move over - but not yet. django-post-office reads
+# settings.EMAIL_BACKEND directly and calls get_connection(backend), both of
+# which Django refuses once MAILERS is defined (AttributeError and RuntimeError
+# respectively). Migrating before post_office supports mailers breaks every send
+# in the project. Revisit when it does; the deadline is Django's removal, not ours.
 
 if env("EMAIL_URL", default=""):
     _email_url_config = env.email_url("EMAIL_URL")

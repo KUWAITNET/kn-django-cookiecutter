@@ -12,7 +12,7 @@ send, and no call site has to know it exists.
 import logging
 
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives, get_connection
+from django.core.mail import EmailMultiAlternatives, mailers
 from django.utils import timezone
 from django.utils.html import strip_tags
 from django.utils.safestring import mark_safe
@@ -156,7 +156,7 @@ def send_branded_mail(
 
 def send_branded_mass_mail(messages) -> int:
     """Send pre-built messages over a single connection."""
-    connection = get_connection()
+    connection = mailers.default
     try:
         return connection.send_messages(list(messages)) or 0
     except Exception:
