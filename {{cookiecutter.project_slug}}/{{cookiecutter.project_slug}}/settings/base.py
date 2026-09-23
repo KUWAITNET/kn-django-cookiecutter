@@ -946,17 +946,22 @@ SPAM_PROTECTION = "none"
 # severe and silent: with FAIL_OPEN, a Redis outage removes the rate limit from
 # every endpoint that needed it most, and nothing in the logs says the protection
 # is gone. A cache outage should cost availability, not the control.
-# Where a vulnerability report should go (RFC 9116, /.well-known/security.txt).
-# A monitored address, not an individual: a personal mailbox stops being read the
-# day that person changes role, and the file is public for years.
-SECURITY_CONTACT_EMAIL = env("SECURITY_CONTACT_EMAIL", default="{{ cookiecutter.author_email }}")
-
 RATELIMIT_FAIL_OPEN = False
 
 RATELIMIT_FORM_SUBMIT = env("RATELIMIT_FORM_SUBMIT", default="5/h")
 RATELIMIT_NEWSLETTER = env("RATELIMIT_NEWSLETTER", default="3/h")
 RATELIMIT_SEARCH = env("RATELIMIT_SEARCH", default="30/m")
 {%- endif %}
+
+
+# Security contact -------------------------------------------------------------
+
+# Where a vulnerability report should go (RFC 9116, /.well-known/security.txt).
+# A monitored address, not an individual: a personal mailbox stops being read the
+# day that person changes role, and the file is public for years.
+# Unconditional on purpose: apps.core.views.security_txt reads it whatever the
+# generation options were, and it once sat inside the rate-limiting block.
+SECURITY_CONTACT_EMAIL = env("SECURITY_CONTACT_EMAIL", default="{{ cookiecutter.author_email }}")
 
 
 # Analytics --------------------------------------------------------------------
