@@ -83,3 +83,20 @@ def upload_file():
         return SimpleUploadedFile(name, content, content_type=content_type)
 
     return _build
+
+{% if cookiecutter.languages == "en_ar" %}
+@pytest.fixture(autouse=True)
+def _restore_active_language():
+    """Undo the language a request left active on this thread.
+
+    LocaleMiddleware activates the request's language and nothing resets it, so a
+    single test that fetches an Arabic URL leaves every later test in the process
+    running in Arabic - which then fails on English labels it never touched. The
+    symptom appears in an unrelated test file, which is why this belongs here and
+    not in a private copy per app.
+    """
+    from django.utils import translation
+
+    with translation.override(translation.get_language()):
+        yield
+{% endif %}
