@@ -82,7 +82,7 @@ Each line is initialled by the person who performed it. "It should be fine" is n
 - [ ] **Two-factor exception.** This project does not enforce a second factor. Confirm the exception
       is recorded in [14-decisions.md](14-decisions.md) with who accepted it and when.
 {%- endif %}
-- [ ] **Administrative surface.** The interface answers at `/{{ cookiecutter.admin_url_prefix }}/`
+- [ ] **Administrative surface.** The interface answers at `/{{ cookiecutter.admin_url_prefix }}/`{% if cookiecutter.stack == "wagtail" %}, the Django admin at `/{{ cookiecutter.django_admin_url_prefix }}/`{% endif %},
       and `/admin/` returns 404. No default, demonstration, vendor or temporary account remains. The
       staging basic-authentication credentials are rotated or retired.
 - [ ] **Error handling.** Force a 404 and a 500 on staging. Both render a branded page with no

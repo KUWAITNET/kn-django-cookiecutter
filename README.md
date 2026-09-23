@@ -111,7 +111,8 @@ Answer the prompts, or accept the defaults — the defaults are the KUWAITNET st
 | `languages` | `en_ar` | `en_ar`, `en` | Bilingual English + Arabic with RTL support and translated fields, or English only |
 | `frontend` | `server_rendered` | `server_rendered`, `api_only` | Server-rendered templates, or an API-only backend with no public HTML surface |
 | `multisite` | `single` | `single`, `multi` | Wagtail only: several sites from one instance, with site-scoped content and settings |
-| `admin_url_prefix` | `manage` | string | The administration path. **Must not be `admin`** |
+| `admin_url_prefix` | `manage` | string | The administration path. Wagtail's admin on the Wagtail stack, Django's on the Django stack. **Must not be `admin`** |
+| `django_admin_url_prefix` | `backoffice` | string | [wagtail] The Django admin's own path. Independent of `admin_url_prefix`, never nested under it |
 | `use_2fa` | `yes` | `yes`, `no` | `wagtail-2fa` or `django-otp`, enforced for every administrative account |
 | `spam_protection` | `turnstile_honeypot` | `turnstile_honeypot`, `honeypot`, `none` | Cloudflare Turnstile plus a honeypot, degrading to honeypot-only with no key |
 | `rate_limiting` | `yes` | `yes`, `no` | `django-axes` lockout plus `django-ratelimit` on public POST endpoints |
@@ -139,7 +140,8 @@ Generation is aborted, before any file is written, when:
 | Rule | Why |
 |---|---|
 | `project_slug` is not a valid Python identifier, is a keyword, or collides with `django`, `wagtail`, `apps`, `test(s)`, `settings`, `static`, `media` | The package would be unimportable, or would shadow something the project itself uses |
-| `admin_url_prefix` is `admin`, is empty, is not URL-safe, or collides with `api`, `static`, `media`, `search`, `accounts`, `documents`, `images` | The default admin path is the first thing scanners try; a colliding prefix silently shadows another route |
+| Either admin prefix is `admin`, is empty, is not URL-safe, or collides with `api`, `static`, `media`, `search`, `accounts`, `documents`, `images` | The default admin path is the first thing scanners try; a colliding prefix silently shadows another route |
+| [wagtail] `django_admin_url_prefix` equals `admin_url_prefix` | Two admins on one path defeats the reason for having a non-default prefix at all. A prefix merely *derived* from the other warns rather than fails |
 | `stack=django` with `multisite=multi` | Site scoping is built on Wagtail's site model |
 | `stack=django` with `api=headless` | `headless` means the Wagtail page/image/document endpoints. Use `api=rest` |
 | `stack=wagtail` with `frontend=api_only` | A CMS site serves pages. For a headless backend use `stack=wagtail` with `api=headless` |

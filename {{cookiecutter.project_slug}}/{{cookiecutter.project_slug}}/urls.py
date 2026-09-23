@@ -1,6 +1,7 @@
 """URL configuration for {{ cookiecutter.project_name }}.
 
-The admin is deliberately not at /admin/ (see settings.ADMIN_URL_PREFIX). That is
+No admin is at /admin/{% if cookiecutter.stack == "wagtail" %}, and the two sit on separate prefixes (see
+settings.WAGTAIL_ADMIN_URL_PREFIX and settings.DJANGO_ADMIN_URL_PREFIX){% else %} (see settings.DJANGO_ADMIN_URL_PREFIX){% endif %}. That is
 defence in depth against automated scanners, not a security control in its own
 right: 2FA, lockout and TLS do the actual work.
 """
@@ -30,7 +31,12 @@ from apps.core import views as core_views
 from apps.core.sitemaps import SITEMAPS
 {%- endif %}
 
-ADMIN = settings.ADMIN_URL_PREFIX
+{%- if cookiecutter.stack == "wagtail" %}
+WAGTAIL_ADMIN = settings.WAGTAIL_ADMIN_URL_PREFIX
+DJANGO_ADMIN = settings.DJANGO_ADMIN_URL_PREFIX
+{%- else %}
+DJANGO_ADMIN = settings.DJANGO_ADMIN_URL_PREFIX
+{%- endif %}
 
 # Non-localised URLs. The sitemap deliberately sits OUTSIDE i18n_patterns: a
 # sitemap whose contents depend on the request language emits one language
@@ -38,12 +44,13 @@ ADMIN = settings.ADMIN_URL_PREFIX
 urlpatterns = [
 {%- if cookiecutter.stack == "wagtail" %}
     # The Django admin hosts the models that have no Wagtail interface
-    # (e-mail log, lockout records, countries). Both admins require staff and 2FA.
-    path(f"{ADMIN}/django/", admin.site.urls),
-    path(f"{ADMIN}/", include(wagtailadmin_urls)),
+    # (e-mail log, lockout records, countries). Both admins require staff and 2FA,
+    # and they sit on unrelated prefixes so one guess cannot reach both.
+    path(f"{DJANGO_ADMIN}/", admin.site.urls),
+    path(f"{WAGTAIL_ADMIN}/", include(wagtailadmin_urls)),
     path("documents/", include(wagtaildocs_urls)),
 {%- else %}
-    path(f"{ADMIN}/", admin.site.urls),
+    path(f"{DJANGO_ADMIN}/", admin.site.urls),
 {%- endif %}
 {%- if cookiecutter.frontend != "api_only" %}
     path("robots.txt", core_views.robots_txt, name="robots_txt"),

@@ -321,7 +321,6 @@ AXES_IPWARE_PROXY_COUNT = env.int("AXES_IPWARE_PROXY_COUNT", default=0) or None
 AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend"]
 {%- endif %}
 
-LOGIN_URL = "/{{ cookiecutter.admin_url_prefix }}/login/"
 {% if cookiecutter.use_2fa == "yes" %}
 # Two-factor authentication is required for every administrative account.
 {%- if cookiecutter.stack == "wagtail" %}
@@ -1372,9 +1371,32 @@ SILENCED_SYSTEM_CHECKS = [
 
 # Admin ------------------------------------------------------------------------
 
-# The admin is not mounted at /admin/. This is defence in depth (it removes scanner
+# No admin is mounted at /admin/. This is defence in depth (it removes scanner
 # noise), never a substitute for 2FA, lockout or TLS.
-ADMIN_URL_PREFIX = "{{ cookiecutter.admin_url_prefix }}"
+{%- if cookiecutter.stack == "wagtail" %}
+# The two interfaces have independent prefixes - the Django admin is NOT a path
+# under the Wagtail one - so the guess that finds the editors' login does not also
+# hand over the second login form.
+WAGTAIL_ADMIN_URL_PREFIX = env(
+    "WAGTAIL_ADMIN_URL_PREFIX", default="{{ cookiecutter.admin_url_prefix }}"
+)
+DJANGO_ADMIN_URL_PREFIX = env(
+    "DJANGO_ADMIN_URL_PREFIX", default="{{ cookiecutter.django_admin_url_prefix }}"
+)
+
+# Wagtail's login form is the one both admins share. Derived, never written out: a
+# literal here outlives a prefix change and silently sends every @login_required
+# redirect to a 404.
+LOGIN_URL = f"/{WAGTAIL_ADMIN_URL_PREFIX}/login/"
+{%- else %}
+DJANGO_ADMIN_URL_PREFIX = env(
+    "DJANGO_ADMIN_URL_PREFIX", default="{{ cookiecutter.admin_url_prefix }}"
+)
+
+# Derived, never written out: a literal here outlives a prefix change and silently
+# sends every @login_required redirect to a 404.
+LOGIN_URL = f"/{DJANGO_ADMIN_URL_PREFIX}/login/"
+{%- endif %}
 
 # Site-wide configuration singleton (django-solo). The model is
 # apps.core.models.{% if cookiecutter.stack == "wagtail" %}OperationalSettings{% else %}SiteConfiguration{% endif %}; it is read on{% if cookiecutter.stack == "wagtail" %}ce per request that needs it{% else %} every rendered page{% endif %},

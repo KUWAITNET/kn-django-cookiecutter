@@ -13,6 +13,7 @@
   "frontend": ["server_rendered", "api_only"],
   "multisite": ["single", "multi"],
   "admin_url_prefix": "manage",
+  "django_admin_url_prefix": "backoffice",
   "use_2fa": ["yes", "no"],
   "spam_protection": ["turnstile_honeypot", "honeypot", "none"],
   "rate_limiting": ["yes", "no"],
@@ -66,6 +67,7 @@
       "multi": "Multiple sites from one instance (site-scoped content and settings)"
     },
     "admin_url_prefix": "Admin URL prefix (must NOT be 'admin'; no slashes)",
+    "django_admin_url_prefix": "Django admin URL prefix [wagtail only] (must differ from admin_url_prefix and not sit under it)",
     "use_2fa": {
       "__prompt__": "Require two-factor authentication for admin accounts?",
       "yes": "Yes (company standard)",

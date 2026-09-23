@@ -28,6 +28,12 @@ nobody pastes one into a ticket, a chat message or a screenshot.
 | `BASE_URL` | Absolute base used to build links in e-mail and in machine-readable output, where no request is available. | Yes in production | `https://{{ cookiecutter.domain_name }}` | No |
 | `SESSION_COOKIE_AGE` | Session lifetime in seconds. Default 43200 (12 hours). | No | `43200` | No |
 | `LOG_LEVEL` | Root log level. `INFO` is the production floor. | No | `INFO` | No |
+{%- if cookiecutter.stack == "wagtail" %}
+| `WAGTAIL_ADMIN_URL_PREFIX` | Path prefix for the Wagtail admin, where the editors work. Never `admin`. | No | `{{ cookiecutter.admin_url_prefix }}` | No |
+| `DJANGO_ADMIN_URL_PREFIX` | Path prefix for the Django admin. Independent of the Wagtail prefix and never a path beneath it, so finding one does not give away the other. Never `admin`. | No | `{{ cookiecutter.django_admin_url_prefix }}` | No |
+{%- else %}
+| `DJANGO_ADMIN_URL_PREFIX` | Path prefix for the Django admin. Never `admin`: it is the first path every scanner tries. | No | `{{ cookiecutter.admin_url_prefix }}` | No |
+{%- endif %}
 
 ## Database
 

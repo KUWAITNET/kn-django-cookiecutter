@@ -62,11 +62,16 @@ production configuration store.
 credentials and data. `settings/local.py` remains a development escape hatch and is gitignored; no
 deploy procedure may instruct anyone to create one on a production host.
 
-### The administration interface is not at `/admin/`
+### The administration interfaces are not at `/admin/`
 
 **Context.** `/admin/` is the first path every automated scanner tries.
 **Decision.** The administration interface is mounted at `/{{ cookiecutter.admin_url_prefix }}/`.
-**Alternatives considered.** Leaving it at the default and relying on lockout alone.
+{%- if cookiecutter.stack == "wagtail" %} The Django admin is mounted at `/{{ cookiecutter.django_admin_url_prefix }}/`, an
+independent prefix rather than a path beneath the first, so one lucky guess does not reach both
+login forms.
+{%- endif %}
+**Alternatives considered.** Leaving it at the default and relying on lockout alone.{% if cookiecutter.stack == "wagtail" %} Nesting the
+Django admin under the Wagtail prefix, which is what an earlier version of this template did.{% endif %}
 **Consequences.** Scanner noise in the logs drops sharply, which makes real attempts visible. **This
 is defence in depth, not a security control**: the controls that do the work are the second factor,
 the lockout and TLS. Changing the prefix later changes every bookmark and every piece of

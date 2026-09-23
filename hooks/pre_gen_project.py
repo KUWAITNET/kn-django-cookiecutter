@@ -11,6 +11,7 @@ import sys
 STACK = "{{ cookiecutter.stack }}"
 PROJECT_SLUG = "{{ cookiecutter.project_slug }}"
 ADMIN_URL_PREFIX = "{{ cookiecutter.admin_url_prefix }}"
+DJANGO_ADMIN_URL_PREFIX = "{{ cookiecutter.django_admin_url_prefix }}"
 LANGUAGES = "{{ cookiecutter.languages }}"
 FRONTEND = "{{ cookiecutter.frontend }}"
 MULTISITE = "{{ cookiecutter.multisite }}"
@@ -53,27 +54,52 @@ elif PROJECT_SLUG in {"django", "wagtail", "apps", "test", "tests", "settings", 
     )
 
 
-# --- Admin URL prefix -------------------------------------------------------
+# --- Admin URL prefixes -----------------------------------------------------
 
-if not ADMIN_URL_PREFIX:
-    errors.append("admin_url_prefix must not be empty.")
-elif ADMIN_URL_PREFIX.strip("/") == "admin":
-    errors.append(
-        "admin_url_prefix must not be 'admin'.\n"
-        "    The default admin path is the first thing automated scanners try. Choose a\n"
-        "    project-specific prefix (see the security baseline, 'Administrative surface').\n"
-        "    Note this is defence in depth, not a security control in its own right."
-    )
-elif not re.match(r"^[a-z0-9][a-z0-9\-_]*$", ADMIN_URL_PREFIX):
-    errors.append(
-        f"admin_url_prefix {ADMIN_URL_PREFIX!r} must be URL-safe: lowercase letters, "
-        "digits, hyphens and underscores only, with no leading or trailing slash."
-    )
-elif ADMIN_URL_PREFIX in {"api", "static", "media", "search", "accounts", "documents", "images"}:
-    errors.append(
-        f"admin_url_prefix {ADMIN_URL_PREFIX!r} collides with another URL prefix used by "
-        "the project."
-    )
+RESERVED_PREFIXES = {"api", "static", "media", "search", "accounts", "documents", "images"}
+
+
+def check_prefix(name: str, value: str) -> None:
+    """Validate one admin prefix, appending to the shared error list."""
+    if not value:
+        errors.append(f"{name} must not be empty.")
+    elif value.strip("/") == "admin":
+        errors.append(
+            f"{name} must not be 'admin'.\n"
+            "    The default admin path is the first thing automated scanners try. Choose a\n"
+            "    project-specific prefix (see the security baseline, 'Administrative surface').\n"
+            "    Note this is defence in depth, not a security control in its own right."
+        )
+    elif not re.match(r"^[a-z0-9][a-z0-9\-_]*$", value):
+        errors.append(
+            f"{name} {value!r} must be URL-safe: lowercase letters, "
+            "digits, hyphens and underscores only, with no leading or trailing slash."
+        )
+    elif value in RESERVED_PREFIXES:
+        errors.append(f"{name} {value!r} collides with another URL prefix used by the project.")
+
+
+check_prefix("admin_url_prefix", ADMIN_URL_PREFIX)
+
+if STACK == "wagtail":
+    check_prefix("django_admin_url_prefix", DJANGO_ADMIN_URL_PREFIX)
+
+    # Two admins on one prefix is the defect this pair of options exists to prevent:
+    # the guess that finds the editors' login would hand over the second login form
+    # as well, which is the whole of what a non-default prefix was meant to cost.
+    if DJANGO_ADMIN_URL_PREFIX == ADMIN_URL_PREFIX:
+        errors.append(
+            f"django_admin_url_prefix {DJANGO_ADMIN_URL_PREFIX!r} is the same as "
+            "admin_url_prefix. The two admins must answer on different paths."
+        )
+    elif DJANGO_ADMIN_URL_PREFIX.startswith(f"{ADMIN_URL_PREFIX}-") or ADMIN_URL_PREFIX.startswith(
+        f"{DJANGO_ADMIN_URL_PREFIX}-"
+    ):
+        warnings.append(
+            f"django_admin_url_prefix {DJANGO_ADMIN_URL_PREFIX!r} is derived from "
+            f"admin_url_prefix {ADMIN_URL_PREFIX!r}. Anyone who finds one will try the "
+            "other; prefer two unrelated words."
+        )
 
 
 # --- Stack layering: Wagtail-only options ------------------------------------

@@ -95,19 +95,31 @@ def check_allowed_hosts(app_configs, **kwargs):
     ]
 
 
+#: Every setting that mounts an administration interface.
+ADMIN_PREFIX_SETTINGS = [
+{%- if cookiecutter.stack == "wagtail" %}
+    "WAGTAIL_ADMIN_URL_PREFIX",
+{%- endif %}
+    "DJANGO_ADMIN_URL_PREFIX",
+]
+
+
 @register(Tags.security)
-def check_admin_url_prefix(app_configs, **kwargs):
-    """Not gated on production: the prefix is the same value in every environment."""
-    if settings.ADMIN_URL_PREFIX.strip("/") != "admin":
+def check_admin_url_prefixes(app_configs, **kwargs):
+    """Not gated on production: the prefixes are the same value in every environment."""
+    offenders = [
+        name for name in ADMIN_PREFIX_SETTINGS if getattr(settings, name).strip("/") == "admin"
+    ]
+    if not offenders:
         return []
     return [
         Error(
-            "The admin is mounted at /admin/.",
+            f"An admin is mounted at /admin/ ({', '.join(offenders)}).",
             hint=(
                 "It is the first path every automated scanner tries, so the login form - "
-                "and the account lockout behind it - is found by everyone. Set "
-                "ADMIN_URL_PREFIX to a project-specific value and update the deploy "
-                "documentation. This is defence in depth, not a substitute for 2FA."
+                "and the account lockout behind it - is found by everyone. Set the prefix "
+                "to a project-specific value and update the deploy documentation. This is "
+                "defence in depth, not a substitute for 2FA."
             ),
             id="core.E004",
         )

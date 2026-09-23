@@ -50,7 +50,7 @@ Wait, or ask an administrator to clear it — do not keep trying.
 | Reports → Site history | Who changed what, and when |
 | Redirects | Send an old address to a new one |
 {%- if cookiecutter.forms_suite == "yes" or cookiecutter.notifications_app == "yes" %}
-| The Django administration at `/{{ cookiecutter.admin_url_prefix }}/django/` | Records with no editor interface: submitted forms, the e-mail log |
+| The Django administration at `/{{ cookiecutter.django_admin_url_prefix }}/` | Records with no editor interface: submitted forms, the e-mail log |
 {%- endif %}
 
 ## The content types

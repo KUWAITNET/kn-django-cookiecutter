@@ -296,6 +296,9 @@ curl -sS -o /dev/null -w '%{http_code} %{time_total}s\n' https://{{ cookiecutter
 {% endif %}curl -sS https://{{ cookiecutter.domain_name }}/robots.txt
 {% endif %}curl -sS -o /dev/null -w '%{http_code}\n' https://{{ cookiecutter.domain_name }}/healthz
 curl -sS -o /dev/null -w '%{http_code}\n' https://{{ cookiecutter.domain_name }}/{{ cookiecutter.admin_url_prefix }}/
+{%- if cookiecutter.stack == "wagtail" %}
+curl -sS -o /dev/null -w '%{http_code}\n' https://{{ cookiecutter.domain_name }}/{{ cookiecutter.django_admin_url_prefix }}/
+{%- endif %}
 # Must be 404: the admin is not at /admin/
 curl -sS -o /dev/null -w '%{http_code}\n' https://{{ cookiecutter.domain_name }}/admin/
 ```

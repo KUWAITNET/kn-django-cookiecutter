@@ -64,4 +64,7 @@ class TestContent:
     def test_does_not_leak_the_admin_path(self, security_txt):
         """This file is world-readable and read mostly by people probing us."""
         body = security_txt.content.decode()
-        assert settings.ADMIN_URL_PREFIX not in body
+{%- if cookiecutter.stack == "wagtail" %}
+        assert settings.WAGTAIL_ADMIN_URL_PREFIX not in body
+{%- endif %}
+        assert settings.DJANGO_ADMIN_URL_PREFIX not in body

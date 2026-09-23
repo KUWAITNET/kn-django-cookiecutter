@@ -190,7 +190,7 @@ make run
 {%- endif %}
 | `http://localhost:8000/{{ cookiecutter.admin_url_prefix }}/` | Administration |
 {%- if cookiecutter.stack == "wagtail" %}
-| `http://localhost:8000/{{ cookiecutter.admin_url_prefix }}/django/` | The Django admin, for models with no editor interface |
+| `http://localhost:8000/{{ cookiecutter.django_admin_url_prefix }}/` | The Django admin, for models with no editor interface |
 {%- endif %}
 {%- if cookiecutter.api != "none" %}
 | `http://localhost:8000/api/v1/` | The API root |
