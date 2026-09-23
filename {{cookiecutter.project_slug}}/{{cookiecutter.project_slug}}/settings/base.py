@@ -1384,21 +1384,15 @@ SILENCED_SYSTEM_CHECKS = [
 # The two interfaces have independent prefixes - the Django admin is NOT a path
 # under the Wagtail one - so the guess that finds the editors' login does not also
 # hand over the second login form.
-WAGTAIL_ADMIN_URL_PREFIX = env(
-    "WAGTAIL_ADMIN_URL_PREFIX", default="{{ cookiecutter.admin_url_prefix }}"
-)
-DJANGO_ADMIN_URL_PREFIX = env(
-    "DJANGO_ADMIN_URL_PREFIX", default="{{ cookiecutter.django_admin_url_prefix }}"
-)
+WAGTAIL_ADMIN_URL_PREFIX = env("WAGTAIL_ADMIN_URL_PREFIX", default="{{ cookiecutter.admin_url_prefix }}")
+DJANGO_ADMIN_URL_PREFIX = env("DJANGO_ADMIN_URL_PREFIX", default="{{ cookiecutter.django_admin_url_prefix }}")
 
 # Wagtail's login form is the one both admins share. Derived, never written out: a
 # literal here outlives a prefix change and silently sends every @login_required
 # redirect to a 404.
 LOGIN_URL = f"/{WAGTAIL_ADMIN_URL_PREFIX}/login/"
 {%- else %}
-DJANGO_ADMIN_URL_PREFIX = env(
-    "DJANGO_ADMIN_URL_PREFIX", default="{{ cookiecutter.admin_url_prefix }}"
-)
+DJANGO_ADMIN_URL_PREFIX = env("DJANGO_ADMIN_URL_PREFIX", default="{{ cookiecutter.admin_url_prefix }}")
 
 # Derived, never written out: a literal here outlives a prefix change and silently
 # sends every @login_required redirect to a 404.
