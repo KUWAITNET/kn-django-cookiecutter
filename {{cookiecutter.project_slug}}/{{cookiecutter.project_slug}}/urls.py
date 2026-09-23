@@ -32,9 +32,11 @@ from apps.core.sitemaps import SITEMAPS
 {%- endif %}
 
 {%- if cookiecutter.stack == "wagtail" %}
+
 WAGTAIL_ADMIN = settings.WAGTAIL_ADMIN_URL_PREFIX
 DJANGO_ADMIN = settings.DJANGO_ADMIN_URL_PREFIX
 {%- else %}
+
 DJANGO_ADMIN = settings.DJANGO_ADMIN_URL_PREFIX
 {%- endif %}
 
