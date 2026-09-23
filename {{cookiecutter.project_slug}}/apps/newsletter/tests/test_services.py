@@ -1,3 +1,5 @@
+import types
+
 import pytest
 from django.conf import settings
 
@@ -83,7 +85,11 @@ def test_messages_advertise_one_click_unsubscribe():
 def test_a_campaign_is_one_batch_over_one_connection_with_one_recipient_each(monkeypatch):
     SubscriberFactory.create_batch(3)
     connection = RecordingConnection()
-    monkeypatch.setattr(core_emails, "get_connection", lambda *args, **kwargs: connection)
+    # Patch the module's own reference to the mailers registry, never Django's
+    # shared one: `mailers.default` is a property on a process-wide singleton.
+    monkeypatch.setattr(
+        core_emails, "mailers", types.SimpleNamespace(default=connection), raising=True
+    )
 
     campaign = services.send_campaign(
         {settings.LANGUAGE_CODE: {"subject": "S", "body": "<p>B</p>"}}
