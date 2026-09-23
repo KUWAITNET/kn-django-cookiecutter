@@ -1,0 +1,37 @@
+{% load wagtailimages_tags navigation_tags %}{% comment %}
+A grid of cards.
+
+The column count is a modifier class rather than an inline style: inline styles
+are the one thing the Content-Security-Policy cannot allow, and a class lets the
+grid collapse to one column on a narrow screen instead of insisting on four.
+
+A card's image is decorative here - the heading beside it carries the meaning and
+is the thing that links - so its alt is deliberately empty.
+{% endcomment %}
+<section class="block-card-grid block-card-grid--columns-{{ value.columns|default:'3' }}">
+    {% if value.heading %}
+        <h2 class="block-card-grid__heading">{{ value.heading }}</h2>
+    {% endif %}
+
+    <ul class="block-card-grid__items">
+        {% for card in value.cards %}
+            <li class="block-card-grid__item">
+                <article class="block-card-grid__card">
+                    {% if card.image %}
+                        {% image card.image fill-800x520 format-webp loading="lazy" decoding="async" alt="" class="block-card-grid__image" %}
+                    {% endif %}
+                    <h3 class="block-card-grid__card-heading">
+                        {% if card.link.page or card.link.url %}
+                            <a href="{{ card.link|nav_href }}">{{ card.heading }}</a>
+                        {% else %}
+                            {{ card.heading }}
+                        {% endif %}
+                    </h3>
+                    {% if card.body %}
+                        <p class="block-card-grid__card-body">{{ card.body }}</p>
+                    {% endif %}
+                </article>
+            </li>
+        {% endfor %}
+    </ul>
+</section>

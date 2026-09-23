@@ -5,6 +5,7 @@ building something the template cannot render, so they are worth pinning.
 """
 
 import pytest
+from django.template.loader import get_template
 from wagtail.blocks.struct_block import StructBlockValidationError
 
 from apps.core.blocks import (
@@ -80,3 +81,16 @@ def test_content_blocks_are_registered_under_stable_names():
     # Renaming a block type orphans every existing page's stored content.
     assert "rich_text" in names
     assert len(names) == len(set(names))
+
+
+def test_every_block_template_exists():
+    # A block that declares a template the project does not ship raises
+    # TemplateDoesNotExist the first time an editor puts it on a page - and never
+    # before, because a freshly seeded home page has an empty body. Resolving
+    # every declared template here is what turns that into a build failure.
+    templates = {block.meta.template for _name, block in HOME_BLOCKS}
+    # ButtonBlock renders inside other blocks rather than on its own, so it is in
+    # no block list and would otherwise go unchecked.
+    templates.add(ButtonBlock().meta.template)
+    for template_name in sorted(templates):
+        get_template(template_name)

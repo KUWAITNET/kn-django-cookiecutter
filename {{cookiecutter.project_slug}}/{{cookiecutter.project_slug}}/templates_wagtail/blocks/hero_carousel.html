@@ -1,0 +1,34 @@
+{% load i18n wagtailimages_tags %}{% comment %}
+The lead band of the home page.
+
+No rotator script: the block renders as a list of slides that is complete and
+readable without JavaScript, and a theme enhances it into a carousel. That is
+also why the markup is a real list - a screen reader gets the slide count for
+free.
+
+The first slide is the page's largest contentful paint, so it is fetched eagerly
+at high priority while the rest lazy-load. Pair it with a rel="preload" hint in
+the page's extra_head block. A slide image is decorative: the heading printed
+beside it carries the same meaning.
+{% endcomment %}
+<section class="block-hero-carousel" aria-label="{% translate 'Highlights' %}">
+    <ul class="block-hero-carousel__slides">
+        {% for slide in value.slides %}
+            <li class="block-hero-carousel__slide">
+                {% if forloop.first %}
+                    {% image slide.image fill-1920x800 format-webp decoding="async" fetchpriority="high" alt="" class="block-hero-carousel__image" %}
+                {% else %}
+                    {% image slide.image fill-1920x800 format-webp loading="lazy" decoding="async" alt="" class="block-hero-carousel__image" %}
+                {% endif %}
+
+                <div class="block-hero-carousel__text flow">
+                    <h2 class="block-hero-carousel__heading">{{ slide.heading }}</h2>
+                    {% if slide.body %}
+                        <p class="block-hero-carousel__body">{{ slide.body }}</p>
+                    {% endif %}
+                    {% include "blocks/button.html" with value=slide.button %}
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+</section>

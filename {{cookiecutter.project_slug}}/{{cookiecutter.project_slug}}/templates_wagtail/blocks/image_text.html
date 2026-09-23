@@ -1,0 +1,23 @@
+{% load wagtailcore_tags wagtailimages_tags %}{% comment %}
+An image beside a block of text.
+
+image_position is a modifier class, never a float or a physical margin: the
+stylesheet orders the two columns with the logical "row" direction, so an Arabic
+page mirrors the layout without a second template or an RTL override.
+
+alt_text is optional on purpose - an empty alt is the correct markup for a
+decorative image, and is not the same thing as omitting the attribute.
+{% endcomment %}
+<section class="block-image-text block-image-text--image-{{ value.image_position|default:'start' }}">
+    <figure class="block-image-text__figure">
+        {% image value.image width-1200 format-webp loading="lazy" decoding="async" alt=value.alt_text class="block-image-text__image" %}
+    </figure>
+
+    <div class="block-image-text__text flow">
+        {% if value.heading %}
+            <h2 class="block-image-text__heading">{{ value.heading }}</h2>
+        {% endif %}
+        {% if value.body %}{{ value.body|richtext }}{% endif %}
+        {% include "blocks/button.html" with value=value.button %}
+    </div>
+</section>
