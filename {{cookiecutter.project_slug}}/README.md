@@ -13,9 +13,9 @@ This README is how you run, test and deploy the project. The full technical docu
 | | |
 |---|---|
 | Python | {{ cookiecutter.python_version }}, managed by `uv` |
-| Framework | Django 5.2 LTS |
+| Framework | Django {{ cookiecutter._django_version }} |
 {%- if cookiecutter.stack == "wagtail" %}
-| Content management | Wagtail 7.4 LTS |
+| Content management | Wagtail {{ cookiecutter._wagtail_version }} LTS |
 {%- endif %}
 | Database | PostgreSQL 17 |
 | Cache | {% if cookiecutter.cache == "redis" %}Redis 7{% else %}Local memory (development only — see `docs/14-decisions.md`){% endif %} |

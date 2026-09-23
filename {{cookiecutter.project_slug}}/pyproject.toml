@@ -17,9 +17,9 @@ dependencies = [
     # 6.1 is the current release. We track the 6.x line rather than the 5.2 LTS
     # so the April 2027 move to the 6.2 LTS is a single-step upgrade rather than
     # a jump across two release cycles and their accumulated deprecations.
-    "django>=6.1,<6.2",
+    "django>={{ cookiecutter._django_version }},<6.2",
 {%- if cookiecutter.stack == "wagtail" %}
-    "wagtail>=7.4,<7.5",
+    "wagtail>={{ cookiecutter._wagtail_version }},<7.5",
 {%- endif %}
 {%- if cookiecutter.languages == "en_ar" %}
 {%- if cookiecutter.stack == "wagtail" %}

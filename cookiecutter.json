@@ -28,6 +28,8 @@
   "static_storage": ["whitenoise", "cloud"],
   "asset_pipeline": ["none", "compressor"],
   "database": "postgres",
+  "_django_version": "6.1",
+  "_wagtail_version": "7.4",
   "cache": ["redis", "locmem"],
   "task_queue": ["none", "huey", "celery"],
   "huey_backend": ["postgres", "redis", "sqlite"],
@@ -48,7 +50,7 @@
     "domain_name": "Production domain (no scheme, e.g. example.com)",
     "author": "Author / team",
     "author_email": "Author e-mail",
-    "description": "One-line project description",
+    "description": "One-line project description, as a full sentence (it is printed as its own paragraph)",
     "timezone": "TIME_ZONE",
     "python_version": "Python version",
     "languages": {

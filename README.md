@@ -107,7 +107,7 @@ Answer the prompts, or accept the defaults — the defaults are the KUWAITNET st
 | `author` / `author_email` | `KUWAITNET` / `info@kuwaitnet.com` | string | Attribution and the default `DEFAULT_FROM_EMAIL` |
 | `description` | one line | string | `pyproject.toml` and the API schema description |
 | `timezone` | `Asia/Kuwait` | TZ name | `TIME_ZONE`; `USE_TZ` is always on |
-| `python_version` | `3.13` | `3.x` | `.python-version`, `requires-python`, the ruff target and the Docker base image |
+| `python_version` | `3.14` | `3.x` | `.python-version`, `requires-python`, the ruff target and the Docker base image |
 | `languages` | `en_ar` | `en_ar`, `en` | Bilingual English + Arabic with RTL support and translated fields, or English only |
 | `frontend` | `server_rendered` | `server_rendered`, `api_only` | Server-rendered templates, or an API-only backend with no public HTML surface |
 | `multisite` | `single` | `single`, `multi` | Wagtail only: several sites from one instance, with site-scoped content and settings |

@@ -44,9 +44,27 @@ def copied_verbatim(relative: pathlib.PurePath) -> bool:
     return relative.suffix == ".html" or any(p.startswith("templates") for p in parts)
 
 
+#: Underscore keys cookiecutter reads as directives rather than as variables. Any
+#: other private key IS usable in a template - that is how a value shared by
+#: several files stays in one place without becoming a prompt.
+COOKIECUTTER_DIRECTIVES = {
+    "_copy_without_render",
+    "_extensions",
+    "_jinja2_env_vars",
+    "_new_lines",
+    "_output_dir",
+    "_repo_dir",
+    "_template",
+}
+
+
 def main() -> int:
     config = json.loads((REPO / "cookiecutter.json").read_text(encoding="utf-8"))
-    known = {k for k in config if not k.startswith(("_", "__"))}
+    known = {
+        k
+        for k in config
+        if not k.startswith("__") and k not in COOKIECUTTER_DIRECTIVES
+    }
 
     problems: list[str] = []
     rendered_count = copied_count = 0
