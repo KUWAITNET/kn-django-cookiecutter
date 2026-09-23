@@ -320,8 +320,8 @@ AXES_IPWARE_PROXY_COUNT = env.int("AXES_IPWARE_PROXY_COUNT", default=0) or None
 {%- else %}
 AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend"]
 {%- endif %}
+{%- if cookiecutter.use_2fa == "yes" %}
 
-{% if cookiecutter.use_2fa == "yes" %}
 # Two-factor authentication is required for every administrative account.
 {%- if cookiecutter.stack == "wagtail" %}
 WAGTAIL_2FA_REQUIRED = env.bool("WAGTAIL_2FA_REQUIRED", default=True)
@@ -762,8 +762,14 @@ UPLOAD_IMAGE_MAX_PIXELS = env.int("UPLOAD_IMAGE_MAX_PIXELS", default=50_000_000)
 # block should move over - but not yet. django-post-office reads
 # settings.EMAIL_BACKEND directly and calls get_connection(backend), both of
 # which Django refuses once MAILERS is defined (AttributeError and RuntimeError
-# respectively). Migrating before post_office supports mailers breaks every send
-# in the project. Revisit when it does; the deadline is Django's removal, not ours.
+# respectively), so migrating early breaks every send in the project.
+#
+# The trigger is concrete: post_office merged MAILERS support one day after
+# cutting 3.11.3, so the first release ABOVE 3.11.3 carries it. At that point
+# raise the pin, define MAILERS, set POST_OFFICE["DEFAULT_MAILER"], and delete
+# this block - POST_OFFICE["BACKENDS"] is ignored under MAILERS. Until then the
+# deprecation warning on this setting is expected, and is the reason the test
+# suite cannot yet run with RemovedInDjango70Warning as an error.
 
 if env("EMAIL_URL", default=""):
     _email_url_config = env.email_url("EMAIL_URL")
@@ -930,7 +936,8 @@ SPAM_PROTECTION = "{{ cookiecutter.spam_protection }}"
 # the security baseline; record it in docs/14-decisions.md.
 SPAM_PROTECTION = "none"
 {%- endif %}
-{% if cookiecutter.rate_limiting == "yes" and cookiecutter.frontend != "api_only" %}
+{%- if cookiecutter.rate_limiting == "yes" and cookiecutter.frontend != "api_only" %}
+
 # django-ratelimit budgets for non-DRF public POST endpoints. Endpoints that send
 # e-mail or write files get the tightest budgets: each request costs an external
 # resource.
@@ -962,7 +969,8 @@ GTM_CONTAINER_ID = env("GTM_CONTAINER_ID", default="")
 GA4_MEASUREMENT_ID = ""
 GTM_CONTAINER_ID = ""
 {%- endif %}
-{% if cookiecutter.api != "none" %}
+{%- if cookiecutter.api != "none" %}
+
 
 # API ---------------------------------------------------------------------------
 # Implements api-standard.md. Deny by default; public endpoints opt in explicitly.
@@ -1091,7 +1099,8 @@ CORS_PREFLIGHT_MAX_AGE = 3600
 # The schema UI is served on staging and gated in production (see production.py).
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=True)
 {%- endif %}
-{% if cookiecutter.countries_app != "none" %}
+{%- if cookiecutter.countries_app != "none" %}
+
 
 # Countries -----------------------------------------------------------------------
 # Whichever backend is selected, apps.core.countries is the only module the rest of
@@ -1141,6 +1150,7 @@ CITIES_LIGHT_INCLUDE_COUNTRIES = None
 #
 # Retention is at least 12 months (security baseline). Prune older entries with a
 # scheduled job rather than letting the table grow forever.
+{%- if cookiecutter.forms_suite == "yes" or cookiecutter.newsletter == "yes" or cookiecutter.notifications_app == "yes" or cookiecutter.countries_app == "cities" %}
 AUDITLOG_INCLUDE_TRACKING_MODELS = (
 {%- if cookiecutter.forms_suite == "yes" %}
     # exclude_fields matters here: without it the audit table stores a second
@@ -1167,6 +1177,9 @@ AUDITLOG_INCLUDE_TRACKING_MODELS = (
     "cities.Country",
 {%- endif %}
 )
+{%- else %}
+AUDITLOG_INCLUDE_TRACKING_MODELS = ()
+{%- endif %}
 {%- if cookiecutter.task_queue != "none" %}
 
 # How long an audit entry is kept before apps.tasks prunes it. The security
@@ -1272,7 +1285,8 @@ CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="sqs://")
 # but it is not free - add a queue when there is a task that must not wait behind
 # another, and give the worker a matching -Q.
 CELERY_TASK_DEFAULT_QUEUE = env(
-    "CELERY_TASK_DEFAULT_QUEUE", default="{{ cookiecutter.project_slug }}"
+    "CELERY_TASK_DEFAULT_QUEUE",
+    default="{{ cookiecutter.project_slug }}",
 )
 {%- if cookiecutter.task_broker == "sqs" %}
 
@@ -1285,7 +1299,8 @@ if CELERY_BROKER_URL.startswith("sqs://"):
         "visibility_timeout": env.int("AWS_SQS_VISIBILITY_TIMEOUT", default=3600),
         # Namespaces the queues so several environments can share one account.
         "queue_name_prefix": env(
-            "AWS_SQS_QUEUE_PREFIX", default="{{ cookiecutter.project_slug }}-"
+            "AWS_SQS_QUEUE_PREFIX",
+            default="{{ cookiecutter.project_slug }}-",
         ),
         "polling_interval": env.float("AWS_SQS_POLLING_INTERVAL", default=1.0),
     }
@@ -1443,7 +1458,8 @@ UNFOLD = {
         },
     },
 }
-{% if cookiecutter.sentry == "yes" %}
+{%- if cookiecutter.sentry == "yes" %}
+
 
 # Error monitoring ---------------------------------------------------------------
 # Initialised only when SENTRY_DSN is provided. Without it Sentry stays fully
