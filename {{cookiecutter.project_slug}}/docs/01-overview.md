@@ -2,9 +2,9 @@
 
 ## What this system is
 
-{{ cookiecutter.project_name }} is {{ cookiecutter.description }}
+{{ cookiecutter.description }}
 
-It is built for {{ cookiecutter.client_name }} and served from `{{ cookiecutter.domain_name }}`.
+It is built for {{ cookiecutter.client_name }}. Production domain: `{{ cookiecutter.domain_name }}`.
 
 {% if cookiecutter.stack == "wagtail" -%}
 The site is a content-managed website. Editors sign in to a content management system and build
