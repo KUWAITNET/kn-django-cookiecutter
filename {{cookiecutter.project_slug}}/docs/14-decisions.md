@@ -306,6 +306,19 @@ a country library directly. Until then a visitor must type the country calling c
 a submission records no country.
 {%- endif %}
 
+### `'unsafe-eval'` on the Django admin only - documented CSP exception
+
+**Context.** django-unfold drives the Django admin with Alpine.js, which evaluates its template
+expressions with `new Function()`. With no `'unsafe-eval'` in `script-src`, none of it runs: the
+keyboard-shortcuts modal opens over every page and nothing can close it.
+**Decision.** `apps.core.csp.DjangoAdminCSPMiddleware` gives responses under
+`DJANGO_ADMIN_URL_PREFIX` the site policy plus `'unsafe-eval'`. Everything else keeps the strict
+policy, and a test pins it.
+**Alternatives considered.** `'unsafe-eval'` site-wide - rejected by the security baseline. Alpine's
+CSP build - it cannot evaluate inline expressions, which is all Unfold's templates use.
+**Consequences.** The Django admin is staff-only and 2FA-gated, which bounds the exposure. Remove the
+middleware when Unfold ships a CSP-compatible build.
+
 ### Migrations are generated at bootstrap, not shipped by the template
 
 **Context.** The model set depends on which options the project was generated with, so a shipped

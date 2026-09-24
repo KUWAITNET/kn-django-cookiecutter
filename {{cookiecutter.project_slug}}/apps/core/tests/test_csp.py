@@ -102,3 +102,22 @@ class TestPolicy:
     def test_frame_ancestors_is_restricted(self, settings):
         """Clickjacking protection, alongside X-Frame-Options."""
         assert settings.SECURE_CSP.get("frame-ancestors") == ["'self'"]
+
+
+@pytest.mark.django_db
+def test_only_the_django_admin_allows_eval(client):
+    """Unfold's Alpine.js needs eval; nothing else may have it."""
+    from django.conf import settings
+
+    admin = client.get(f"/{settings.DJANGO_ADMIN_URL_PREFIX}/login/")
+    assert "'unsafe-eval'" in admin["Content-Security-Policy"]
+{%- if cookiecutter.frontend != "api_only" %}
+
+    public = client.get("/", follow=True)
+    assert "'unsafe-eval'" not in public["Content-Security-Policy"]
+{%- endif %}
+{%- if cookiecutter.stack == "wagtail" %}
+
+    wagtail_admin = client.get(f"/{settings.WAGTAIL_ADMIN_URL_PREFIX}/login/")
+    assert "'unsafe-eval'" not in wagtail_admin["Content-Security-Policy"]
+{%- endif %}
