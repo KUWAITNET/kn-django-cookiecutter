@@ -201,6 +201,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Security response headers.
     "django.middleware.csp.ContentSecurityPolicyMiddleware",
+    # After the CSP middleware, so it can hand it the Django admin's policy.
+    "apps.core.csp.DjangoAdminCSPMiddleware",
     "django_permissions_policy.PermissionsPolicyMiddleware",
 {%- if cookiecutter.rate_limiting == "yes" %}
     # AxesMiddleware must come last: it needs the authenticated user.

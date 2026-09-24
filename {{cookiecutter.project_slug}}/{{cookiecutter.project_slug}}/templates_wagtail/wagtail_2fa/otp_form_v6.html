@@ -1,12 +1,24 @@
 {% extends "wagtail_2fa/otp_form_v6.html" %}
+{% load wagtailimages_tags %}
 {% comment %}
 The one-time-password prompt shown after a correct password.
 
 Overrides a single block so wagtail-2fa keeps ownership of the form itself. Do
 NOT fork the whole template: our reference project forked the device list
 wholesale, and that copy silently drifts from the package on every upgrade.
+
+The logo block is the same as wagtailadmin/login.html's, so the two sign-in
+screens match. It used to include wagtailadmin/logo.html, whose placeholder SVG
+draws the word "Administration" in currentColor - which an <img> always renders
+black, so it showed as large black text on the dark card.
 {% endcomment %}
 
 {% block branding_logo %}
-  {% include "wagtailadmin/logo.html" with wordmark=1 %}
+    <div class="login-logo">
+        {% if settings.navigation.BrandingSettings.logo %}
+            {% image settings.navigation.BrandingSettings.logo height-48 alt=CLIENT_NAME class="admin-brand-logo" %}
+        {% else %}
+            <span class="admin-brand-logo admin-brand-logo--text">{{ CLIENT_NAME }}</span>
+        {% endif %}
+    </div>
 {% endblock %}
