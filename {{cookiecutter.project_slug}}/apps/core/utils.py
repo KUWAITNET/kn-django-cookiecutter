@@ -108,6 +108,9 @@ def url_in_language(request, language_code: str, page=None) -> str:
     * **the query string.** Switching language on ``?page=3&category=x`` must not
       throw away the pagination and filters the visitor chose.
     * **an unknown code.** A typo must not emit a prefix that 404s.
+
+    It also keeps a routable page's sub-path: an article served by the newsroom
+    page switches to the same article, not to the newsroom listing.
     """
 {%- if cookiecutter.languages == "en_ar" %}
     from django.urls import translate_url
@@ -126,6 +129,12 @@ def url_in_language(request, language_code: str, page=None) -> str:
             page_url = page.get_url(request=request)
         if not page_url:
             return ""
+        # A routable page serves more than its own URL (a newsroom serves every
+        # article under it). Keep whatever follows the page's URL in the current
+        # language, or switching language on an article lands on the listing.
+        current_url = page.get_url(request=request) or ""
+        if current_url and path.startswith(current_url) and path != current_url:
+            page_url += path[len(current_url) :]
         return urlunsplit(("", "", page_url, query, fragment))
 {%- endif %}
 

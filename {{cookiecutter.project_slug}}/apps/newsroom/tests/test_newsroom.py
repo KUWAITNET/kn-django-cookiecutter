@@ -138,3 +138,15 @@ def test_published_articles_are_found_by_site_search(client, make_article):
         response = client.get(reverse("search:search"), {"q": "Quarterly"})
 
     assert article.url in [hit.url for hit in response.context["search_results"]]
+
+{%- if cookiecutter.languages == "en_ar" %}
+
+
+def test_switching_language_on_an_article_keeps_the_article(client, newsroom, make_article):
+    """Regression: the switcher used to drop the routable sub-path."""
+    article = make_article("Switchable", "switchable")
+
+    content = _get(client, _article_url(newsroom, article)).content.decode()
+
+    assert '/ar/news/switchable/"' in content
+{%- endif %}
