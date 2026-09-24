@@ -186,6 +186,13 @@ if not IS_BILINGUAL:
         str(APPS / "contact" / "translation.py"),
     )
 
+# wagtail-2fa's sign-in patch exists only where wagtail-2fa does.
+if USE_2FA != "yes" or not IS_WAGTAIL:
+    remove(
+        str(APPS / "core" / "otp_patches.py"),
+        str(APPS / "core" / "tests" / "test_two_factor.py"),
+    )
+
 # The 2FA screens are only branded when 2FA is actually enabled.
 if USE_2FA != "yes":
     remove(str(PKG / "templates" / "wagtail_2fa"))

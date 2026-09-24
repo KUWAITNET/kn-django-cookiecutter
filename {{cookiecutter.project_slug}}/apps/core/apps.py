@@ -17,10 +17,9 @@ class CoreConfig(AppConfig):
     verbose_name = "Core"
 
     def ready(self):
-        # Importing the module is what registers the system checks and, on the
-        # bilingual CMS stack, installs the localised page-URL patch.
-{%- if cookiecutter.stack == "wagtail" and cookiecutter.languages == "en_ar" %}
-        from apps.core import checks, url_patches  # noqa: F401
-{%- else %}
-        from apps.core import checks  # noqa: F401
+        # Importing the module is what registers the system checks{% if cookiecutter.stack == "wagtail" and cookiecutter.languages == "en_ar" %} and, on the
+        # bilingual CMS stack, installs the localised page-URL patch{% endif %}.
+{%- if cookiecutter.stack == "wagtail" and cookiecutter.use_2fa == "yes" %}
+        # otp_patches makes wagtail-2fa's sign-in form work with django-otp 1.7+.
 {%- endif %}
+        from apps.core import checks{% if cookiecutter.stack == "wagtail" and cookiecutter.use_2fa == "yes" %}, otp_patches{% endif %}{% if cookiecutter.stack == "wagtail" and cookiecutter.languages == "en_ar" %}, url_patches{% endif %}  # noqa: F401
