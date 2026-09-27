@@ -21,8 +21,8 @@ and makes the choice the form cannot:
 
 A user with several devices is normal: wagtail-2fa lets anyone add a second one
 from the device list, and an enrolment that is started twice leaves two. The
-first version of this patch refused that case outright, which locked the dev
-site admin account of a generated project out.
+first version of this patch refused that case outright, which locked such
+accounts out.
 
 Remove this module once wagtail-2fa sends ``otp_device`` itself.
 
