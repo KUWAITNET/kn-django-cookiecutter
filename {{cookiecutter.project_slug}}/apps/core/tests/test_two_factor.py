@@ -62,11 +62,33 @@ def test_a_code_cannot_be_replayed(client, admin_user, device):
     assert response.status_code == 200
 
 
-def test_a_user_with_several_devices_is_not_guessed_for(client, admin_user, device):
-    """django-otp's rule stands: the patch never tries every device in turn."""
+def test_a_user_with_several_devices_signs_in_with_either(client, admin_user, device):
+    """Regression: a second device locked the account out ("Invalid code")."""
+    second = TOTPDevice.objects.create(user=admin_user, name="tablet", confirmed=True)
+
+    client.force_login(admin_user)
+    response = client.post(VERIFY_URL, {"otp_token": _code(second)})
+
+    assert response.status_code == 302
+    assert client.session[DEVICE_ID_SESSION_KEY] == second.persistent_id
+
+
+def test_a_matching_code_never_throttles_the_other_devices(client, admin_user, device):
+    """django-otp's rule stands: only the device that matched is touched."""
+    second = TOTPDevice.objects.create(user=admin_user, name="tablet", confirmed=True)
+
+    client.force_login(admin_user)
+    client.post(VERIFY_URL, {"otp_token": _code(second)})
+
+    device.refresh_from_db()
+    assert device.throttling_failure_count == 0
+
+
+def test_a_wrong_code_is_still_counted_against_one_device(client, admin_user, device):
     TOTPDevice.objects.create(user=admin_user, name="tablet", confirmed=True)
     client.force_login(admin_user)
 
-    response = client.post(VERIFY_URL, {"otp_token": _code(device)})
+    client.post(VERIFY_URL, {"otp_token": "not-a-code"})
 
-    assert response.status_code == 200
+    failures = [d.throttling_failure_count for d in TOTPDevice.objects.filter(user=admin_user)]
+    assert sorted(failures) == [0, 1]
