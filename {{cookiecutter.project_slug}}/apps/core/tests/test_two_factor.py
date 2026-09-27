@@ -92,3 +92,65 @@ def test_a_wrong_code_is_still_counted_against_one_device(client, admin_user, de
 
     failures = [d.throttling_failure_count for d in TOTPDevice.objects.filter(user=admin_user)]
     assert sorted(failures) == [0, 1]
+
+
+def test_a_code_typed_with_a_space_signs_in(client, admin_user, device):
+    code = _code(device)
+    client.force_login(admin_user)
+
+    response = client.post(VERIFY_URL, {"otp_token": f"{code[:3]} {code[3:]}"})
+
+    assert response.status_code == 302
+
+
+# --- Setting up a device -------------------------------------------------------
+
+NEW_DEVICE_URL = f"/{settings.WAGTAIL_ADMIN_URL_PREFIX}/2fa/devices/new"
+
+
+def _pending(user):
+    return TOTPDevice.objects.get(user=user, confirmed=False)
+
+
+def test_reloading_the_set_up_page_keeps_the_scanned_secret(client, admin_user):
+    """Regression: every load replaced the secret, so a scanned QR code went stale."""
+    client.force_login(admin_user)
+
+    client.get(NEW_DEVICE_URL)
+    scanned = _pending(admin_user).key
+    client.get(NEW_DEVICE_URL)
+
+    assert _pending(admin_user).key == scanned
+
+
+def test_a_device_set_up_after_a_reload_is_confirmed(client, admin_user):
+    client.force_login(admin_user)
+    client.get(NEW_DEVICE_URL)
+    scanned = _pending(admin_user)
+    client.get(NEW_DEVICE_URL)
+
+    code = _code(scanned)
+    response = client.post(
+        NEW_DEVICE_URL,
+        {
+            "name": "phone",
+            "otp_token": f"{code[:3]} {code[3:]}",
+            "password": "admin-password-for-tests",
+        },
+    )
+
+    assert response.status_code == 302
+    assert TOTPDevice.objects.get(pk=scanned.pk).confirmed is True
+
+
+def test_a_wrong_set_up_code_is_still_refused(client, admin_user):
+    client.force_login(admin_user)
+    client.get(NEW_DEVICE_URL)
+
+    response = client.post(
+        NEW_DEVICE_URL,
+        {"name": "phone", "otp_token": "not-a-code", "password": "admin-password-for-tests"},
+    )
+
+    assert response.status_code == 200
+    assert not TOTPDevice.objects.filter(user=admin_user, confirmed=True).exists()

@@ -1,4 +1,9 @@
-"""Let wagtail-2fa's sign-in form verify a code under django-otp 1.7+.
+"""Make wagtail-2fa's sign-in and device set-up work reliably.
+
+Three defects, all of which surfaced on a live KUWAITNET project as "Invalid code" or
+"Invalid token" for a code the user could see was right.
+
+**1. Sign-in under django-otp 1.7+.**
 
 django-otp 1.7 stopped trying every one of a user's devices when a form does
 not say which device a code belongs to: ``OTPAuthenticationFormMixin`` now
@@ -24,7 +29,18 @@ from the device list, and an enrolment that is started twice leaves two. The
 first version of this patch refused that case outright, which locked such
 accounts out.
 
-Remove this module once wagtail-2fa sends ``otp_device`` itself.
+**2. Setting up a device.** wagtail-2fa's "add device" page deletes the pending
+device and creates a new one - with a new secret - on *every* load, and serves
+the QR code as a separate request. A refresh, a second tab, the back button or
+a colleague opening the same page replaces the secret the user has just
+scanned, and every code from their app is then "Invalid token". The pending
+device is now reused until it is confirmed, so a scanned QR code stays valid.
+
+**3. Codes typed with a space.** Authenticator apps display "123 456", and
+people type or paste it that way. Whitespace is stripped before verification
+on both forms.
+
+Remove this module once wagtail-2fa fixes all three upstream.
 
 Installed from ``CoreConfig.ready()``; applying it twice is harmless.
 """
@@ -33,9 +49,16 @@ import time
 
 from django_otp.oath import TOTP
 from django_otp.plugins.otp_totp.models import TOTPDevice
-from wagtail_2fa.forms import TokenForm
+from wagtail_2fa import utils as wagtail_2fa_utils
+from wagtail_2fa.forms import DeviceForm, TokenForm
 
 _original_chosen_device = TokenForm._chosen_device
+_original_new_unconfirmed_device = wagtail_2fa_utils.new_unconfirmed_device
+_original_device_clean_otp_token = DeviceForm.clean_otp_token
+
+
+def _normalise(token):
+    return "".join(str(token or "").split())
 
 
 def _matches(device, token):
@@ -62,6 +85,26 @@ def _chosen_device(self, user):
     return next((d for d in devices if _matches(d, token)), devices[0])
 
 
+def _token_clean_otp_token(self):
+    """Sign-in form: strip the spaces authenticator apps display."""
+    return _normalise(self.cleaned_data.get("otp_token"))
+
+
+def _device_clean_otp_token(self):
+    """Set-up form: strip spaces, then wagtail-2fa's own check."""
+    self.cleaned_data["otp_token"] = _normalise(self.cleaned_data.get("otp_token"))
+    return _original_device_clean_otp_token(self)
+
+
+def _new_unconfirmed_device(user):
+    """Reuse the pending device, so a reload never invalidates a scanned QR code."""
+    pending = TOTPDevice.objects.devices_for_user(user, confirmed=False).first()
+    return pending if pending is not None else _original_new_unconfirmed_device(user)
+
+
 if not getattr(TokenForm._chosen_device, "_kuwaitnet_patched", False):
     _chosen_device._kuwaitnet_patched = True
     TokenForm._chosen_device = _chosen_device
+    TokenForm.clean_otp_token = _token_clean_otp_token
+    DeviceForm.clean_otp_token = _device_clean_otp_token
+    wagtail_2fa_utils.new_unconfirmed_device = _new_unconfirmed_device
