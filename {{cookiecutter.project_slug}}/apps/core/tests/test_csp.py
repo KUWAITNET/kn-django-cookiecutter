@@ -121,3 +121,25 @@ def test_only_the_django_admin_allows_eval(client):
     wagtail_admin = client.get(f"/{settings.WAGTAIL_ADMIN_URL_PREFIX}/login/")
     assert "'unsafe-eval'" not in wagtail_admin["Content-Security-Policy"]
 {%- endif %}
+
+{%- if cookiecutter.stack == "wagtail" %}
+
+
+@pytest.mark.django_db
+def test_only_the_wagtail_admin_allows_inline_scripts(client):
+    """Wagtail's choosers are initialised inline; nothing else may be."""
+    from django.conf import settings
+
+    def script_src(response):
+        return response["Content-Security-Policy"].split("script-src")[1].split(";")[0]
+
+    wagtail_admin = script_src(client.get(f"/{settings.WAGTAIL_ADMIN_URL_PREFIX}/login/"))
+    django_admin = script_src(client.get(f"/{settings.DJANGO_ADMIN_URL_PREFIX}/login/"))
+    public = script_src(client.get("/", follow=True))
+
+    # With a nonce present, browsers ignore 'unsafe-inline' - so there must be none.
+    assert "'unsafe-inline'" in wagtail_admin
+    assert "nonce-" not in wagtail_admin
+    assert "'unsafe-inline'" not in django_admin
+    assert "'unsafe-inline'" not in public
+{%- endif %}

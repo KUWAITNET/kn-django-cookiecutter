@@ -328,18 +328,23 @@ looked up once, never with `item.url`, which costs a query per item.
 
 {% endif -%}
 
-### `'unsafe-eval'` on the Django admin only - documented CSP exception
+### The admin{% if cookiecutter.stack == "wagtail" %}s get their own{% else %} gets its own{% endif %} Content-Security-Policy - documented exception{% if cookiecutter.stack == "wagtail" %}s{% endif %}
 
-**Context.** django-unfold drives the Django admin with Alpine.js, which evaluates its template
-expressions with `new Function()`. With no `'unsafe-eval'` in `script-src`, none of it runs: the
-keyboard-shortcuts modal opens over every page and nothing can close it.
-**Decision.** `apps.core.csp.DjangoAdminCSPMiddleware` gives responses under
-`DJANGO_ADMIN_URL_PREFIX` the site policy plus `'unsafe-eval'`. Everything else keeps the strict
-policy, and a test pins it.
-**Alternatives considered.** `'unsafe-eval'` site-wide - rejected by the security baseline. Alpine's
-CSP build - it cannot evaluate inline expressions, which is all Unfold's templates use.
-**Consequences.** The Django admin is staff-only and 2FA-gated, which bounds the exposure. Remove the
-middleware when Unfold ships a CSP-compatible build.
+**Context.** The site policy (nonce-only scripts, no `'unsafe-inline'`, no `'unsafe-eval'`) blocks
+third-party admin markup. django-unfold drives the Django admin with Alpine.js, which evaluates
+expressions with `new Function()`: the keyboard-shortcuts modal opens over every page and cannot be
+closed.{% if cookiecutter.stack == "wagtail" %} Wagtail initialises choosers on snippet and settings forms with inline `<script>` tags{% if cookiecutter.languages == "en_ar" %}, and
+wagtail-modeltranslation injects its language toggles the same way{% endif %}: "Choose an image" does nothing.{% endif %}
+**Decision.** `apps.core.csp.AdminCSPMiddleware` gives responses under `DJANGO_ADMIN_URL_PREFIX` the
+site policy plus `'unsafe-eval'`.{% if cookiecutter.stack == "wagtail" %} Responses under `WAGTAIL_ADMIN_URL_PREFIX` get the site policy with
+`'unsafe-inline'` and **without** the nonce - browsers ignore `'unsafe-inline'` while a nonce is
+present. Gravatar is switched off (`WAGTAIL_GRAVATAR_PROVIDER_URL = None`) rather than allowed: it
+sends a hash of every administrator's e-mail address to a third party.{% endif %} The public site keeps the strict
+policy; `apps/core/tests/test_csp.py` pins it.
+**Alternatives considered.** Relaxing the site-wide policy - rejected by the security baseline.
+Nonces or hashes on the admin scripts - the markup is third-party and varies per field.
+**Consequences.** The admin{% if cookiecutter.stack == "wagtail" %}s are{% else %} is{% endif %} staff-only and behind 2FA, which bounds the exposure. Drop each
+exception when its upstream ships CSP-compatible markup.
 
 ### Migrations are generated at bootstrap, not shipped by the template
 

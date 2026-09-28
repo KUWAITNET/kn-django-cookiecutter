@@ -201,8 +201,8 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # Security response headers.
     "django.middleware.csp.ContentSecurityPolicyMiddleware",
-    # After the CSP middleware, so it can hand it the Django admin's policy.
-    "apps.core.csp.DjangoAdminCSPMiddleware",
+    # After the CSP middleware, so it can hand it the admin{% if cookiecutter.stack == "wagtail" %}s'{% else %}'s{% endif %} policies.
+    "apps.core.csp.AdminCSPMiddleware",
     "django_permissions_policy.PermissionsPolicyMiddleware",
 {%- if cookiecutter.rate_limiting == "yes" %}
     # AxesMiddleware must come last: it needs the authenticated user.
@@ -1410,6 +1410,10 @@ SILENCED_SYSTEM_CHECKS = [
 # under the Wagtail one - so the guess that finds the editors' login does not also
 # hand over the second login form.
 WAGTAIL_ADMIN_URL_PREFIX = env("WAGTAIL_ADMIN_URL_PREFIX", default="{{ cookiecutter.admin_url_prefix }}")
+
+# No Gravatar in the admin: it sends a hash of every administrator's e-mail
+# address to a third party to draw an avatar, and the CSP blocks it anyway.
+WAGTAIL_GRAVATAR_PROVIDER_URL = None
 DJANGO_ADMIN_URL_PREFIX = env("DJANGO_ADMIN_URL_PREFIX", default="{{ cookiecutter.django_admin_url_prefix }}")
 
 # Wagtail's login form is the one both admins share. Derived, never written out: a
