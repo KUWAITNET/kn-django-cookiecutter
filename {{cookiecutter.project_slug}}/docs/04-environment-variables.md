@@ -147,21 +147,23 @@ development and would silently swallow production mail.
 |---|---|---|---|---|
 {%- if cookiecutter.media_storage == "filesystem" %}
 | `MEDIA_ROOT` | Where public uploads are written. | Yes in production | `/var/www/{{ cookiecutter.project_slug }}/media` | No |
-| `PRIVATE_MEDIA_ROOT` | Where uploads containing personal data are written. **Must not be reachable from the web server.** | Yes in production | `/var/www/{{ cookiecutter.project_slug }}/private-media` | No |
+| `PRIVATE_MEDIA_ROOT` | Where uploads containing personal data are written. **Outside `MEDIA_ROOT`** (`core.E009` otherwise), and served by nginx only from an `internal` location. | Yes in production | `/var/www/{{ cookiecutter.project_slug }}/private-media` | No |
+| `PRIVATE_FILES_ACCEL_PREFIX` | Blank (default): Django streams private files. `/protected-private/`: Django answers with `X-Accel-Redirect` and nginx sends the bytes; needs the matching `internal` location in [03-infrastructure.md](03-infrastructure.md). | No | `/protected-private/` | No |
 {%- else %}
 | `MEDIA_ROOT` | Unused in production: media is in the object store. Kept so a local run without bucket credentials still has somewhere to write. | No | | No |
 | `PRIVATE_MEDIA_ROOT` | Unused in production for the same reason. The test settings point the private storage here so the suite runs with no cloud credentials. | No | | No |
 {%- endif %}
+| `PRIVATE_URL_EXPIRY_SECONDS` | Lifetime of every signed link to a private file, in seconds. Default 3600. A signed link is a bearer token until it expires; above an hour needs a written reason (`core.W011`). | No | `3600` | No |
+| `PRIVATE_FILE_LINKS_ENABLED` | `True` (default): page links to private files go through the permission gate at `/files/`. `False`: the `file_link` filter falls back to the signed URL - a switch for rolling the gate out, not a steady state. | No | `True` | No |
 | `UPLOAD_MAX_SIZE_MB` | Default per-field size cap in megabytes. Default 10. Individual fields may set a tighter cap. | No | `10` | No |
 | `UPLOAD_IMAGE_MAX_PIXELS` | Pixel-count ceiling that bounds decompression bombs. Default 50000000. | No | `50000000` | No |
 {%- if cookiecutter.media_storage != "filesystem" %}
 
 ## Media storage
 
-Two storages, not one: editorial media under `MEDIA_LOCATION`, and anything a visitor uploads about
-themselves under `PRIVATE_MEDIA_LOCATION`, reachable only through the permission-checked view. The
-bucket is **not** public-read — see [03-infrastructure.md](03-infrastructure.md) for the policy that
-has to be applied to it.
+Two storages, not one, in separate {% if cookiecutter.media_storage == "azure" %}containers{% else %}buckets{% endif %}: editorial media, and anything holding personal data,
+whose every URL is signed and expires after `PRIVATE_URL_EXPIRY_SECONDS`. Neither is public-read —
+see [03-infrastructure.md](03-infrastructure.md) for the policy that has to be applied to each.
 
 | Variable | Purpose | Required | Example | Secret |
 |---|---|---|---|---|
@@ -170,15 +172,14 @@ has to be applied to it.
 {%- if cookiecutter.static_storage == "cloud" %}
 | `STATIC_LOCATION` | Key prefix for collected static files. Default `static`. The only prefix granted public read. | No | `static` | No |
 {%- endif %}
-| `PRIVATE_MEDIA_SIGNED_URLS` | `False` (default) streams every private file through `/private-media/<path>`, so the permission is checked on each request and **no URL to the file exists at all**. `True` redirects to a short-lived signed URL instead: far cheaper for large files, but that URL then works for **anyone holding it** until it expires — after the user logs out, after the permission is revoked, after it is forwarded. Turn it on deliberately, per project, and keep the expiry as low as the download tolerates. | No | `False` | No |
-| `PRIVATE_MEDIA_URL_EXPIRE_SECONDS` | Lifetime of a private signed URL, in seconds. Default 300. Only used when the setting above is `True`. | No | `300` | No |
 {%- if cookiecutter.media_storage == "s3" %}
 | `AWS_STORAGE_BUCKET_NAME` | The bucket. | Yes in production | `{{ cookiecutter.project_slug }}-media` | No |
-| `AWS_PRIVATE_STORAGE_BUCKET_NAME` | A separate bucket for personal data, so a bucket policy rather than a key prefix separates public from private. Defaults to the bucket above. Recommended. | No | `{{ cookiecutter.project_slug }}-private` | No |
+| `AWS_PRIVATE_BUCKET_NAME` | The private bucket: public access blocked, ACLs off, no CDN, versioned. Must differ from the bucket above (`core.E010`). | Yes in production | `{{ cookiecutter.project_slug }}-private` | No |
 | `AWS_S3_REGION_NAME` | Bucket region. Required unless an endpoint URL is given. | Yes in production | `me-south-1` | No |
-| `AWS_ACCESS_KEY_ID` | Leave unset when the host has an instance role or IRSA — preferred, because then there is no long-lived key to rotate or leak. | No | | **Yes** |
+| `AWS_ACCESS_KEY_ID` | **Never set on AWS**: the server's instance role (or IRSA) provides temporary credentials. Only for an S3-compatible store. | No | | **Yes** |
 | `AWS_SECRET_ACCESS_KEY` | As above. Setting one of the pair without the other is reported by `manage.py check`. | No | | **Yes** |
 | `AWS_S3_ENDPOINT_URL` | Only for an S3-compatible store (MinIO, DigitalOcean Spaces, Wasabi). | No | `https://fra1.digitaloceanspaces.com` | No |
+| `AWS_S3_ADDRESSING_STYLE` | `virtual` (default), as AWS requires. `path` only for a store that cannot do virtual-hosted URLs. | No | `virtual` | No |
 | `AWS_S3_CUSTOM_DOMAIN` | CDN in front of the **public** prefix. Never applied to private media: an edge cache is a copy of the file sitting outside every permission check. | No | `cdn.{{ cookiecutter.domain_name }}` | No |
 | `AWS_QUERYSTRING_EXPIRE` | Lifetime of a signed URL for public editorial media, in seconds. Default 3600. | No | `3600` | No |
 {%- if cookiecutter.static_storage == "cloud" %}
@@ -186,7 +187,7 @@ has to be applied to it.
 {%- endif %}
 {%- elif cookiecutter.media_storage == "gcs" %}
 | `GS_BUCKET_NAME` | The bucket. | Yes in production | `{{ cookiecutter.project_slug }}-media` | No |
-| `GS_PRIVATE_BUCKET_NAME` | A separate bucket for personal data, so an IAM policy rather than a key prefix separates public from private. Defaults to the bucket above. Recommended. | No | `{{ cookiecutter.project_slug }}-private` | No |
+| `GS_PRIVATE_BUCKET_NAME` | The private bucket: no public grant, no CDN, versioned. Must differ from the bucket above (`core.E010`). | Yes in production | `{{ cookiecutter.project_slug }}-private` | No |
 | `GS_PROJECT_ID` | Google Cloud project. | Yes in production | | No |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to a service-account key file. Leave unset when workload identity or the metadata server supplies credentials — preferred, because then there is no key file to rotate or leak. The file itself is a secret: mode `0600`, never committed. | No | `/etc/{{ cookiecutter.project_slug }}/gcs.json` | **Yes** |
 | `GS_EXPIRATION_SECONDS` | Lifetime of a signed URL for public editorial media, in seconds. Default 3600. | No | `3600` | No |
@@ -197,7 +198,7 @@ has to be applied to it.
 {%- else %}
 | `AZURE_ACCOUNT_NAME` | Storage account. | Yes in production | `{{ cookiecutter.project_slug }}media` | No |
 | `AZURE_CONTAINER` | Container holding public editorial media{% if cookiecutter.static_storage == "cloud" %} and static files{% endif %}. | Yes in production | `media` | No |
-| `AZURE_PRIVATE_CONTAINER` | A separate container for personal data. Public access is a per-container setting in Azure, so this is what makes "private" structural rather than conventional. Defaults to the container above. Recommended. | No | `private` | No |
+| `AZURE_PRIVATE_CONTAINER` | The private container, with no anonymous access and no CDN. Public access is a per-container setting in Azure, so this is what makes "private" structural rather than conventional. Must differ from the container above (`core.E010`). | Yes in production | `private` | No |
 | `AZURE_ACCOUNT_KEY` | Leave unset when a managed identity supplies credentials — preferred, because then there is no long-lived key to rotate or leak. | No | | **Yes** |
 | `AZURE_CONNECTION_STRING` | Alternative to account name plus key. It contains the key, so it is a secret in full. | No | | **Yes** |
 | `AZURE_CUSTOM_DOMAIN` | CDN in front of the **public** container. Never applied to private media: an edge cache is a copy of the file sitting outside every permission check. | No | `cdn.{{ cookiecutter.domain_name }}` | No |

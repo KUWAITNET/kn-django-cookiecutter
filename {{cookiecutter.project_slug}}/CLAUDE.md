@@ -62,9 +62,13 @@ If a task appears to require breaking one of these, stop and say so instead.
   extension (the browser-supplied content type and filename are attacker-controlled); server-side
   image re-encoding bounded against decompression bombs, with SVG never accepted on a public field;
   a **generated** stored filename with the original kept in a separate column for display only; and
-  `PRIVATE_MEDIA_ROOT` for anything containing personal data. Never add a bare `FileField()`.
-- **Private media** is served only through the permission-checked private-media view. Never from
-  `MEDIA_URL`, and never by handing out a path.
+  `storage=private_media_storage` (or `private=True` on `SecureFileField`) for anything identifying a
+  person or holding personal data - when unsure, private. Never add a bare `FileField()`.
+- **Private files** never have a permanent URL. Templates link with `|file_link`, never `.url`
+  (`.url` only for an inline `<img src>`); every model with a private field needs an entry in
+  `PRIVATE_FILE_PERMISSIONS` (a callable `(request, obj)` when users may open their own files); a new
+  private field goes into `EXPECTED_PRIVATE_FIELDS` in `apps/core/tests/test_private_files.py`. Never
+  return signed links to anonymous callers, and never put them in e-mails or notifications.
 {%- if cookiecutter.spam_protection != "none" %}
 - **Every public form** carries the project's spam protection{% if cookiecutter.spam_protection == "turnstile_honeypot" %} — Turnstile plus a honeypot, degrading
   to honeypot-only when no key is configured{% endif %}. Do not add a public form without it, and do not

@@ -8,7 +8,7 @@
 #
 # The canonical source, with the full reasoning behind every entry, is
 # `approved-packages.toml` and `docs/approved-packages.md` in
-# https://github.com/kuwaitnet/kuwaitnet-web-standards - a test there asserts the
+# https://bitbucket.org/KuwaitNET/kn-docs - a test there asserts the
 # two agree. The reasons below are trimmed to one line; read the document before
 # arguing with one.
 #
@@ -22,9 +22,9 @@
 # the standards, not a workaround here.
 
 [meta]
-source = "https://github.com/kuwaitnet/kuwaitnet-web-standards"
+source = "https://bitbucket.org/KuwaitNET/kn-docs"
 document = "docs/approved-packages.md"
-updated = "2026-09-02"
+updated = "2026-11-03"
 
 # --- Shipped by the template: on every project ------------------------------
 
@@ -274,6 +274,16 @@ tier = "shipped"
 scope = "optional"
 selected_by = "task_queue=celery"
 reason = "Background work, when routing, priorities or multiple queues are genuinely needed."
+
+[[packages]]
+name = "amqp"
+tier = "shipped"
+reason = "Celery's AMQP transport, pulled in by Celery. Listed so the checker does not report it as undecided."
+
+[[packages]]
+name = "kombu"
+tier = "shipped"
+reason = "Celery's messaging library, pulled in by Celery. Listed so the checker does not report it as undecided."
 
 [[packages]]
 name = "sentry-sdk"

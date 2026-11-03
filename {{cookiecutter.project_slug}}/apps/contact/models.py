@@ -109,7 +109,7 @@ class ContactSubmission({% if cookiecutter.stack == "wagtail" and cookiecutter.m
     )
     subject = models.CharField(_("subject"), max_length=255)
     message = models.TextField(_("message"))
-    # private=True routes this to PRIVATE_MEDIA_ROOT and gives it a generated
+    # private=True puts this on the private storage and gives it a generated
     # filename: an attachment on a contact form is personal data, and under
     # MEDIA_ROOT it would be a public document reachable by guessing a name.
     attachment = SecureFileField(
@@ -152,18 +152,15 @@ class ContactSubmission({% if cookiecutter.stack == "wagtail" and cookiecutter.m
 
     @property
     def attachment_download_url(self) -> str:
-        """Permission-checked download URL, or "" when there is no attachment.
+        """The attachment's link through the permission gate, or "" when there is none.
 
-        Never ``attachment.url``: private storage refuses to produce one, because
-        a URL under ``MEDIA_URL`` would serve this file to anybody who has the
-        link. ``apps.core.views.serve_private_file`` checks
-        ``core.access_private_media`` first.
+        What ``file_link`` gives a template. Staff open it with
+        ``contact.view_contactsubmission`` (``PRIVATE_FILE_PERMISSIONS``); the
+        link itself never expires, because the check happens on the click.
         """
-        from django.urls import reverse
+        from apps.core.private_files import file_link
 
-        if not self.attachment:
-            return ""
-        return reverse("private_media", kwargs={"relative_path": self.attachment.name})
+        return file_link(self.attachment)
 {%- if cookiecutter.stack == "wagtail" %}
 
 

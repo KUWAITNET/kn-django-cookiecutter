@@ -18,12 +18,12 @@ from apps.core.viewsets import NoAddModelViewSet
 
 
 class PrivateAttachmentPanel(Panel):
-    """Links an attachment through the permission-checked private view.
+    """Links an attachment through the permission gate.
 
     ``FieldPanel(read_only=True)`` on a file field renders the storage path, and
-    a link to it would mean ``MEDIA_URL`` - which serves the file to anyone
-    holding the URL. This one goes through ``apps.core.views.serve_private_file``,
-    which checks ``core.access_private_media`` first.
+    a link built from that would bypass every check. This one goes through
+    ``/files/`` (``apps.core.views.private_file``), which checks the model's
+    entry in ``PRIVATE_FILE_PERMISSIONS`` on every click.
     """
 
     def __init__(self, field_name="attachment", **kwargs):

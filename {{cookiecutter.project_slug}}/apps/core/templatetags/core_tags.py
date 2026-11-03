@@ -1,4 +1,4 @@
-"""Template helpers for links, absolute URLs{% if cookiecutter.languages == "en_ar" %}, language switching{% endif %} and bidirectional text.
+"""Template helpers for links, file links, absolute URLs{% if cookiecutter.languages == "en_ar" %}, language switching{% endif %} and bidirectional text.
 
 The module name is fixed (``{% raw %}{% load core_tags %}{% endraw %}``) rather than derived from the
 project slug, so the load line is identical in every KUWAITNET project.
@@ -17,6 +17,7 @@ from django.urls import Resolver404, get_resolver
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import get_language
 
+from apps.core import private_files
 from apps.core.utils import absolute_url{% if cookiecutter.languages == "en_ar" %}, url_in_language{% endif %}
 from apps.core.utils import ltr_isolate as _ltr_isolate
 
@@ -27,6 +28,19 @@ _TIME = re.compile(r"\d{1,2}(?::\d{2}){0,2}")
 
 
 # --- URLs --------------------------------------------------------------------
+
+
+@register.filter
+def file_link(value):
+    """The ``href`` for an uploaded file: the permission gate if it is private.
+
+    Use it for every link to an upload, never ``.url``. A private file gets
+    ``/files/<app.model>/<pk>/<field>/``, which checks permission on the click; a
+    public one gets its plain URL - so a template never needs to know which it
+    has. An inline ``<img src>`` is the one place ``.url`` is right on a private
+    file, because the browser loads it without a click.
+    """
+    return private_files.file_link(value)
 
 
 @register.filter(name="absolute_url")

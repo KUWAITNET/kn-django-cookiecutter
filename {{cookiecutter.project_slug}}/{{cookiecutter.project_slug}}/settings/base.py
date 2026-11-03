@@ -372,7 +372,7 @@ LOCALE_REDIRECT_EXEMPT_PREFIXES = [
     # it verbatim. Redirecting it into /en/ makes it 404 for every caller that
     # matters, which looks like "they publish no contact".
     "/.well-known/",
-    "/private-media/",
+    "/files/",
 ]
 {%- endif %}
 
@@ -402,16 +402,43 @@ STATIC_URL = "/static/"
 MEDIA_ROOT = env("MEDIA_ROOT", default=os.path.join(BASE_DIR, "media"))
 MEDIA_URL = "/media/"
 
-# Uploads containing personal data are served through a permission-checked view,
-# never from MEDIA_URL. See apps.core.storage and the security baseline.
+# Private files: two storages, never one (the media storage standard). Anything
+# that identifies a person or holds personal data goes to the "private" alias and
+# never has a permanent URL: a link goes through the permission gate at /files/,
+# and .url is signed and expires. On disk the folder is OUTSIDE MEDIA_ROOT - under
+# it, the public /media/ location would serve it to anyone who guessed a path.
 PRIVATE_MEDIA_ROOT = env("PRIVATE_MEDIA_ROOT", default=os.path.join(BASE_DIR, "private-media"))
+# Lifetime of every signed link, disk and bucket alike. Do not go above an hour
+# without a written reason (apps/core/checks.py warns).
+PRIVATE_URL_EXPIRY_SECONDS = env.int("PRIVATE_URL_EXPIRY_SECONDS", default=3600)
+# Page links to private files go through the permission gate. Off, the file_link
+# filter falls back to the signed .url - a switch for rolling the gate out.
+PRIVATE_FILE_LINKS_ENABLED = env.bool("PRIVATE_FILE_LINKS_ENABLED", default=True)
+# Blank: Django streams a private file from disk. "/protected-private/": Django
+# answers with X-Accel-Redirect and nginx sends the bytes from its internal
+# location, so no worker is held for a large download. See docs/03-infrastructure.md.
+PRIVATE_FILES_ACCEL_PREFIX = env("PRIVATE_FILES_ACCEL_PREFIX", default="")
+
+# Who may open a private file through the gate, per model. Every model with a
+# field on the private storage needs an entry; a system check and a test both
+# enforce it. A value is a permission string, or a callable (request, obj) -> bool
+# where a non-staff user may open their OWN file - the permission alone would let
+# every member open every other member's ID scan.
+{%- if cookiecutter.forms_suite == "yes" %}
+PRIVATE_FILE_PERMISSIONS = {
+    "contact.contactsubmission": "contact.view_contactsubmission",
+}
+{%- else %}
+PRIVATE_FILE_PERMISSIONS = {}
+{%- endif %}
 {%- if cookiecutter.media_storage == "filesystem" %}
 
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    # Personal data. A named entry rather than a bare instance so that the test
-    # settings - and a future migration to a bucket - can repoint it in one place.
-    "private_media": {"BACKEND": "apps.core.storage.PrivateMediaStorage"},
+    # Personal data, under PRIVATE_MEDIA_ROOT, with signed expiring URLs. A named
+    # entry rather than a bare instance so the test settings - and a later move to
+    # a bucket - can repoint it in one place.
+    "private": {"BACKEND": "apps.core.storage.SignedFileSystemStorage"},
     "staticfiles": {
         # Hashed filenames: cache-busting without hand-stamped ?v= query strings.
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
@@ -422,52 +449,38 @@ STORAGES = {
 
 # Object storage ---------------------------------------------------------------
 #
-# TWO media storages, never one. Editorial media (page images, brochures) is
-# public; anything a visitor uploads about themselves - a CV, an ID copy, a form
-# attachment - goes to the private storage and is reachable only through
-# apps.core.views.serve_private_file, which checks a permission first. That is the
-# same split the filesystem build makes with MEDIA_ROOT and PRIVATE_MEDIA_ROOT.
+# TWO media storages, never one, in separate buckets. Editorial media (page
+# images, brochures) is public; anything holding personal data - a CV, an ID copy,
+# a form attachment - goes to the private bucket, where every URL is signed and
+# expires and no CDN sits in front. That is the same split the filesystem build
+# makes with MEDIA_ROOT and PRIVATE_MEDIA_ROOT.
 #
-# The bucket is NOT public-read: no public ACL is ever sent, and the URLs the
-# storage builds are signed and expire. Making the bucket world-readable would
-# turn every private object into a public document the moment its key is guessed
-# or logged - which is exactly how applicant CVs leaked in the reference project.
+# No bucket is public-read: no public ACL is ever sent. Making one world-readable
+# would turn every object in it into a public document the moment its key is
+# guessed or logged - which is exactly how applicant CVs leaked in the reference
+# project.
 MEDIA_LOCATION = env("MEDIA_LOCATION", default="media")
 PRIVATE_MEDIA_LOCATION = env("PRIVATE_MEDIA_LOCATION", default="private")
 {%- if cookiecutter.static_storage == "cloud" %}
 STATIC_LOCATION = env("STATIC_LOCATION", default="static")
 {%- endif %}
-
-# How a private file reaches the browser.
-#
-# Default (False): the file is STREAMED through serve_private_file, so the
-# permission is checked on every single byte and no URL exists that could be
-# forwarded, logged by a proxy, or pasted into a ticket.
-#
-# True: the view redirects to a short-lived signed URL instead. That is cheaper -
-# the bytes go straight from the bucket, with no worker held open for a 200 MB
-# download - but the trade-off is real: once issued, a signed URL is valid for its
-# whole lifetime to ANYONE holding it. It keeps working after the user logs out,
-# after the permission is revoked, and after the link is forwarded. Turn it on
-# only for large files, and set the expiry as low as the download will tolerate.
-PRIVATE_MEDIA_SIGNED_URLS = env.bool("PRIVATE_MEDIA_SIGNED_URLS", default=False)
-PRIVATE_MEDIA_URL_EXPIRE_SECONDS = env.int("PRIVATE_MEDIA_URL_EXPIRE_SECONDS", default=300)
 {%- if cookiecutter.media_storage == "s3" %}
 
 AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME", default="")
-# Personal data in a bucket of its own is the strongest form of the split: a
-# bucket policy, not a key prefix, is what stands between public and private.
-# Defaults to the same bucket, where the prefixes do the separating.
-AWS_PRIVATE_STORAGE_BUCKET_NAME = env(
-    "AWS_PRIVATE_STORAGE_BUCKET_NAME", default=AWS_STORAGE_BUCKET_NAME
-)
+# Personal data in a bucket of its own: public access blocked, ACLs disabled,
+# versioned, and no CloudFront in front. A bucket policy, not a key prefix, is what
+# stands between public and private, so this must differ from the media bucket.
+AWS_PRIVATE_BUCKET_NAME = env("AWS_PRIVATE_BUCKET_NAME", default="")
 AWS_S3_REGION_NAME = env("AWS_S3_REGION_NAME", default="")
-# Unset on a host with an instance role / IRSA, which is preferred: no long-lived
-# key to rotate, leak or commit.
+# Unset on AWS: the server's instance role (or IRSA) provides credentials, which
+# are temporary and never written down. Keys are for an S3-compatible store only.
 AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID", default="")
 AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY", default="")
 # Set only for an S3-compatible store (MinIO, DigitalOcean Spaces, Wasabi).
 AWS_S3_ENDPOINT_URL = env("AWS_S3_ENDPOINT_URL", default="") or None
+# Virtual-hosted URLs, as AWS requires. An S3-compatible store that only speaks
+# path-style (a default MinIO) sets this to "path".
+AWS_S3_ADDRESSING_STYLE = env("AWS_S3_ADDRESSING_STYLE", default="virtual")
 # A CDN in front of the PUBLIC prefix. Never used for private media.
 AWS_S3_CUSTOM_DOMAIN = env("AWS_S3_CUSTOM_DOMAIN", default="") or None
 AWS_QUERYSTRING_EXPIRE = env.int("AWS_QUERYSTRING_EXPIRE", default=3600)
@@ -484,8 +497,10 @@ _S3_COMMON = {
     "access_key": AWS_ACCESS_KEY_ID or None,
     "secret_key": AWS_SECRET_ACCESS_KEY or None,
     "endpoint_url": AWS_S3_ENDPOINT_URL,
-    # Required in every region opened since 2014, and harmless in the older ones.
+    # Explicit, so presigned links never fall back to SigV2: buckets created after
+    # June 2020 refuse those with SignatureDoesNotMatch.
     "signature_version": "s3v4",
+    "addressing_style": AWS_S3_ADDRESSING_STYLE,
     # None means "send no ACL header at all" - never "public-read". Buckets created
     # with object ownership set to "bucket owner enforced" reject any ACL, so a
     # value here is both a security hole and a runtime error waiting to happen.
@@ -509,16 +524,17 @@ STORAGES = {
             "custom_domain": AWS_S3_CUSTOM_DOMAIN,
         },
     },
-    "private_media": {
+    "private": {
         "BACKEND": "apps.core.storage.PrivateMediaStorage",
         "OPTIONS": {
             **_S3_COMMON,
-            "bucket_name": AWS_PRIVATE_STORAGE_BUCKET_NAME,
+            "bucket_name": AWS_PRIVATE_BUCKET_NAME,
             "location": PRIVATE_MEDIA_LOCATION,
+            # What makes .url a presigned link.
             "querystring_auth": True,
-            "querystring_expire": PRIVATE_MEDIA_URL_EXPIRE_SECONDS,
-            # Never a CDN for private media: an edge cache is a copy of the file
-            # sitting outside every permission check.
+            "querystring_expire": PRIVATE_URL_EXPIRY_SECONDS,
+            # Never a CDN for private media. django-storages would otherwise apply
+            # AWS_S3_CUSTOM_DOMAIN here too and hand out unsigned CloudFront URLs.
             "custom_domain": None,
         },
     },
@@ -549,10 +565,10 @@ STORAGES = {
 {%- elif cookiecutter.media_storage == "gcs" %}
 
 GS_BUCKET_NAME = env("GS_BUCKET_NAME", default="")
-# Personal data in a bucket of its own is the strongest form of the split: an IAM
-# policy, not a key prefix, is what stands between public and private. Defaults to
-# the same bucket, where the prefixes do the separating.
-GS_PRIVATE_BUCKET_NAME = env("GS_PRIVATE_BUCKET_NAME", default=GS_BUCKET_NAME)
+# Personal data in a bucket of its own, with no public grant and no CDN in front.
+# An IAM policy, not a key prefix, is what stands between public and private, so
+# this must differ from the media bucket.
+GS_PRIVATE_BUCKET_NAME = env("GS_PRIVATE_BUCKET_NAME", default="")
 GS_PROJECT_ID = env("GS_PROJECT_ID", default="")
 # Path to a service-account key file. Unset on a host using workload identity or
 # the metadata server, which is preferred: no key file to rotate, leak or commit.
@@ -595,14 +611,14 @@ STORAGES = {
             "expiration": timedelta(seconds=GS_EXPIRATION_SECONDS),
         },
     },
-    "private_media": {
+    "private": {
         "BACKEND": "apps.core.storage.PrivateMediaStorage",
         "OPTIONS": {
             **_GS_COMMON,
             "bucket_name": GS_PRIVATE_BUCKET_NAME,
             "location": PRIVATE_MEDIA_LOCATION,
             "querystring_auth": True,
-            "expiration": timedelta(seconds=PRIVATE_MEDIA_URL_EXPIRE_SECONDS),
+            "expiration": timedelta(seconds=PRIVATE_URL_EXPIRY_SECONDS),
         },
     },
 {%- if cookiecutter.static_storage == "cloud" %}
@@ -635,10 +651,10 @@ AZURE_ACCOUNT_NAME = env("AZURE_ACCOUNT_NAME", default="")
 AZURE_ACCOUNT_KEY = env("AZURE_ACCOUNT_KEY", default="")
 AZURE_CONNECTION_STRING = env("AZURE_CONNECTION_STRING", default="")
 AZURE_CONTAINER = env("AZURE_CONTAINER", default="")
-# Personal data in a container of its own is the strongest form of the split:
-# public access is a per-container setting in Azure, so a separate container is
-# what makes "private" structural rather than conventional.
-AZURE_PRIVATE_CONTAINER = env("AZURE_PRIVATE_CONTAINER", default=AZURE_CONTAINER)
+# Personal data in a container of its own: public access is a per-container
+# setting in Azure, so a separate container is what makes "private" structural
+# rather than conventional. It must differ from the media container.
+AZURE_PRIVATE_CONTAINER = env("AZURE_PRIVATE_CONTAINER", default="")
 AZURE_URL_EXPIRATION_SECS = env.int("AZURE_URL_EXPIRATION_SECS", default=3600)
 # A CDN in front of the PUBLIC container. Never used for private media.
 AZURE_CUSTOM_DOMAIN = env("AZURE_CUSTOM_DOMAIN", default="") or None
@@ -673,13 +689,13 @@ STORAGES = {
             "custom_domain": AZURE_CUSTOM_DOMAIN,
         },
     },
-    "private_media": {
+    "private": {
         "BACKEND": "apps.core.storage.PrivateMediaStorage",
         "OPTIONS": {
             **_AZURE_COMMON,
             "azure_container": AZURE_PRIVATE_CONTAINER,
             "location": PRIVATE_MEDIA_LOCATION,
-            "expiration_secs": PRIVATE_MEDIA_URL_EXPIRE_SECONDS,
+            "expiration_secs": PRIVATE_URL_EXPIRY_SECONDS,
             # Never a CDN for private media: an edge cache is a copy of the file
             # sitting outside every permission check.
             "custom_domain": None,

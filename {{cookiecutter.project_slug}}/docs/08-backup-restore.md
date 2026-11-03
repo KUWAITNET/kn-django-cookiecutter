@@ -406,7 +406,7 @@ Then, by hand:
 - [ ] Sign in to the administration interface{% if cookiecutter.use_2fa == "yes" %} and confirm the second factor is still enforced{% endif %}.
 - [ ] Open the most recently edited content and confirm it is there.
 - [ ] Open a media file — an image and a PDF — and confirm both load.
-- [ ] Open a private-media file through the application and confirm it still requires permission.
+- [ ] Open a private file through its `/files/` link and confirm it still requires permission.
 {%- if cookiecutter.media_storage != "filesystem" %}
 - [ ] Request a private object's URL directly, without a signature, and confirm it returns 403. On a
       recreated bucket this is the check that catches a policy that was never reapplied, and it is

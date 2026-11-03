@@ -197,5 +197,5 @@
     "*/templates_wagtail/*",
     "*/templates_django/*"
   ],
-  "__kuwaitnet_standards": "https://github.com/kuwaitnet/kuwaitnet-web-standards"
+  "__kuwaitnet_standards": "https://devdocs.mykuwaitnet.net/"
 }

@@ -1,9 +1,11 @@
-"""Operational endpoints, robots.txt and permission-checked private media."""
+"""Operational endpoints, robots.txt and the project 404.
+
+Private files have their own module: test_private_files.py.
+"""
 
 import json
 
 import pytest
-from django.contrib.auth.models import Permission
 from django.urls import reverse
 
 pytestmark = pytest.mark.django_db
@@ -42,73 +44,6 @@ def test_robots_advertises_the_sitemap_when_indexing_is_allowed(client, settings
     assert response.status_code == 200
     assert "sitemap.xml" in response.content.decode().lower()
 {%- endif %}
-
-
-# --- Private media -----------------------------------------------------------
-
-
-@pytest.fixture
-def private_file():
-    """A real file in the private store, plus the name the view is given.
-
-    Written through the configured private storage rather than straight to disk,
-    so the fixture stays correct whichever backend the project selected - the
-    view reads it back through the same storage.
-    """
-    from django.core.files.base import ContentFile
-
-    from apps.core.storage import private_media_storage
-
-    storage = private_media_storage()
-    name = storage.save("submissions/cv.pdf", ContentFile(b"%PDF-1.4 confidential"))
-    yield name
-    storage.delete(name)
-
-
-def _grant_private_media(user):
-    user.user_permissions.add(Permission.objects.get(codename="access_private_media"))
-    return user
-
-
-def test_anonymous_access_is_denied(client, private_file):
-    response = client.get(reverse("private_media", args=[private_file]))
-    assert response.status_code == 403
-
-
-def test_staff_without_the_permission_is_denied(client, staff_user, private_file):
-    client.force_login(staff_user)
-    # is_staff is not authorisation: the permission is what grants access.
-    response = client.get(reverse("private_media", args=[private_file]))
-    assert response.status_code == 403
-
-
-def test_permitted_user_gets_the_file_as_an_attachment(client, staff_user, private_file):
-    client.force_login(_grant_private_media(staff_user))
-    response = client.get(reverse("private_media", args=[private_file]))
-    assert response.status_code == 200
-    assert response["Content-Disposition"].startswith("attachment")
-    assert response["X-Content-Type-Options"] == "nosniff"
-    assert b"confidential" in b"".join(response.streaming_content)
-
-
-@pytest.mark.parametrize(
-    "traversal",
-    [
-        "../../../etc/passwd",
-        "submissions/../../../etc/passwd",
-        "/etc/passwd",
-    ],
-)
-def test_path_traversal_is_rejected(client, staff_user, private_file, traversal):
-    client.force_login(_grant_private_media(staff_user))
-    response = client.get(f"/private-media/{traversal}")
-    assert response.status_code in (404, 403)
-
-
-def test_missing_file_is_a_404_not_a_500(client, staff_user, private_file):
-    client.force_login(_grant_private_media(staff_user))
-    response = client.get(reverse("private_media", args=["submissions/nope.pdf"]))
-    assert response.status_code == 404
 
 
 def test_unknown_url_returns_the_project_404(client):

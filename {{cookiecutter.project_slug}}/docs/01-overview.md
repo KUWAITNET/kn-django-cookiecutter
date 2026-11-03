@@ -127,10 +127,13 @@ That boundary determines who can fix what.
 {%- endif %}
 | Secrets store | `SECRET_KEY`, database and mail credentials | — | [08](08-backup-restore.md) |
 
-Files containing personal data are never served from a public URL. They live {% if cookiecutter.media_storage == "filesystem" %}under
-`PRIVATE_MEDIA_ROOT`{% else %}in a separate
-private storage, in a store that is not public-read,{% endif %} and are served only through the permission-checked
-private-media view mounted at `/private-media/<path>`.
+Files containing personal data never have a permanent URL. They live {% if cookiecutter.media_storage == "filesystem" %}under
+`PRIVATE_MEDIA_ROOT`, outside `MEDIA_ROOT`,{% else %}in a private bucket of their
+own, with public access blocked and no CDN,{% endif %} and reach a user one of two ways: a link on a page
+goes through the permission gate at `/files/<app.model>/<pk>/<field>/`, which checks the model's entry
+in `PRIVATE_FILE_PERMISSIONS` on every click; an `<img src>` or an API response carries a signed URL
+that expires after `PRIVATE_URL_EXPIRY_SECONDS`. See the KUWAITNET
+[media storage standard](https://devdocs.mykuwaitnet.net/media-storage-standard/).
 
 ## Environments
 

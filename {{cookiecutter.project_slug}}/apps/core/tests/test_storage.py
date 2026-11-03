@@ -4,7 +4,7 @@ None of this needs cloud credentials or a network, and that is deliberate: a tes
 that reaches a real bucket is an integration test and belongs elsewhere. What is
 asserted here is the part that goes wrong silently - that the backend the project
 selected is the one actually wired into ``STORAGES``, that personal data has a
-storage of its own, and that nothing anywhere can hand out a link to it.
+storage of its own, and that every link to it is signed and expires.
 
 The configuration is read from ``settings.base`` rather than from the live
 ``settings`` object, because the test settings deliberately point the media
@@ -16,13 +16,11 @@ the project ships.
 import copy
 
 {% endif -%}
-import pytest
-from django.urls import reverse
+{% if cookiecutter.media_storage == "filesystem" -%}
+from pathlib import Path
 
-{% if cookiecutter.media_storage != "filesystem" -%}
-from apps.core import checks
 {% endif -%}
-from apps.core.storage import PrivateMediaStorage, private_media_storage
+from apps.core import checks
 from {{ cookiecutter.project_slug }}.settings import base
 
 {%- if cookiecutter.media_storage == "s3" %}
@@ -41,6 +39,13 @@ EXPECTED_MEDIA_BACKEND = "storages.backends.azure_storage.AzureStorage"
 
 #: What settings/base.py must have wired up for media_storage="filesystem".
 EXPECTED_MEDIA_BACKEND = "django.core.files.storage.FileSystemStorage"
+{%- endif %}
+{%- if cookiecutter.media_storage == "filesystem" %}
+
+EXPECTED_PRIVATE_BACKEND = "apps.core.storage.SignedFileSystemStorage"
+{%- else %}
+
+EXPECTED_PRIVATE_BACKEND = "apps.core.storage.PrivateMediaStorage"
 {%- endif %}
 {%- if cookiecutter.static_storage == "cloud" %}
 
@@ -65,37 +70,44 @@ def test_static_uses_the_selected_backend():
 def test_personal_data_has_a_storage_of_its_own():
     # One storage for both would mean a single misconfigured prefix publishes
     # every CV the site has ever received.
-    assert base.STORAGES["private_media"]["BACKEND"] == "apps.core.storage.PrivateMediaStorage"
-    assert base.STORAGES["private_media"] != base.STORAGES["default"]
+    assert base.STORAGES["private"]["BACKEND"] == EXPECTED_PRIVATE_BACKEND
+    assert base.STORAGES["private"] != base.STORAGES["default"]
 
 
-# --- The private storage has no public URL ------------------------------------
+# --- Signed links, and their defaults -----------------------------------------
 
 
-def test_private_storage_refuses_to_build_a_url():
-    # Instantiated directly rather than through the alias: this is the class the
-    # project ships, whatever the test settings point the alias at.
-    with pytest.raises(ValueError, match="no public URL"):
-        PrivateMediaStorage().url("submissions/cv.pdf")
+def test_signed_links_live_an_hour_by_default():
+    assert base.PRIVATE_URL_EXPIRY_SECONDS == 3600
 
 
-def test_the_configured_private_storage_refuses_too():
-    # The class above is what the project ships; this is what it actually resolves
-    # to at runtime. A template that renders the file's url attribute must fail
-    # loudly rather than emit a path that happens to resolve.
-    with pytest.raises(ValueError, match="no public URL"):
-        private_media_storage().url("submissions/cv.pdf")
+def test_page_links_go_through_the_gate_by_default():
+    assert base.PRIVATE_FILE_LINKS_ENABLED is True
 
 
-# --- The permission-checked view ---------------------------------------------
+def test_django_streams_private_files_until_nginx_is_configured():
+    # The X-Accel prefix only works once nginx has the matching internal
+    # location, so it is off until a server says otherwise.
+    assert base.PRIVATE_FILES_ACCEL_PREFIX == ""
 
 
-@pytest.mark.django_db
-def test_anonymous_access_to_private_media_is_denied(client):
-    # No file is created on purpose: the permission check must come first, so an
-    # anonymous caller cannot even learn whether a given key exists.
-    response = client.get(reverse("private_media", args=["submissions/cv.pdf"]))
-    assert response.status_code == 403
+def test_an_expiry_over_an_hour_is_reported(settings):
+    settings.PRIVATE_URL_EXPIRY_SECONDS = 86400
+    assert [w.id for w in checks.check_private_url_expiry(None)] == ["core.W011"]
+{%- if cookiecutter.media_storage == "filesystem" %}
+
+
+def test_private_media_root_is_outside_media_root():
+    # Under it, the public /media/ location would serve every private file.
+    private = Path(base.PRIVATE_MEDIA_ROOT).resolve()
+    assert not private.is_relative_to(Path(base.MEDIA_ROOT).resolve())
+
+
+def test_private_media_root_inside_media_root_is_an_error(settings):
+    settings.PRIVATE_MEDIA_ROOT = str(Path(settings.MEDIA_ROOT) / "private")
+    errors = checks.check_private_media_root_is_outside_media_root(None)
+    assert [error.id for error in errors] == ["core.E009"]
+{%- endif %}
 {%- if cookiecutter.media_storage != "filesystem" %}
 
 
@@ -103,35 +115,67 @@ def test_anonymous_access_to_private_media_is_denied(client):
 
 
 def test_no_media_storage_sends_a_public_acl():
-    for alias in ("default", "private_media"):
+    for alias in ("default", "private"):
         assert base.STORAGES[alias]["OPTIONS"].get("default_acl") is None
 
 
 def test_private_media_urls_are_signed_and_expire():
-    options = base.STORAGES["private_media"]["OPTIONS"]
+    options = base.STORAGES["private"]["OPTIONS"]
 {%- if cookiecutter.media_storage == "azure" %}
     # Azure has no per-object ACL: an unsigned blob URL only resolves when the
     # whole container is open to the world, so a SAS lifetime is what makes the
     # container's privacy usable.
-    assert options["expiration_secs"] == base.PRIVATE_MEDIA_URL_EXPIRE_SECONDS
+    assert options["expiration_secs"] == base.PRIVATE_URL_EXPIRY_SECONDS
 {%- elif cookiecutter.media_storage == "s3" %}
     assert options["querystring_auth"] is True
-    assert options["querystring_expire"] == base.PRIVATE_MEDIA_URL_EXPIRE_SECONDS
+    assert options["querystring_expire"] == base.PRIVATE_URL_EXPIRY_SECONDS
 {%- else %}
     assert options["querystring_auth"] is True
-    assert options["expiration"].total_seconds() == base.PRIVATE_MEDIA_URL_EXPIRE_SECONDS
+    assert options["expiration"].total_seconds() == base.PRIVATE_URL_EXPIRY_SECONDS
 {%- endif %}
 
 
 def test_private_media_never_sits_behind_a_cdn():
     # An edge cache is a copy of the file living outside every permission check.
-    assert base.STORAGES["private_media"]["OPTIONS"].get("custom_domain") is None
+    assert base.STORAGES["private"]["OPTIONS"].get("custom_domain") is None
+{%- if cookiecutter.media_storage == "s3" %}
 
 
-def test_streaming_is_the_default_not_signed_urls():
-    # A signed URL, once issued, is valid for its whole lifetime to anyone holding
-    # it - after logout, after the permission is revoked, after it is forwarded.
-    assert base.PRIVATE_MEDIA_SIGNED_URLS is False
+def test_presigned_links_are_sigv4_and_virtual_hosted():
+    # Left to botocore, older regions still sign SigV2, which buckets created
+    # after June 2020 refuse with SignatureDoesNotMatch.
+    options = base.STORAGES["private"]["OPTIONS"]
+    assert options["signature_version"] == "s3v4"
+    assert options["addressing_style"] == "virtual"
+
+
+def test_presigned_links_tell_the_browser_not_to_keep_a_copy():
+    from apps.core.storage import PrivateMediaStorage
+
+    storage = PrivateMediaStorage(
+        bucket_name="private-bucket",
+        region_name="me-south-1",
+        access_key="AKIAEXAMPLE",
+        secret_key="example-secret",  # noqa: S106
+        signature_version="s3v4",
+        querystring_auth=True,
+    )
+    url = storage.url("members/civil-id.jpg")
+    assert "X-Amz-Algorithm=AWS4-HMAC-SHA256" in url
+    assert "response-cache-control=private%2C%20no-store" in url
+{%- endif %}
+
+
+def test_private_media_must_not_share_the_public_bucket(settings):
+{%- if cookiecutter.media_storage == "s3" %}
+    settings.AWS_STORAGE_BUCKET_NAME = settings.AWS_PRIVATE_BUCKET_NAME = "one-bucket"
+{%- elif cookiecutter.media_storage == "gcs" %}
+    settings.GS_BUCKET_NAME = settings.GS_PRIVATE_BUCKET_NAME = "one-bucket"
+{%- else %}
+    settings.AZURE_CONTAINER = settings.AZURE_PRIVATE_CONTAINER = "one-container"
+{%- endif %}
+    errors = checks.check_private_media_has_its_own_bucket(None)
+    assert [error.id for error in errors] == ["core.E010"]
 
 
 # --- The deployment checks ----------------------------------------------------

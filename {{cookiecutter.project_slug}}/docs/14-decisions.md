@@ -184,8 +184,8 @@ applicants' documents were enumerable by anyone who guessed the pattern.
 denylist); content sniffing so the file's real type must match its extension; server-side
 re-encoding of images, bounded against decompression bombs, with SVG never accepted on a public
 field; a **generated** stored filename, with the original kept in a separate column for display
-only; and storage {% if cookiecutter.media_storage == "filesystem" %}under `PRIVATE_MEDIA_ROOT`{% else %}in the separate private storage{% endif %} for anything containing personal data, served
-only through a permission-checked view.
+only; and storage {% if cookiecutter.media_storage == "filesystem" %}under `PRIVATE_MEDIA_ROOT`{% else %}in the separate private storage{% endif %} for anything containing personal data, which
+never has a permanent URL: a link goes through a permission gate, and every signed URL expires.
 **Alternatives considered.** Trusting the browser-supplied content type and filename. Both are
 attacker-controlled.
 **Consequences.** Adding an upload field is more work than `FileField()`, deliberately. A field that
@@ -576,7 +576,9 @@ credentials end up in a layer.{% endif %}
 **Context.** Uploaded files have to live somewhere with a backup story, and personal data must never
 be reachable from a public URL.
 **Decision.** `MEDIA_ROOT` on local disk for editorial media, and a separate `PRIVATE_MEDIA_ROOT`
-that the web server never maps to a URL, served only through a permission-checked view.
+outside it that the web server never maps to a public URL. A link to a private file goes through the
+permission gate at `/files/`; an `<img src>` or an API response gets a signed link that expires, which
+nginx can serve from an `internal` location once `PRIVATE_FILES_ACCEL_PREFIX` is set.
 **Alternatives considered.** An object store (S3, GCS, Azure Blob), which the template also
 supports: it removes the media disk from the sizing conversation, survives losing the server, and
 scales without thought. It was not chosen here because it adds a cloud SDK, a set of credentials, a
@@ -592,25 +594,27 @@ be reachable from a public URL. A media disk on the application server is one mo
 monitor and lose with the server.
 **Decision.** Media goes to {% if cookiecutter.media_storage == "s3" %}Amazon S3{% elif cookiecutter.media_storage == "gcs" %}Google Cloud Storage{% else %}Azure Blob Storage{% endif %} through `django-storages`, as **two storages,
 not one**: a public storage for editorial media, and a private storage for anything a visitor
-uploads about themselves. The bucket is not public-read; no public ACL is ever sent, and every URL
-the application builds is signed and expires. Private files are streamed through the
-permission-checked view by default, never redirected to.
+uploads about themselves, each in a bucket of its own. Neither bucket is public-read and no public
+ACL is ever sent. A page link to a private file goes through the permission gate, which checks on the
+click and redirects to a freshly presigned URL; an `<img src>` or an API response carries the
+presigned URL directly. Every one expires after `PRIVATE_URL_EXPIRY_SECONDS`, an hour by default.
+This is the KUWAITNET [media storage standard](https://devdocs.mykuwaitnet.net/media-storage-standard/).
 **Alternatives considered.**
 *One bucket, world-readable, "the URLs are unguessable".* This is the reference project's failure
 verbatim: applicant CVs sat under a public media root with the filenames their owners gave them.
 Unguessable is not a permission.
-*Signed URLs for private media by default.* Cheaper — the bytes never touch a worker — but a signed
-URL, once issued, is valid for its whole lifetime to anyone holding it: after logout, after the
-permission is revoked, after it is forwarded or logged by a proxy. It is available behind
-`PRIVATE_MEDIA_SIGNED_URLS` for projects serving large private files, as a per-project decision with
-the expiry set as low as the download tolerates.
+*Streaming every private file through the application.* The permission is re-checked on every byte
+and no URL exists to forward - but every download holds a worker and is billed twice, and an
+`<img src>` or a mobile client cannot use a session-checked stream at all. The standard chose signed
+links with a short lifetime, signed at click time for page links, and never handed to anonymous
+callers or put in e-mails.
 *Local disk.* Simpler, and the right answer for a small site; see the alternative branch of this
 decision in the template.
 **Consequences.** The server needs no media disk, and losing the server loses no files. In exchange:
 a cloud SDK and a credential to rotate; a bucket policy that is now the thing standing between
 private uploads and the internet, verified by hand and recorded in
-[03-infrastructure.md](03-infrastructure.md); and egress billed twice on every private download,
-because the permission check runs on every byte. **"Backup" also changes meaning** — from a nightly
+[03-infrastructure.md](03-infrastructure.md); and a signed link that works for anyone holding it until
+it expires, which is why the lifetime is kept short. **"Backup" also changes meaning** — from a nightly
 `rsync` to bucket versioning plus lifecycle rules, which live in the same account as the data and
 therefore protect against a mistake but not against losing the account. Read
 [08-backup-restore.md](08-backup-restore.md) before agreeing an RPO.
@@ -705,10 +709,9 @@ surprised.
   country calling code.
 {%- endif %}
 {%- if cookiecutter.media_storage != "filesystem" %}
-- **Private downloads are proxied, so their bandwidth is billed twice** — bucket to application, then
-  application to visitor — and a large download holds a gunicorn worker for its duration. That is the
-  price of checking the permission on every byte. `PRIVATE_MEDIA_SIGNED_URLS` trades it away; read
-  the decision above before doing so.
+- **A signed link to a private file is a bearer token until it expires.** Whoever holds it can open
+  the file for up to `PRIVATE_URL_EXPIRY_SECONDS`, even after logging out. Keep the lifetime short,
+  never return signed links to anonymous callers, and never put them in e-mails or notifications.
 - **Media backup lives in the same cloud account as the media.** Bucket versioning protects against
   a deletion or an overwrite, not against losing the account. See
   [08-backup-restore.md](08-backup-restore.md).

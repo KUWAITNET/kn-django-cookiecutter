@@ -252,10 +252,12 @@ request with a reason, not a quiet edit.
 
 - **Six controls on every upload field**: size limit, extension allowlist (never a denylist),
   content sniffing so the real type must match the extension, server-side image re-encoding bounded
-  against decompression bombs with SVG never accepted, a generated stored filename, and
-  `PRIVATE_MEDIA_ROOT` for anything containing personal data.
-- **Private media is served only through a permission-checked view**, never from `MEDIA_URL`. A
-  file's URL is not a credential.
+  against decompression bombs with SVG never accepted, a generated stored filename, and the private
+  storage for anything containing personal data.
+- **A private file never has a permanent URL.** Links go through the permission gate at `/files/`
+  (`|file_link` in templates), and every signed URL expires. Older uploads move across with
+  `manage.py migrate_private_files`. See the
+  [media storage standard](https://devdocs.mykuwaitnet.net/media-storage-standard/).
 {%- if cookiecutter.spam_protection != "none" %}
 - **Spam protection on every public form**{% if cookiecutter.spam_protection == "turnstile_honeypot" %} — Turnstile plus a honeypot, degrading to honeypot-only
   when no key is configured so development, CI and UAT never break. Production without a key is a

@@ -1,4 +1,4 @@
-"""Core models: shared abstract bases{% if cookiecutter.stack == "wagtail" %}, the project image model{% endif %}, the private-media permission and the site-wide configuration singleton."""
+"""Core models: shared abstract bases{% if cookiecutter.stack == "wagtail" %}, the project image model{% endif %} and the site-wide configuration singleton."""
 
 {% if cookiecutter.stack == "wagtail" -%}
 from django.conf import settings
@@ -36,26 +36,6 @@ class TimeStampedModel(models.Model):
 
     class Meta:
         abstract = True
-
-
-class PrivateMediaAccess(models.Model):
-    """Owns the permission that guards downloads from ``PRIVATE_MEDIA_ROOT``.
-
-    It has no rows and is never instantiated: Django needs a model to hang a
-    custom permission off, and the permission is what
-    ``apps.core.views.serve_private_file`` checks. Grant
-    ``core.access_private_media`` to the group that legitimately reads
-    submissions - not to everyone with ``is_staff``.
-    """
-
-    class Meta:
-        default_permissions = ()
-        permissions = [("access_private_media", _("Can download private media"))]
-        verbose_name = _("private media access")
-        verbose_name_plural = _("private media access")
-
-    def __str__(self):
-        return str(self._meta.verbose_name)
 {%- if cookiecutter.stack == "wagtail" %}
 
 

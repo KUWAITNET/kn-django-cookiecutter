@@ -335,8 +335,8 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://{{ cookiecutter.domain_name }}
 {%- if cookiecutter.media_storage != "filesystem" %}
 - [ ] An image uploaded through the admin renders on the site, so writes to the bucket work under
       the deployed credentials — not only under the ones on a laptop.
-- [ ] A private file still downloads through `/private-media/<path>` for a permitted account, and
-      403s for everyone else.
+- [ ] A private file still opens through its `/files/` link for a permitted account, and 403s for
+      everyone else.
 {%- endif %}
 - [ ] Error rate and response time are back at pre-deploy levels after 30 minutes.
 - [ ] `CHANGELOG.md` matches what was actually deployed.

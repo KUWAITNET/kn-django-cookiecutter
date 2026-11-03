@@ -1,22 +1,27 @@
-"""Storage for uploads that must never be reachable from a public URL.
+"""Two storages, never one: public media, and private files that never have a permanent URL.
 
-Files holding personal data - CVs, ID copies, vendor certificates, anything a
-visitor attached to a form - go here. Public media is served with no access
-control, so a predictable name there is a public document; in our reference
-project that is exactly how applicant CVs became enumerable. Files stored here
-are reachable only through ``apps.core.views.serve_private_file``, which checks a
-permission first.
+Files holding personal data - CVs, ID copies, contracts, anything a visitor
+attached to a form, photos of customers or members - go to the ``private``
+storage alias. Public media has permanent, cacheable URLs; a predictable name
+there is a public document, which in our reference project is exactly how
+applicant CVs became enumerable.
 
-The split is the same whichever backend the project selected: a public storage
-for editorial media, and this one for personal data. Only what sits underneath
-changes.
+A private file reaches a user one of two ways (the media storage standard,
+section 5): a link on a page points at the permission gate
+(``apps.core.views.private_file``, through the ``file_link`` filter), and an
+``<img src>`` or an API response carries ``.url``, which is signed and expires.
+{%- if cookiecutter.media_storage == "filesystem" %} On disk that signature is
+built here, by ``SignedFileSystemStorage``.{% else %} In the bucket that is a
+presigned URL from the object store itself.{% endif %}
 """
 
 from django.conf import settings
 {%- if cookiecutter.static_storage == "cloud" %}
 from django.contrib.staticfiles.storage import ManifestFilesMixin
 {%- endif %}
+from django.core import signing
 from django.core.files.storage import FileSystemStorage, storages
+from django.urls import reverse
 from django.utils.deconstruct import deconstructible
 from django.utils.functional import cached_property
 {%- if cookiecutter.media_storage == "s3" %}
@@ -27,86 +32,86 @@ from storages.backends.gcloud import GoogleCloudStorage
 from storages.backends.azure_storage import AzureStorage
 {%- endif %}
 
-NO_PUBLIC_URL = (
-    "Private media has no public URL. Link to it with "
-    "reverse('private_media', args=[name]) so the permission check runs."
-)
-{%- if cookiecutter.media_storage == "filesystem" %}
+#: Namespaces the signed-file token, so it is worthless to any other
+#: ``signing.loads()`` in the project and theirs are worthless here.
+SIGNED_FILE_SALT = "apps.core.storage.private-file"
+
+
+def sign_file_name(name):
+    """A token carrying the stored name and the time it was signed."""
+    return signing.dumps(name, salt=SIGNED_FILE_SALT)
+
+
+def unsign_file_name(token):
+    """The stored name a token carries, or ``None`` for a forged or expired one."""
+    try:
+        return signing.loads(
+            token, salt=SIGNED_FILE_SALT, max_age=settings.PRIVATE_URL_EXPIRY_SECONDS
+        )
+    except signing.BadSignature:
+        # SignatureExpired is a subclass: an old token and a forged one look the
+        # same to the caller, which is the point.
+        return None
 
 
 @deconstructible
-class PrivateMediaStorage(FileSystemStorage):
-    """Filesystem storage rooted at ``PRIVATE_MEDIA_ROOT``, with no public URL.
+class SignedFileSystemStorage(FileSystemStorage):
+    """Private files on disk, under ``PRIVATE_MEDIA_ROOT``, with expiring URLs.
 
-    ``base_location``/``base_url`` are resolved lazily from settings rather than
-    passed to ``__init__`` so that no absolute deployment path is ever baked into
-    a migration.
+    A filesystem has no presigning, so ``url()`` builds the same thing with
+    Django's ``signing``: ``/files/signed/<token>/``, where the token carries the
+    file name and a timestamp and cannot be forged without ``SECRET_KEY``. The
+    view behind it needs no login, exactly like a presigned S3 URL, and refuses
+    the token after ``PRIVATE_URL_EXPIRY_SECONDS``.
+
+    The location is resolved lazily from settings rather than passed to
+    ``__init__``, so no absolute deployment path is ever baked into a migration.
     """
 
     @cached_property
     def base_location(self):
         return self._value_or_setting(self._location, settings.PRIVATE_MEDIA_ROOT)
 
-    @cached_property
-    def base_url(self):
-        # No public URL by construction: url() below is the only accessor and it
-        # refuses, so a template that renders the file's url attribute fails
-        # loudly in development instead of leaking the path in production.
-        return None
-
     def url(self, name):
-        raise ValueError(NO_PUBLIC_URL)
-{%- else %}
-
-
-@deconstructible
-class PrivateFileSystemStorage(FileSystemStorage):
-    """The private store on local disk, refusing to build a URL just the same.
-
-    Used by the test settings. The suite runs with no cloud credentials and no
-    network - a test that needs a real bucket is an integration test - but it
-    still has to exercise the behaviour that matters, which is that nothing in
-    the project can hand out a link to a private file.
-    """
-
-    @cached_property
-    def base_url(self):
-        return None
-
-    def url(self, name):
-        raise ValueError(NO_PUBLIC_URL)
-
-
-@deconstructible
-class PrivateMediaStorage(
+        return reverse("private_file_signed", args=[sign_file_name(name)])
 {%- if cookiecutter.media_storage == "s3" %}
-    S3Storage,
-{%- elif cookiecutter.media_storage == "gcs" %}
-    GoogleCloudStorage,
-{%- else %}
-    AzureStorage,
-{%- endif %}
-):
-    """Object storage for personal data: private prefix, signed URLs, no ACL.
 
-    Everything bucket-side comes from ``STORAGES['private_media']['OPTIONS']`` in
-    ``settings/base.py``: no public ACL, its own prefix (or its own bucket), and
-    no CDN in front, because an edge cache is a copy of the file sitting outside
-    every permission check. What this class adds is the refusal to hand out a URL
-    at all.
 
-    ``PRIVATE_MEDIA_SIGNED_URLS`` is the documented opt-in. Left off, every
-    download is streamed through the permission-checked view, so the check runs
-    on every byte and no shareable URL exists anywhere. Turned on, the view
-    redirects to a short-lived signed URL instead: cheaper for large files, but
-    that URL stays valid for its whole lifetime to anyone holding it - including
-    after the user logs out, loses the permission, or forwards the link.
+@deconstructible
+class PrivateMediaStorage(S3Storage):
+    """The private bucket: public access blocked, no CDN, SigV4 presigned URLs.
+
+    Everything bucket-side comes from ``STORAGES['private']['OPTIONS']`` in
+    ``settings/base.py``. What this class adds is ``Cache-Control: private,
+    no-store`` on every presigned download, so the browser does not keep a copy
+    of somebody's ID scan after the link has expired.
     """
 
-    def url(self, name, *args, **kwargs):
-        if not settings.PRIVATE_MEDIA_SIGNED_URLS:
-            raise ValueError(NO_PUBLIC_URL)
-        return super().url(name, *args, **kwargs)
+    def url(self, name, parameters=None, expire=None, http_method=None):
+        parameters = {"ResponseCacheControl": "private, no-store", **(parameters or {})}
+        return super().url(name, parameters=parameters, expire=expire, http_method=http_method)
+{%- elif cookiecutter.media_storage == "gcs" %}
+
+
+@deconstructible
+class PrivateMediaStorage(GoogleCloudStorage):
+    """The private bucket: no public IAM grant, no CDN, signed URLs that expire.
+
+    Everything bucket-side comes from ``STORAGES['private']['OPTIONS']`` in
+    ``settings/base.py``. A class of its own so the private storage is named
+    the same way on every backend, and has one place to grow behaviour.
+    """
+{%- elif cookiecutter.media_storage == "azure" %}
+
+
+@deconstructible
+class PrivateMediaStorage(AzureStorage):
+    """The private container: no anonymous access, no CDN, SAS URLs that expire.
+
+    Everything container-side comes from ``STORAGES['private']['OPTIONS']`` in
+    ``settings/base.py``. A class of its own so the private storage is named
+    the same way on every backend, and has one place to grow behaviour.
+    """
 {%- endif %}
 {%- if cookiecutter.static_storage == "cloud" %}
 
@@ -164,10 +169,10 @@ class StaticCloudStorage(
 def private_media_storage():
     """The configured private storage.
 
-    A callable rather than a module-level instance: ``FileField`` resolves it
-    once at model-import time, after settings are loaded, so the storage follows
-    ``STORAGES['private_media']`` and the test settings can repoint it without a
-    single model changing. Django records the reference to this function in the
-    migration, so no bucket name and no deployment path is baked in either.
+    Fields opt in with ``storage=private_media_storage`` - this callable, never a
+    storage instance. Django records the function path in the migration, not a
+    bucket name or a deployment path, so the migration is the same on every
+    environment and changing the bucket never needs a new one. It is also how
+    ``apps.core.private_files`` finds every private field by introspection.
     """
-    return storages["private_media"]
+    return storages["private"]

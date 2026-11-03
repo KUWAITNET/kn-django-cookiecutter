@@ -72,11 +72,18 @@ urlpatterns = [
     # Health endpoint for uptime monitoring: it touches the database, so it fails
     # when the site is up but the database is not.
     path("healthz", core_views.healthz, name="healthz"),
-    # Uploads containing personal data are never served from MEDIA_URL.
+    # Private files are never served from MEDIA_URL. A link on a page points at
+    # the permission gate; an <img src> or an API client gets a signed URL that
+    # expires. See apps.core.views and the media storage standard, section 5.
     path(
-        "private-media/<path:relative_path>",
-        core_views.serve_private_file,
-        name="private_media",
+        "files/signed/<str:token>/",
+        core_views.private_file_signed,
+        name="private_file_signed",
+    ),
+    path(
+        "files/<str:model_label>/<str:pk>/<str:field_name>/",
+        core_views.private_file,
+        name="private_file",
     ),
 {%- if cookiecutter.api != "none" %}
     path("api/", include("apps.api.urls")),

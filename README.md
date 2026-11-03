@@ -1,7 +1,7 @@
 # cookiecutter-kuwaitnet-web
 
 The KUWAITNET project template. A new Django or Wagtail project starts here, with the
-[KUWAITNET web standards](../kuwaitnet-web-standards) already implemented rather than waiting to be
+[KUWAITNET web standards](https://devdocs.mykuwaitnet.net/) already implemented rather than waiting to be
 remembered.
 
 That is the point of it. A standard that has to be re-implemented by hand on every project is a
@@ -18,7 +18,10 @@ made — containing:
   fails at boot instead of running with a development key.
 - **The security pack.** Six controls on every upload field (size cap, extension allowlist, content
   sniffing with `python-magic`, server-side image re-encoding with SVG excluded, generated stored
-  filenames, private storage for personal data); a private-media view that checks permission;
+  filenames, private storage for personal data); private files that never have a permanent URL -
+  a `/files/` permission gate, signed expiring links, nginx `X-Accel-Redirect` and a
+  `migrate_private_files` command, per the
+  [media storage standard](https://devdocs.mykuwaitnet.net/media-storage-standard/);
   Content-Security-Policy with a per-request nonce and no `unsafe-inline` or `unsafe-eval` in
   `script-src`; Permissions-Policy; Argon2 hashing; an administration interface that is not at
   `/admin/`.
@@ -36,7 +39,7 @@ made — containing:
 - **The documentation set** — `docs/README.md` plus `01-overview.md` … `15-developer-handover.md`
   and `security-pass.md` — pre-filled with everything the template knows, and marked `TODO:`
   everywhere only the project team can supply an answer. It is the
-  [technical documentation skeleton](../kuwaitnet-web-standards/client-templates/technical-documentation-skeleton.md)
+  [technical documentation skeleton](https://devdocs.mykuwaitnet.net/client-templates/technical-documentation-skeleton/)
   as a real directory, written while the site is built rather than assembled from memory at the end.
 - A project `README.md` and a `CLAUDE.md` for AI coding assistants.
 
@@ -72,7 +75,7 @@ grep -ri wagtail path/to/generated/project    # must return nothing
 ## Running it
 
 ```bash
-uvx --from cookiecutter cookiecutter gh:kuwaitnet/cookiecutter-kuwaitnet-web
+uvx --from cookiecutter cookiecutter gh:KUWAITNET/kn-django-cookiecutter
 ```
 
 From a local checkout:
@@ -232,7 +235,7 @@ Combinations worth running before any change is merged, because they exercise di
 
 ## Contributing a change
 
-1. Read [the standards](../kuwaitnet-web-standards) first. Most template changes are a standard
+1. Read [the standards](https://devdocs.mykuwaitnet.net/) first. Most template changes are a standard
    change wearing a disguise; if the rule is wrong, change the standard in the same pull request
    rather than quietly diverging here.
 2. Branch, change the template, and **generate at least the affected combinations** from the
@@ -246,7 +249,7 @@ Combinations worth running before any change is merged, because they exercise di
      error.
    - Use whitespace-control markers so generated Python has no stray blank lines.
 4. Keep the two documentation sets in step. The generated `docs/` tree and
-   [the technical documentation skeleton](../kuwaitnet-web-standards/client-templates/technical-documentation-skeleton.md)
+   [the technical documentation skeleton](https://devdocs.mykuwaitnet.net/client-templates/technical-documentation-skeleton/)
    are the same artefact. When one changes, change the other in the same pull request — otherwise
    the generated projects and the client deliverable drift, which is exactly how our reference
    project ended up with its only runbook untracked and documenting the wrong admin path.
@@ -255,11 +258,14 @@ Combinations worth running before any change is merged, because they exercise di
 
 ## Related
 
-- [KUWAITNET web standards](../kuwaitnet-web-standards) — the rules this template implements, and
-  the client-facing documents that go with them.
-- [Security baseline](../kuwaitnet-web-standards/security-baseline.md) — the controls, and the
+- [KUWAITNET web standards](https://devdocs.mykuwaitnet.net/) — the rules this template implements, and the client-facing
+  documents that go with them. The site is behind the team's basic-auth login; its source is
+  [KuwaitNET/kn-docs on Bitbucket](https://bitbucket.org/KuwaitNET/kn-docs).
+- [Security baseline](https://devdocs.mykuwaitnet.net/security-baseline/) — the controls, and the
   pre-go-live security pass the generated `docs/security-pass.md` records.
-- [Project structure](../kuwaitnet-web-standards/project-structure.md) — the layout, settings split,
+- [Project structure](https://devdocs.mykuwaitnet.net/project-structure/) — the layout, settings split,
   naming and migration rules the generated project follows.
-- [Technical documentation skeleton](../kuwaitnet-web-standards/client-templates/technical-documentation-skeleton.md)
+- [Media storage standard](https://devdocs.mykuwaitnet.net/media-storage-standard/) — private files, signed links and the
+  `/files/` gate the template ships.
+- [Technical documentation skeleton](https://devdocs.mykuwaitnet.net/client-templates/technical-documentation-skeleton/)
   — the `docs/` tree this template creates.

@@ -144,10 +144,11 @@ Rules that are not negotiable:
 - `.env` is mode `0600`, owned by the application account. It contains the database password, the
   mail password{% if cookiecutter.media_storage != "filesystem" %}, the object-store credentials{% endif %} and `SECRET_KEY`. A world-readable `.env` is a credential disclosure.
 {%- if cookiecutter.media_storage == "filesystem" %}
-- `private-media/` is **never** mapped to a URL by the reverse proxy. It is served only through the
-  application's permission-checked private-media view at `/private-media/<path>`. TODO: after the
-  first deploy, confirm by requesting a known private file's on-disk path directly through the web
-  server and getting a 404.
+- `private-media/` is **never** mapped to a public URL by the reverse proxy. A private file reaches a
+  browser only through the application - the permission gate at `/files/<app.model>/<pk>/<field>/`
+  or a signed `/files/signed/<token>/` link - and, once `PRIVATE_FILES_ACCEL_PREFIX` is set, from
+  the `internal` nginx location below, which a browser cannot request directly. TODO: after the
+  first deploy, run the checks under "Private files on disk" and record the results.
 - `media/` is served by the reverse proxy but must not execute anything. Deny script handlers for
   that location.
 {%- else %}
@@ -157,7 +158,50 @@ Rules that are not negotiable:
   be right.
 {%- endif %}
 - `staticfiles/` is generated, never edited on the server, and never committed.
-{%- if cookiecutter.media_storage != "filesystem" %}
+{%- if cookiecutter.media_storage == "filesystem" %}
+
+## Private files on disk
+
+Django can stream a private file itself, and does until `PRIVATE_FILES_ACCEL_PREFIX` is set. On a
+real server, let nginx send the bytes instead: Django checks the signature or the permission, then
+answers with an empty response and an `X-Accel-Redirect` header, so no gunicorn worker is held for
+the length of a download.
+
+```nginx
+# Reachable only through X-Accel-Redirect from Django, never from a browser.
+location /protected-private/ {
+    internal;
+    alias /var/www/{{ cookiecutter.project_slug }}/private-media/;
+    add_header Cache-Control "private, no-store" always;
+    add_header X-Content-Type-Options "nosniff" always;
+}
+```
+
+and in `.env`:
+
+```bash
+PRIVATE_MEDIA_ROOT=/var/www/{{ cookiecutter.project_slug }}/private-media
+PRIVATE_FILES_ACCEL_PREFIX=/protected-private/
+```
+
+- `internal` is what makes this safe: a browser asking for `/protected-private/...` gets a 404.
+- Django sets `Content-Type` and `Content-Disposition` (attachment for anything that is not an
+  image, SVG included) and nginx keeps them, so an uploaded HTML file never renders on this origin.
+- **The nginx user must be able to read the folder**: execute on every parent directory, read on
+  the files. A folder at `750` owned by the application user gives a 403 that looks like a Django
+  bug and is not. Use `755`/`644`, or add the nginx user to the application's group.
+
+Checking it works:
+
+```bash
+# 1. the internal location is not reachable from outside -> 404
+curl -sI https://{{ cookiecutter.domain_name }}/protected-private/anything | head -1
+# 2. a private file is not under /media/ -> 404
+curl -sI https://{{ cookiecutter.domain_name }}/media/<a private file's name> | head -1
+# 3. a signed link (copy one from a page or the API) -> 200, served by nginx
+# 4. the same link after PRIVATE_URL_EXPIRY_SECONDS -> 404
+```
+{%- else %}
 
 ## Object storage
 
@@ -170,17 +214,19 @@ spelled out here.
 | Prefix | Holds | Reachable how |
 |---|---|---|
 | `media/` (`MEDIA_LOCATION`) | Editorial media: page images, brochures, logos | Signed URLs built by the application, expiring after `{% if cookiecutter.media_storage == "s3" %}AWS_QUERYSTRING_EXPIRE{% elif cookiecutter.media_storage == "gcs" %}GS_EXPIRATION_SECONDS{% else %}AZURE_URL_EXPIRATION_SECS{% endif %}` seconds |
-| `private/` (`PRIVATE_MEDIA_LOCATION`) | Personal data: CVs, ID copies, form attachments | Only through `/private-media/<path>`, which checks `core.access_private_media` first and streams the object |
+| `private/` (`PRIVATE_MEDIA_LOCATION`), in the private {% if cookiecutter.media_storage == "azure" %}container{% else %}bucket{% endif %} | Personal data: CVs, ID copies, form attachments | A page link goes through the permission gate at `/files/<app.model>/<pk>/<field>/`, which redirects to a fresh signed URL; `<img src>` and API responses carry a signed URL directly. Every one expires after `PRIVATE_URL_EXPIRY_SECONDS` |
 {%- if cookiecutter.static_storage == "cloud" %}
 | `static/` (`STATIC_LOCATION`) | Collected CSS, JS, fonts, icons | Public read — the **only** prefix that is allowed to be. Names are content-hashed, so the URLs never expire |
 {%- endif %}
 
-The private prefix can be moved to a
-{%- if cookiecutter.media_storage == "s3" %} bucket of its own with `AWS_PRIVATE_STORAGE_BUCKET_NAME`
-{%- elif cookiecutter.media_storage == "gcs" %} bucket of its own with `GS_PRIVATE_BUCKET_NAME`
-{%- else %} container of its own with `AZURE_PRIVATE_CONTAINER`
-{%- endif %}. Do it: a policy boundary is harder to get wrong than a prefix in a policy, and it means a
-mistake in the public policy cannot reach personal data at all.
+Private files live in a
+{%- if cookiecutter.media_storage == "s3" %} bucket of their own, `AWS_PRIVATE_BUCKET_NAME`
+{%- elif cookiecutter.media_storage == "gcs" %} bucket of their own, `GS_PRIVATE_BUCKET_NAME`
+{%- else %} container of their own, `AZURE_PRIVATE_CONTAINER`
+{%- endif %}, never beside public media: a policy boundary is harder to get wrong than a prefix in a
+policy, and a mistake in the public policy then cannot reach personal data at all. `manage.py check`
+fails with `core.E010` if it is the same as the media one. **No CDN in front of it, ever**: a plain
+CDN serves whatever it has cached to anyone until it expires.
 
 ### What the {% if cookiecutter.media_storage == "azure" %}container{% else %}bucket{% endif %} must and must not allow
 
@@ -197,8 +243,12 @@ mistake in the public policy cannot reach personal data at all.
   this bucket and nothing else. It must **not** hold `PutBucketPolicy`, `PutBucketAcl` or
   `DeleteBucket`: a compromised application must not be able to make the bucket public or destroy
   the versions that are the backup.
-- Prefer an **instance role / IRSA** over a long-lived access key. If a key is unavoidable, TODO:
-  record the rotation schedule and who owns it.
+- **Use the server's role, never keys.** On EC2 attach an instance role (IRSA on EKS) and leave
+  `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` unset: role credentials are temporary and never written
+  down. Check with `aws sts get-caller-identity`, which must show `assumed-role/<role>/...`. Keys are
+  for an S3-compatible store only. TODO: record the role name and its policy, covering both buckets.
+- The private bucket additionally: no CloudFront distribution, no bucket policy granting
+  `s3:GetObject` to `*`, versioned, encrypted, and a `aws:SecureTransport` deny for plain HTTP.
 {%- elif cookiecutter.media_storage == "gcs" -%}
 - **Uniform bucket-level access on** (object ACLs disabled). The application sends no ACL, which is
   why this works; a bucket that still honours object ACLs is one `GS_DEFAULT_ACL` away from
@@ -235,17 +285,44 @@ credentials are missing. Those checks read the application's configuration, not 
 cannot see a policy applied in the console, so the list above still has to be verified by hand once,
 and recorded here.
 
-### Egress and latency
+### Signed links and their lifetime
 
-Every byte a visitor downloads from the private prefix is paid for twice: bucket to application, then
-application to visitor. That is the price of the permission check running on every request, and it is
-the right default. For a project that serves large private files, `PRIVATE_MEDIA_SIGNED_URLS=True`
-switches the view to a redirect so the bytes go straight from the bucket — read the trade-off in
-[04-environment-variables.md](04-environment-variables.md) before turning it on.
+The permission gate checks on the click and then redirects to a freshly signed URL, so the bytes go
+straight from the bucket and never hold a worker. A signed URL is a bearer token until it expires,
+which is why the lifetime is short (`PRIVATE_URL_EXPIRY_SECONDS`, an hour at most without a written
+reason), why signed links are never handed to anonymous callers, and why e-mails, SMS and push
+notifications link to the page or the gate - never to a signed URL.
+{%- if cookiecutter.media_storage == "s3" %}
+
+A presigned URL also dies with the credentials that signed it. Role credentials last about six hours
+and are refreshed shortly before they run out, so a link signed just before a refresh can stop working
+early. Clients handle a 403 by refetching the resource for a new link.
+{%- endif %}
 
 Public editorial media is served by a signed URL that the application generates but does not proxy,
 so it costs one bucket egress and no application time.
 {%- endif %}
+
+## Moving existing files to private
+
+Changing a field to `storage=private_media_storage` moves nothing: files uploaded before the change
+stay in public storage, on a public URL, until they are copied. `manage.py migrate_private_files`
+copies every private field's files from `default` to `private` under the same name, so no database
+row changes. It is safe to re-run, reports missing files and exits non-zero on any failure, and
+refuses to run when both storages point at the same place.
+
+1. Create the private {% if cookiecutter.media_storage == "filesystem" %}folder, outside `MEDIA_ROOT`, readable by the nginx user{% elif cookiecutter.media_storage == "azure" %}container and grant the application's identity access{% else %}bucket and grant the application's role access{% endif %}.
+2. Set the environment ({% if cookiecutter.media_storage == "filesystem" %}`PRIVATE_MEDIA_ROOT`{% elif cookiecutter.media_storage == "s3" %}`AWS_PRIVATE_BUCKET_NAME`{% elif cookiecutter.media_storage == "gcs" %}`GS_PRIVATE_BUCKET_NAME`{% else %}`AZURE_PRIVATE_CONTAINER`{% endif %}), deploy, restart, and run `migrate` (an `AlterField`, no SQL).
+3. `manage.py migrate_private_files --dry-run`; fix any failure (usually access) and repeat.
+4. `manage.py migrate_private_files`.
+5. Open private files in the browser and confirm they load through the gate.
+6. `manage.py migrate_private_files --delete-source`: copies anything uploaded since step 4, then
+   deletes each public copy once it exists in private storage.
+7. On any project with a CDN, invalidate the old paths: it keeps serving a cached copy of a deleted
+   object until the cache expires.
+
+History tables (django-simple-history and the like) store file names as text: their rows keep the
+old names and are not copied.
 
 ## Outbound network access the application needs
 
@@ -406,12 +483,11 @@ Whatever the final configuration, it must:
 {%- if cookiecutter.static_storage == "cloud" %}
 - Serve **nothing** from disk: both static files and media come from the object store.
 {%- elif cookiecutter.media_storage == "filesystem" %}
-- Serve `/static/` from `staticfiles/` and `/media/` from `media/`, and serve **nothing** from
-  `private-media/`.
+- Serve `/static/` from `staticfiles/` and `/media/` from `media/`, and serve `private-media/` only
+  from the `internal` location in "Private files on disk" above.
 {%- else %}
 - Serve `/static/` from `staticfiles/`. There is no `/media/` location: media is in the object
-  store, and `/private-media/` must be proxied to the application like any other URL, never served
-  from disk.
+  store, and `/files/` must be proxied to the application like any other URL.
 {%- endif %}
 - Write an access log and an error log to the paths recorded in [09-monitoring.md](09-monitoring.md).
 - Proxy everything else to `127.0.0.1:8000` with a read timeout at least as long as gunicorn's
@@ -443,13 +519,13 @@ bodies of at least 10 MB, and expose the container's port 8000 to nothing but it
       and `/admin/` returns 404.
 {%- if cookiecutter.media_storage == "filesystem" %}
 - [ ] A file uploaded through the admin appears at the expected path with the expected ownership.
-- [ ] A private-media file is unreachable except through the permission-checked view.
+- [ ] The four checks under "Private files on disk" pass.
 {%- else %}
 - [ ] A file uploaded through the admin appears under the `media/` prefix in the bucket.
 - [ ] A private upload appears under the `private/` prefix, and requesting its object URL directly —
       without a signature — returns 403, not the file.
-- [ ] The same file downloads successfully through `/private-media/<path>` for an account holding
-      `core.access_private_media`, and returns 403 for one that does not.
+- [ ] The same file opens through its `/files/<app.model>/<pk>/<field>/` link for an account holding
+      the model's `PRIVATE_FILE_PERMISSIONS` entry, and returns 403 for one that does not.
 - [ ] The application's storage identity cannot change the bucket policy: try it and confirm the
       denial.
 {%- endif %}

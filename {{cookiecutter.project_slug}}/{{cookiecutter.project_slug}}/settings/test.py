@@ -74,27 +74,31 @@ DATABASES["default"] = env.db(  # noqa: F405
 
 MEDIA_ROOT = os.path.join(BASE_DIR, ".test-media")  # noqa: F405
 PRIVATE_MEDIA_ROOT = os.path.join(BASE_DIR, ".test-private-media")  # noqa: F405
-{%- if cookiecutter.media_storage != "filesystem" %}
 
-# The suite runs with no cloud credentials and no network - a test that needs a
-# real bucket is an integration test, not a unit test - so both media storages go
-# back to local directories here. The backend the project actually ships is
-# asserted against the base settings module in apps/core/tests/test_storage.py,
-# which is the only place that can check it without reaching the network.
+# The private alias is a plain FileSystemStorage under the per-test root, as the
+# media storage standard asks: a signed link carries a timestamp, and page
+# assertions on .url must not depend on the second they ran in. The tests that
+# are about signing swap SignedFileSystemStorage in explicitly.
+{%- if cookiecutter.media_storage != "filesystem" %}
+#
+# The public alias goes back to local disk too. The suite runs with no cloud
+# credentials and no network - a test that needs a real bucket is an integration
+# test - and the backend the project actually ships is asserted against the base
+# settings module in apps/core/tests/test_storage.py.
+{%- endif %}
 STORAGES = {  # noqa: F405
     **STORAGES,  # noqa: F405
+{%- if cookiecutter.media_storage != "filesystem" %}
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
         "OPTIONS": {"location": MEDIA_ROOT, "base_url": MEDIA_URL},  # noqa: F405
     },
-    # Not a plain FileSystemStorage: this one keeps the real private storage's
-    # refusal to build a URL, which is the behaviour the suite is there to guard.
-    "private_media": {
-        "BACKEND": "apps.core.storage.PrivateFileSystemStorage",
-        "OPTIONS": {"location": PRIVATE_MEDIA_ROOT},
+{%- endif %}
+    "private": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {"location": PRIVATE_MEDIA_ROOT, "base_url": "/test-private-media/"},
     },
 }
-{%- endif %}
 
 # WhiteNoise indexes STATIC_ROOT at startup, and a test run never builds one, so
 # every test emitted "No directory at: staticfiles/" and buried the real warnings.

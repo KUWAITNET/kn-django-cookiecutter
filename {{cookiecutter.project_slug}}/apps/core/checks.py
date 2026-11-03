@@ -16,6 +16,9 @@ tabulated in ``docs/enforcement.md`` in the KUWAITNET web standards repository.
 """
 
 import os
+{%- if cookiecutter.media_storage == "filesystem" %}
+from pathlib import Path
+{%- endif %}
 
 from django.conf import settings
 from django.core.checks import Error, Tags, Warning, register
@@ -30,7 +33,7 @@ WORLD_READABLE_ACLS = frozenset(
 )
 
 #: The storage aliases that can end up holding personal data.
-MEDIA_STORAGE_ALIASES = ("default", "private_media")
+MEDIA_STORAGE_ALIASES = ("default", "private")
 {%- endif %}
 
 
@@ -384,10 +387,10 @@ def check_media_bucket_is_not_world_readable(app_configs, **kwargs):
 {%- if cookiecutter.media_storage == "azure" %}
     # Azure has no per-object ACL: an unsigned URL is only usable when the whole
     # container was opened for anonymous blob read, so that is the tell.
-    if _storage_options("private_media").get("expiration_secs", "unset") is None:
+    if _storage_options("private").get("expiration_secs", "unset") is None:
         problems.append(
             Error(
-                "STORAGES['private_media'] builds unsigned blob URLs.",
+                "STORAGES['private'] builds unsigned blob URLs.",
                 hint=(
                     "An unsigned Azure blob URL only resolves when the container "
                     "allows anonymous read, which would publish every private "
@@ -397,10 +400,10 @@ def check_media_bucket_is_not_world_readable(app_configs, **kwargs):
             )
         )
 {%- else %}
-    if _storage_options("private_media").get("querystring_auth") is False:
+    if _storage_options("private").get("querystring_auth") is False:
         problems.append(
             Error(
-                "STORAGES['private_media'] builds unsigned URLs.",
+                "STORAGES['private'] builds unsigned URLs.",
                 hint=(
                     "An unsigned object URL only resolves when the bucket allows "
                     "anonymous read, which would publish every private upload. Set "
@@ -427,6 +430,8 @@ def check_cloud_media_credentials(app_configs, **kwargs):
 {%- if cookiecutter.media_storage == "s3" %}
     if not settings.AWS_STORAGE_BUCKET_NAME:
         missing.append("AWS_STORAGE_BUCKET_NAME")
+    if not settings.AWS_PRIVATE_BUCKET_NAME:
+        missing.append("AWS_PRIVATE_BUCKET_NAME")
     if not settings.AWS_S3_REGION_NAME and not settings.AWS_S3_ENDPOINT_URL:
         missing.append("AWS_S3_REGION_NAME (or AWS_S3_ENDPOINT_URL for a compatible store)")
     # An instance role or IRSA is the preferred credential and leaves both of
@@ -436,6 +441,8 @@ def check_cloud_media_credentials(app_configs, **kwargs):
 {%- elif cookiecutter.media_storage == "gcs" %}
     if not settings.GS_BUCKET_NAME:
         missing.append("GS_BUCKET_NAME")
+    if not settings.GS_PRIVATE_BUCKET_NAME:
+        missing.append("GS_PRIVATE_BUCKET_NAME")
     # Workload identity and the metadata server are the preferred credentials and
     # leave this unset, so this is a hint rather than a certainty - hence a warning.
     if not settings.GOOGLE_APPLICATION_CREDENTIALS:
@@ -450,6 +457,8 @@ def check_cloud_media_credentials(app_configs, **kwargs):
 {%- else %}
     if not settings.AZURE_CONTAINER:
         missing.append("AZURE_CONTAINER")
+    if not settings.AZURE_PRIVATE_CONTAINER:
+        missing.append("AZURE_PRIVATE_CONTAINER")
     if not settings.AZURE_CONNECTION_STRING and not settings.AZURE_ACCOUNT_NAME:
         missing.append("AZURE_ACCOUNT_NAME or AZURE_CONNECTION_STRING")
     if (
@@ -478,6 +487,113 @@ def check_cloud_media_credentials(app_configs, **kwargs):
                 "these in the environment; see docs/04-environment-variables.md."
             ),
             id="core.W006",
+        )
+    ]
+{%- endif %}
+{%- if cookiecutter.media_storage != "filesystem" %}
+{%- if cookiecutter.media_storage == "s3" %}
+
+
+def _private_store_and_public_store():
+    return settings.AWS_PRIVATE_BUCKET_NAME, settings.AWS_STORAGE_BUCKET_NAME
+{%- elif cookiecutter.media_storage == "gcs" %}
+
+
+def _private_store_and_public_store():
+    return settings.GS_PRIVATE_BUCKET_NAME, settings.GS_BUCKET_NAME
+{%- else %}
+
+
+def _private_store_and_public_store():
+    return settings.AZURE_PRIVATE_CONTAINER, settings.AZURE_CONTAINER
+{%- endif %}
+
+
+@register(Tags.security)
+def check_private_media_has_its_own_bucket(app_configs, **kwargs):
+    """Private files live in a bucket of their own, never beside public media.
+
+    A key prefix inside one bucket separates nothing a bucket policy, a CDN or a
+    misconfigured grant can see: one wrong rule publishes every private file.
+    """
+    private, public = _private_store_and_public_store()
+    if not private or private != public:
+        return []
+    return [
+        Error(
+            f"Private media shares the public media bucket ({private!r}).",
+            hint=(
+                "Create a separate private bucket - public access blocked, no CDN, "
+                "versioned - and set it in the environment. See the media storage "
+                "standard, section 7."
+            ),
+            id="core.E010",
+        )
+    ]
+{%- endif %}
+
+
+@register(Tags.security)
+def check_private_files_have_a_permission(app_configs, **kwargs):
+    """Every model with a private file field has an entry in PRIVATE_FILE_PERMISSIONS.
+
+    Without one the gate refuses everybody, which looks like a bug; worse, the
+    obvious "fix" is a permission nobody chose. The entry is that choice.
+    """
+    from apps.core.private_files import private_file_fields
+
+    configured = settings.PRIVATE_FILE_PERMISSIONS
+    missing = sorted(
+        {model._meta.label_lower for model, _field in private_file_fields()} - set(configured)
+    )
+    return [
+        Error(
+            f"{label} has a private file field but no entry in PRIVATE_FILE_PERMISSIONS.",
+            hint=(
+                f'Add "{label}": "<app>.view_<model>" - or a callable (request, obj) '
+                "-> bool when users may open their own files - to settings/base.py."
+            ),
+            id="core.E008",
+        )
+        for label in missing
+    ]
+
+
+@register(Tags.security)
+def check_private_url_expiry(app_configs, **kwargs):
+    """Signed links live an hour at most, unless somebody wrote down why."""
+    if settings.PRIVATE_URL_EXPIRY_SECONDS <= 3600:
+        return []
+    return [
+        Warning(
+            f"PRIVATE_URL_EXPIRY_SECONDS is {settings.PRIVATE_URL_EXPIRY_SECONDS}, over one hour.",
+            hint=(
+                "A signed link is a bearer token: whoever holds it opens the file "
+                "until it expires. Keep it at 3600 or below, or record the reason "
+                "in docs/14-decisions.md and silence core.W011."
+            ),
+            id="core.W011",
+        )
+    ]
+{%- if cookiecutter.media_storage == "filesystem" %}
+
+
+@register(Tags.security)
+def check_private_media_root_is_outside_media_root(app_configs, **kwargs):
+    """PRIVATE_MEDIA_ROOT must not sit inside MEDIA_ROOT.
+
+    The public /media/ location would otherwise serve every private file to
+    anyone who guessed its path, signed or not.
+    """
+    private = Path(settings.PRIVATE_MEDIA_ROOT).resolve()
+    public = Path(settings.MEDIA_ROOT).resolve()
+    if not private.is_relative_to(public):
+        return []
+    return [
+        Error(
+            "PRIVATE_MEDIA_ROOT is inside MEDIA_ROOT.",
+            hint="Move it to a sibling folder that no public web server location serves.",
+            id="core.E009",
         )
     ]
 {%- endif %}

@@ -105,6 +105,26 @@ jobs:
           TURNSTILE_SITE_KEY: ci-only-not-a-site-key
           TURNSTILE_SECRET_KEY: ci-only-not-a-secret-key
 {%- endif %}
+{%- if cookiecutter.media_storage == "s3" %}
+          AWS_STORAGE_BUCKET_NAME: ci-only-media
+          AWS_PRIVATE_BUCKET_NAME: ci-only-private
+          AWS_S3_REGION_NAME: me-south-1
+{%- elif cookiecutter.media_storage == "gcs" %}
+          GS_BUCKET_NAME: ci-only-media
+          GS_PRIVATE_BUCKET_NAME: ci-only-private
+          GOOGLE_APPLICATION_CREDENTIALS: /ci-only/not-a-key.json
+{%- if cookiecutter.static_storage == "cloud" %}
+          GS_STATIC_BUCKET_NAME: ci-only-static
+{%- endif %}
+{%- elif cookiecutter.media_storage == "azure" %}
+          AZURE_CONTAINER: ci-only-media
+          AZURE_PRIVATE_CONTAINER: ci-only-private
+          AZURE_ACCOUNT_NAME: cionlyaccount
+          AZURE_ACCOUNT_KEY: ci-only-not-a-key
+{%- if cookiecutter.static_storage == "cloud" %}
+          AZURE_STATIC_CONTAINER: ci-only-static
+{%- endif %}
+{%- endif %}
 
 # Before go-live, run the ZAP baseline scan against staging as part of the
 # security pass (security-baseline.md section 18).
