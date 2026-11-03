@@ -1,0 +1,11 @@
+{% load i18n navigation_tags %}{% comment %}
+A link block painted as a button. Every destination - page, document or raw URL -
+goes through nav_href, so a chosen page that has lost its place in the tree
+renders "#" rather than the string "None".
+
+The style choice is a modifier class, not a framework class: a redesign restyles
+.block-button--outline and every stored block follows, with no content migration.
+{% endcomment %}{% if value.page or value.document or value.url %}
+{% firstof value.label value.page.title value.document.title as button_label %}
+<a class="block-button block-button--{{ value.style|default:'primary' }}" href="{{ value|nav_href }}"{% if value.download %} download{% endif %}>{% if button_label %}{{ button_label }}{% else %}{% translate "Read more" %}{% endif %}</a>
+{% endif %}

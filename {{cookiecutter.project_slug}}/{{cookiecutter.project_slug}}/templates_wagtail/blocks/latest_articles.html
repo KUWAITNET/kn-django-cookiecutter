@@ -1,0 +1,14 @@
+{% comment %}
+The newest newsroom articles, pulled automatically. `articles` and `newsroom`
+come from LatestArticlesBlock.get_context. Renders nothing at all while there is
+nothing published, rather than an empty heading.
+{% endcomment %}{% if articles %}
+<section class="block-latest-articles">
+    {% if value.heading %}<h2 class="block-latest-articles__heading">{{ value.heading }}</h2>{% endif %}
+    <ul class="newsroom__list">
+        {% for article in articles %}
+            <li>{% include "newsroom/includes/article_card.html" with article=article newsroom=newsroom %}</li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}

@@ -1,0 +1,22 @@
+{% load i18n %}{% get_current_language as LANGUAGE_CODE %}{% comment %}
+Language switcher. A plain anchor list, not a form: with prefix_default_language
+every public url already carries an explicit language prefix, so no cookie and no
+set_language round trip is needed.
+
+It reuses exactly the same primitive as the hreflang alternates in meta.html -
+LANGUAGES_AVAILABLE[n].url, which is this page resolved UNDER that language, so it
+carries the translated slug and preserves the query string. Prefix-swapping /en/
+for /ar/ 404s the moment a slug is translated, and drops pagination and filters.
+
+A language in which this page does not exist has an empty url and is rendered as
+disabled rather than as a link to a 404.
+{% endcomment %}{% if LANGUAGES_AVAILABLE|length > 1 %}<nav class="language-switcher" aria-label="{% translate 'Language' %}">
+    <ul class="language-switcher__list">
+        {% for language in LANGUAGES_AVAILABLE %}<li class="language-switcher__item">
+            {% if language.is_current %}<span class="language-switcher__current" lang="{{ language.code }}" aria-current="true">{% firstof language.name_local language.name language.code %}</span>
+            {% elif language.url %}<a class="language-switcher__link" href="{{ language.url }}" lang="{{ language.code }}" hreflang="{{ language.code }}" dir="{% if language.bidi %}rtl{% else %}ltr{% endif %}">{% firstof language.name_local language.name language.code %}</a>
+            {% else %}<span class="language-switcher__unavailable" lang="{{ language.code }}" aria-disabled="true">{% firstof language.name_local language.name language.code %}</span>
+            {% endif %}
+        </li>{% endfor %}
+    </ul>
+</nav>{% endif %}

@@ -1,0 +1,19 @@
+{% load compress static %}{% comment %}
+The site's own stylesheets, run through django-compressor.
+
+This is the file the pipeline exists for: add a SASS or LESS source here and
+COMPRESS_PRECOMPILERS compiles it at deploy time, with no Node toolchain on the
+server. Everything inside the block is concatenated and minified into one file
+whose name carries a content hash.
+
+COMPRESS_OFFLINE is on in production, so the contents of this block are compiled
+by "manage.py compress --force" during the build. Nothing in here may vary per
+request: the offline manifest is keyed on the rendered block, and a per-request
+value would never match the key that was built.
+
+Per-page overrides stay in base.html, after this include, because the stylesheet
+order there is a contract: main.css -> page_css -> extra_css -> rtl.css.
+{% endcomment %}
+{% compress css %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+{% endcompress %}

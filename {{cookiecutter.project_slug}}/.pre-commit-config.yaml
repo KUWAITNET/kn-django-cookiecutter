@@ -1,0 +1,58 @@
+# Install with: make setup  (or: uv run pre-commit install)
+# Run over everything: uv run pre-commit run --all-files
+# Nothing under static/vendor is ours to reformat: the whitespace fixers would
+# rewrite minified libraries nobody has reviewed.
+exclude: ^{{ cookiecutter.project_slug }}/static/vendor/
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: detect-private-key
+
+  # ruff and bandit run through uv, so the hooks are exactly the versions in the
+  # lockfile and can never drift from what CI runs. A pinned remote rev does
+  # drift: ruff 0.9 cannot parse target-version "py314" and failed every commit
+  # in a generated project with a TOML parse error.
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+        require_serial: true
+      - id: bandit
+        name: bandit
+        entry: uv run bandit -c pyproject.toml -r apps {{ cookiecutter.project_slug }}
+        language: system
+        pass_filenames: false
+
+  # The KUWAITNET rules no linter has a rule for: serializers that publish every
+  # column, upload fields with no validators, unexplained csrf_exempt, committed
+  # secrets, rejected dependencies. Stdlib only, so there is nothing to install.
+  # Whole-project by design - a violation is a violation whether or not this
+  # commit touched the file.
+  - repo: local
+    hooks:
+      - id: kuwaitnet-standards
+        name: KUWAITNET standards
+        entry: uv run python tools/check_standards.py
+        language: system
+        pass_filenames: false
+        always_run: true

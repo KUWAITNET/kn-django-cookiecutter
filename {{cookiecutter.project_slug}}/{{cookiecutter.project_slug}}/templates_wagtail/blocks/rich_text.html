@@ -1,0 +1,6 @@
+{% load wagtailcore_tags %}{% comment %}
+Editor prose. The richtext filter is what rewrites Wagtail's internal page and
+document links into real URLs; printing the value without it ships <a linktype>
+markup to the browser.
+{% endcomment %}
+<div class="block-rich-text flow">{{ value.body|richtext }}</div>

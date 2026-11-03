@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block content %}
+  <h1>{% translate "Newsletter" %}</h1>
+
+  {% if rate_limited %}
+    <p role="alert">{{ rate_limited }}</p>
+  {% endif %}
+
+  {% include "newsletter/subscribe_form.html" %}
+
+  <p>{% translate "We will send you a confirmation link. Nothing is sent until you use it." %}</p>
+{% endblock %}

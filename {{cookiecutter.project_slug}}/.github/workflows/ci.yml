@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, "release/**"]
+  pull_request:
+
+jobs:
+  quality:
+    name: Lint, security and dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run bandit -c pyproject.toml -r apps {{ cookiecutter.project_slug }}
+      # Fails the build on a known-vulnerable dependency.
+      - run: uv run pip-audit
+      # The SBOM is evidence, not a gate: it records what this build contains so
+      # "are we affected?" can be answered later without re-resolving anything.
+      - run: uv export --format cyclonedx1.5 -o sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+
+  standards:
+    name: KUWAITNET standards checker
+    runs-on: ubuntu-latest
+    steps:
+      # Full history is not needed, but the working tree must be a git
+      # repository: the checker asks git which files are tracked.
+      - uses: actions/checkout@v4
+      # No uv sync: the checker is stdlib-only on purpose, so this step stays
+      # under ten seconds and cannot be broken by a dependency resolution.
+      - run: python3 tools/check_standards.py
+
+  tests:
+    name: Tests and coverage gate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: test_{{ cookiecutter.project_slug }}
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+{%- if cookiecutter.cache == "redis" %}
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s
+          --health-timeout 5s --health-retries 5
+{%- endif %}
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_{{ cookiecutter.project_slug }}
+{%- if cookiecutter.cache == "redis" %}
+      REDIS_URL: redis://localhost:6379/1
+{%- endif %}
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libmagic1 gettext
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      # A model change without a migration fails here, not on the server.
+      - run: uv run python manage.py makemigrations --check --dry-run
+      - run: uv run pytest --cov=apps --cov-report=term-missing --cov-report=xml --cov-fail-under=60
+
+  deploy-checks:
+    name: Production configuration checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # libmagic is what content sniffing on uploads runs on, and its absence is
+      # itself one of the checks. Without it this job fails on a missing system
+      # package rather than on a misconfiguration.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libmagic1
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      # Must report zero issues. This is a gate, not advice.
+      #
+      # The values below are a realistic dummy environment, not secrets: the job
+      # asks whether the settings are correct GIVEN an environment, so anything
+      # that is merely absent here (a short key, a missing site key) would fail
+      # the gate for a reason that has nothing to do with the code.
+      - run: uv run python manage.py check --deploy --fail-level WARNING
+        env:
+          DJANGO_SETTINGS_MODULE: {{ cookiecutter.project_slug }}.settings.production
+          SECRET_KEY: ci-only-not-a-secret-but-long-enough-to-pass-the-length-check
+          ALLOWED_HOSTS: {{ cookiecutter.domain_name }}
+{%- if cookiecutter.spam_protection == "turnstile_honeypot" %}
+          TURNSTILE_SITE_KEY: ci-only-not-a-site-key
+          TURNSTILE_SECRET_KEY: ci-only-not-a-secret-key
+{%- endif %}
+{%- if cookiecutter.media_storage == "s3" %}
+          AWS_STORAGE_BUCKET_NAME: ci-only-media
+          AWS_PRIVATE_BUCKET_NAME: ci-only-private
+          AWS_S3_REGION_NAME: me-south-1
+{%- elif cookiecutter.media_storage == "gcs" %}
+          GS_BUCKET_NAME: ci-only-media
+          GS_PRIVATE_BUCKET_NAME: ci-only-private
+          GOOGLE_APPLICATION_CREDENTIALS: /ci-only/not-a-key.json
+{%- if cookiecutter.static_storage == "cloud" %}
+          GS_STATIC_BUCKET_NAME: ci-only-static
+{%- endif %}
+{%- elif cookiecutter.media_storage == "azure" %}
+          AZURE_CONTAINER: ci-only-media
+          AZURE_PRIVATE_CONTAINER: ci-only-private
+          AZURE_ACCOUNT_NAME: cionlyaccount
+          AZURE_ACCOUNT_KEY: ci-only-not-a-key
+{%- if cookiecutter.static_storage == "cloud" %}
+          AZURE_STATIC_CONTAINER: ci-only-static
+{%- endif %}
+{%- endif %}
+
+# Before go-live, run the ZAP baseline scan against staging as part of the
+# security pass (security-baseline.md section 18).

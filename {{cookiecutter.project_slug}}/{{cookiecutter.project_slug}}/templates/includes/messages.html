@@ -1,0 +1,12 @@
+{% load i18n %}{% comment %}
+django.contrib.messages output.
+
+role="status" + aria-live="polite" so a message that appears after a form
+submission is announced by a screen reader without interrupting it. The message
+tag is also written into the text for colour-blind users - colour alone never
+carries meaning.
+{% endcomment %}{% if messages %}<div class="messages" role="status" aria-live="polite">
+    {% for message in messages %}<div class="message message--{{ message.level_tag }}">
+        <span class="visually-hidden">{% if message.level_tag == 'error' %}{% translate "Error" %}{% elif message.level_tag == 'warning' %}{% translate "Warning" %}{% elif message.level_tag == 'success' %}{% translate "Success" %}{% else %}{% translate "Information" %}{% endif %}: </span>{{ message }}
+    </div>{% endfor %}
+</div>{% endif %}

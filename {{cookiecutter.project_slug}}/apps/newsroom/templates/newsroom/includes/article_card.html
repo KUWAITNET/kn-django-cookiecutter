@@ -1,0 +1,14 @@
+{% load wagtailroutablepage_tags wagtailimages_tags %}{% comment %}
+One article in a list: category, headline, standfirst, date.
+
+The link is built from `newsroom` - the newsroom page, looked up once by
+whoever renders the list - never from article.url, which looks the page up
+again and would cost one query per card.
+{% endcomment %}
+<article class="news-card">
+    {% if article.image %}{% image article.image fill-800x450 format-webp loading="lazy" decoding="async" alt="" class="news-card__image" %}{% endif %}
+    {% if article.category %}<p class="news-card__category">{{ article.category.name }}</p>{% endif %}
+    <h3 class="news-card__title">{% if newsroom %}<a href="{% routablepageurl newsroom 'article' slug=article.slug %}">{{ article.title }}</a>{% else %}{{ article.title }}{% endif %}</h3>
+    {% if article.introduction %}<p class="news-card__introduction">{{ article.introduction }}</p>{% endif %}
+    <p class="news-card__date"><time datetime="{{ article.date|date:'Y-m-d' }}">{{ article.date|date:"j F Y" }}</time></p>
+</article>

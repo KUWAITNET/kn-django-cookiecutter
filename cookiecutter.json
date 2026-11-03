@@ -1,18 +1,201 @@
 {
-    "author_name": "Your Name",
-    "email": "Your Email",
-    "year": "{% now 'utc', '%Y' %}",
-    "_extensions": ["jinja2_time.TimeExtension"],
-    "version": "0.0.1",
-    "project_name": "project_name",
-    "repo_name": "{{ cookiecutter.project_name|replace(' ', '_')|replace('-', '_') }}",
-    "description": "{{ cookiecutter.project_name }} website",
-    "languages": "en",
-    "timezone": "Asia/Kuwait",
-    "domain_name": "{{ cookiecutter.project_name }}.com",
-    "cms_package": ["None", "django-cms", "wagtail"],
-    "django_filer": "n",
-    "s3": "n",
-    "django_cors": "n",
-    "redis": "n"
+  "stack": ["wagtail", "django"],
+  "project_name": "KUWAITNET Web Project",
+  "project_slug": "{{ cookiecutter.project_name.lower().replace(' ', '_').replace('-', '_').replace('.', '_') }}",
+  "client_name": "KUWAITNET",
+  "domain_name": "example.com",
+  "author": "KUWAITNET",
+  "author_email": "info@kuwaitnet.com",
+  "description": "A KUWAITNET web project.",
+  "timezone": "Asia/Kuwait",
+  "python_version": "3.14",
+  "languages": ["en_ar", "en"],
+  "frontend": ["server_rendered", "api_only"],
+  "multisite": ["single", "multi"],
+  "admin_url_prefix": "manage",
+  "django_admin_url_prefix": "backoffice",
+  "use_2fa": ["yes", "no"],
+  "spam_protection": ["turnstile_honeypot", "honeypot", "none"],
+  "rate_limiting": ["yes", "no"],
+  "countries_app": ["django_countries", "cities", "none"],
+  "notifications_app": ["yes", "no"],
+  "newsletter": ["yes", "no"],
+  "newsroom": ["yes", "no"],
+  "forms_suite": ["yes", "no"],
+  "api": ["none", "rest", "headless"],
+  "sentry": ["yes", "no"],
+  "analytics": ["ga4_gtm", "none"],
+  "media_storage": ["filesystem", "s3", "gcs", "azure"],
+  "static_storage": ["whitenoise", "cloud"],
+  "asset_pipeline": ["none", "compressor"],
+  "database": "postgres",
+  "_django_version": "6.1",
+  "_wagtail_version": "7.4",
+  "cache": ["redis", "locmem"],
+  "task_queue": ["none", "huey", "celery"],
+  "huey_backend": ["postgres", "redis", "sqlite"],
+  "task_broker": ["redis", "rabbitmq", "sqs"],
+  "docker": ["yes", "no"],
+  "ci": ["bitbucket", "github", "none"],
+  "deploy_target": ["gunicorn_nginx", "docker_compose"],
+  "bootstrap": ["yes", "no"],
+  "__prompts__": {
+    "stack": {
+      "__prompt__": "Which stack? (wagtail = CMS site; django = plain Django app or API backend, no CMS)",
+      "wagtail": "Wagtail CMS site",
+      "django": "Plain Django application or API backend"
+    },
+    "project_name": "Project name (human readable)",
+    "project_slug": "Python package / directory name",
+    "client_name": "Client name (used in branding and documentation)",
+    "domain_name": "Production domain (no scheme, e.g. example.com)",
+    "author": "Author / team",
+    "author_email": "Author e-mail",
+    "description": "One-line project description, as a full sentence (it is printed as its own paragraph)",
+    "timezone": "TIME_ZONE",
+    "python_version": "Python version",
+    "languages": {
+      "__prompt__": "Languages",
+      "en_ar": "Bilingual English + Arabic (RTL support, translated fields)",
+      "en": "English only"
+    },
+    "frontend": {
+      "__prompt__": "Frontend",
+      "server_rendered": "Server-rendered HTML templates",
+      "api_only": "API only, no server-rendered frontend (requires stack=django and an API)"
+    },
+    "multisite": {
+      "__prompt__": "Site scoping (Wagtail only)",
+      "single": "Single site",
+      "multi": "Multiple sites from one instance (site-scoped content and settings)"
+    },
+    "admin_url_prefix": "Admin URL prefix (must NOT be 'admin'; no slashes)",
+    "django_admin_url_prefix": "Django admin URL prefix [wagtail only] (must differ from admin_url_prefix and not sit under it)",
+    "use_2fa": {
+      "__prompt__": "Require two-factor authentication for admin accounts?",
+      "yes": "Yes (company standard)",
+      "no": "No (requires a documented exception)"
+    },
+    "spam_protection": {
+      "__prompt__": "Spam / bot protection on public forms",
+      "turnstile_honeypot": "Cloudflare Turnstile + honeypot (company standard)",
+      "honeypot": "Honeypot only",
+      "none": "None (NOT recommended; a go-live finding)"
+    },
+    "rate_limiting": {
+      "__prompt__": "Rate limiting on public POST endpoints (django-ratelimit) + login lockout (django-axes)?",
+      "yes": "Yes (company standard)",
+      "no": "No (requires a documented exception)"
+    },
+    "countries_app": {
+      "__prompt__": "Country data backend (apps/core/countries.py is the same contract either way)",
+      "django_countries": "KUWAITNET django-countries fork: a country field and choices, working immediately - no tables, no import, and the country-list policy lives in the data",
+      "cities": "apps/cities on django-cities-light: editor-toggleable countries, dial codes, nationalities, translated names, regions and cities - empty until 'manage.py cities_light' imports the GeoNames data",
+      "none": "No country data: forms carry no country field, and one international phone input instead of a dial-code select"
+    },
+    "notifications_app": {
+      "__prompt__": "Include the notifications app (admin-editable e-mail templates, per-language sending, e-mail log)?",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "newsletter": {
+      "__prompt__": "Include the newsletter app (subscribers, unsubscribe tokens, admin composer)?",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "newsroom": {
+      "__prompt__": "Include the newsroom app (articles as models with drafts and preview, served by one routable newsroom page)? [wagtail only]",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "forms_suite": {
+      "__prompt__": "Include the example contact form (validated, rate-limited, spam-protected, secure uploads)?",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "api": {
+      "__prompt__": "REST API",
+      "none": "No API",
+      "rest": "Django REST Framework pack (/api/v1/, OpenAPI, JWT, throttles, RFC 9457 errors)",
+      "headless": "DRF pack + Wagtail API v2 page/image/document endpoints (Wagtail only)"
+    },
+    "sentry": {
+      "__prompt__": "Sentry error monitoring (activated only when SENTRY_DSN is set)?",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "analytics": {
+      "__prompt__": "Analytics",
+      "ga4_gtm": "Google Analytics 4 / Tag Manager hooks (IDs from env)",
+      "none": "None"
+    },
+    "media_storage": {
+      "__prompt__": "Where uploaded media is stored (the private/public split is the same either way)",
+      "filesystem": "Local disk: MEDIA_ROOT and PRIVATE_MEDIA_ROOT on the application server",
+      "s3": "Amazon S3 or an S3-compatible store (MinIO, Spaces, Wasabi) via django-storages",
+      "gcs": "Google Cloud Storage via django-storages",
+      "azure": "Azure Blob Storage via django-storages"
+    },
+    "static_storage": {
+      "__prompt__": "Where collected static files are served from",
+      "whitenoise": "WhiteNoise from the application process (compressed, hashed filenames)",
+      "cloud": "The same object store as media, under a public 'static/' prefix (requires a cloud media_storage)"
+    },
+    "asset_pipeline": {
+      "__prompt__": "CSS/JS asset pipeline",
+      "none": "None: WhiteNoise already compresses and cache-busts, and there is no SASS/LESS to build",
+      "compressor": "django-compressor with offline compression (adds a compile step to every deploy)"
+    },
+    "cache": {
+      "__prompt__": "Cache backend",
+      "redis": "Redis (required in production when rate limiting is enabled)",
+      "locmem": "Local memory (development only)"
+    },
+    "task_queue": {
+      "__prompt__": "Background task queue (a worker process that runs work outside the request/response cycle)",
+      "none": "No background processing. The right default: a content site that sends a few e-mails inline does not need a worker, and a queue you do not need is another process to deploy, monitor and restart.",
+      "huey": "Small queue with built-in periodic tasks, backed by the database you already run (see huey_backend). Choose when you need real background work, retries and a schedule, but not Celery's routing, priorities or multi-queue scaling. One worker, a handful of task types.",
+      "celery": "The heavyweight. Choose only when you genuinely need routing, priorities, multiple queues, chains/groups, autoscaling or mature monitoring. Costs a broker, a worker, beat for schedules, and the operational surface of all three."
+    },
+    "huey_backend": {
+      "__prompt__": "Huey storage backend (applies to task_queue='huey' only; ignored otherwise)",
+      "postgres": "Uses the database you already run. No new service to deploy, monitor or back up - the queue is backed up with everything else. The right default: choose it unless you have measured a reason not to.",
+      "redis": "Faster and keeps queue churn out of the database. Choose when task volume is high enough that queue writes are a real load on Postgres, and you already run Redis for cache. Queue contents are lost on a Redis restart unless persistence is tuned.",
+      "sqlite": "Development and single-process use only. Do not select it for a deployed site - it does not survive multiple workers, and it contradicts the PostgreSQL-only rule in the standards."
+    },
+    "task_broker": {
+      "__prompt__": "Celery message broker (applies to task_queue='celery' only; ignored otherwise)",
+      "redis": "Simplest, and you almost certainly already run it for cache and rate limiting. NOT a durable message broker: a restart can drop queued tasks unless persistence is tuned, and there are no publisher confirms or dead-letter queues. Fine when tasks are idempotent and losing one is recoverable - resize an image, warm a cache, send a non-critical notification. And no managed option here - you run it.",
+      "rabbitmq": "A real AMQP broker: durable queues, acknowledgements, publisher confirms, dead-letter exchanges, priorities and routing. Choose when losing a task is not acceptable - payment reconciliation, invoicing, anything a customer has been told already happened. Costs another server to run, monitor, back up and upgrade.",
+      "sqs": "Amazon SQS. Durable and redundant like RabbitMQ, but fully managed - no broker server to run, patch, back up or monitor, and IAM instead of broker credentials. Two real costs: Celery's remote control and events do not work over SQS, so 'celery inspect' and Flower's live monitoring go dark; and there are no broker-level priorities. Also set a visibility timeout longer than your slowest task, or SQS redelivers it and the task runs twice. Choose it when the project is already on AWS and you want durability without operating a broker."
+    },
+    "docker": {
+      "__prompt__": "Include a Dockerfile (uv-based multi-stage) and docker-compose for local services?",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "ci": {
+      "__prompt__": "CI configuration (runs ruff, bandit, pip-audit, tests with the coverage gate)",
+      "bitbucket": "Bitbucket Pipelines",
+      "github": "GitHub Actions",
+      "none": "None"
+    },
+    "deploy_target": {
+      "__prompt__": "Deployment target documented in the runbook",
+      "gunicorn_nginx": "gunicorn behind nginx (systemd)",
+      "docker_compose": "docker compose"
+    },
+    "bootstrap": {
+      "__prompt__": "Bootstrap the generated project (git init, uv sync, makemigrations, pre-commit install, first commit)?",
+      "yes": "Yes",
+      "no": "No (generate files only)"
+    }
+  },
+  "_copy_without_render": [
+    "*.html",
+    "*/templates/*",
+    "*/templates_wagtail/*",
+    "*/templates_django/*"
+  ],
+  "__kuwaitnet_standards": "https://devdocs.mykuwaitnet.net/"
 }

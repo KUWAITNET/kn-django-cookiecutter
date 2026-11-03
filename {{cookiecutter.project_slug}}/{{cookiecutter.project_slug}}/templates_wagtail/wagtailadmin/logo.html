@@ -1,0 +1,18 @@
+{% comment %}
+The logo shown in the CMS sidebar and on the login screen.
+
+This is the single highest-value branding override: it is the first thing a
+client's editors see every day. Replace static/img/admin-logo.svg with the
+client's mark and nothing else here needs to change.
+
+Wagtail renders this template twice - once for the collapsed sidebar (small) and
+once as a "wordmark" on the login page - and passes `wordmark` to tell them
+apart, which is why the two sizes differ.
+{% endcomment %}
+{% load static wagtailadmin_tags %}
+{% spaceless %}
+    <img src="{% static 'img/admin-logo.svg' %}"
+         alt="{{ CLIENT_NAME|default:'Administration' }}"
+         class="{% classnames 'kn-admin-logo' classname %}"
+         {% if wordmark %}style="max-height:64px;width:auto;"{% else %}style="max-height:32px;width:auto;"{% endif %}>
+{% endspaceless %}

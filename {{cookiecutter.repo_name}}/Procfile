@@ -1,2 +1,0 @@
-release: python manage.py migrate
-web: gunicorn $PWD/{{cookiecutter.project_name}}.wsgi:application

@@ -1,0 +1,9 @@
+{% extends base_template %}
+
+{# One page for two admins. The view supplies base_template; whichever content #}
+{# block the parent defines is the one that renders, so the body itself is #}
+{# written once in the include below. #}
+
+{% block content %}{% include "newsletter/admin/_send_newsletter.html" %}{% endblock %}
+
+{% block main_content %}{% include "newsletter/admin/_send_newsletter.html" %}{% endblock %}

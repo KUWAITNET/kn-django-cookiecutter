@@ -1,0 +1,24 @@
+{% load i18n wagtailimages_tags %}{% comment %}
+A set of captioned images.
+
+A list, not a lightbox: the block has to render something correct before any
+theme script exists, and a grid of figures is that. A theme enhances it in place.
+{% endcomment %}
+<section class="block-gallery" aria-label="{% translate 'Image gallery' %}">
+    {% if value.heading %}
+        <h2 class="block-gallery__heading">{{ value.heading }}</h2>
+    {% endif %}
+
+    <ul class="block-gallery__items">
+        {% for item in value.images %}
+            <li class="block-gallery__item">
+                <figure class="block-gallery__figure">
+                    {% image item.image fill-800x600 format-webp loading="lazy" decoding="async" alt=item.caption class="block-gallery__image" %}
+                    {% if item.caption %}
+                        <figcaption class="block-gallery__caption">{{ item.caption }}</figcaption>
+                    {% endif %}
+                </figure>
+            </li>
+        {% endfor %}
+    </ul>
+</section>

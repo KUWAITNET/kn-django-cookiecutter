@@ -1,0 +1,100 @@
+{% load i18n %}{% get_current_language as LANGUAGE_CODE %}{% get_current_language_bidi as LANGUAGE_BIDI %}<!DOCTYPE html>
+{% comment %}
+Branded e-mail shell. Every transactional template extends it and fills the
+content block.
+
+Context, supplied by apps.core.emails (post_office renders with an explicit
+context - there is no request and NO context processors here, so nothing from
+site_context is available):
+
+    site_name        the site name, for the header and the footer
+    base_url         absolute site url, no trailing slash
+    logo_url         ABSOLUTE https url of the header logo (see the note below)
+    logo_width / logo_height   intrinsic pixel size of the logo
+    preheader        one line shown in the inbox preview next to the subject
+    footer_note      optional small print, e.g. why the recipient got this
+    unsubscribe_url  absolute url; required on anything a subscriber can opt out of
+
+Why this file looks like 2003:
+
+* Tables, not flexbox or grid. Outlook renders through Word's HTML engine, which
+  supports neither. A table with role="presentation" is the only layout primitive
+  that survives every client.
+* Every style is an inline attribute. Gmail strips <style> blocks in several
+  contexts and most clients strip external stylesheets outright, so anything that
+  must render is inlined. The <style> block below carries ONLY the responsive
+  media query, which is a progressive enhancement: the layout is already correct
+  without it.
+* PNG icons, never SVG and never an icon webfont. Outlook and several Android
+  clients do not render inline or linked SVG at all, and webfonts are stripped or
+  blocked by most clients and by every "load remote content off" setting - so an
+  icon font degrades to a tofu box or a stray letter in the middle of a sentence.
+  A PNG at 2x, with explicit width/height and real alt text, renders everywhere
+  and still says something useful when images are blocked.
+* Every image url is absolute and https. A relative url, or one produced by the
+  static tag, resolves against nothing in a mail client.
+* Direction is set on <html>, on the body table and on each cell: several clients
+  drop the outer dir attribute, and a half-applied dir is worse than none.
+  Phone numbers and other LTR runs inside Arabic text must additionally be wrapped
+  by apps.core.utils.ltr_isolate, or the bidi algorithm moves the "+" to the wrong
+  end of the number.
+{% endcomment %}
+<html lang="{{ LANGUAGE_CODE|default:'en' }}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>{% block subject %}{{ site_name }}{% endblock %}</title>
+<style>
+@media only screen and (max-width: 620px) {
+  .email-shell { width: 100% !important; }
+  .email-pad { padding-left: 20px !important; padding-right: 20px !important; }
+}
+</style>
+</head>
+<body dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}" style="margin:0; padding:0; width:100%; background-color:#f2f4f7; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;">
+
+<div style="display:none; font-size:1px; color:#f2f4f7; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden;">{% block preheader %}{{ preheader|default:"" }}{% endblock %}</div>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f2f4f7;">
+<tr>
+<td align="center" style="padding:24px 12px;">
+
+<table role="presentation" class="email-shell" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px; background-color:#ffffff; border-radius:6px; border:1px solid #e3e8ee;">
+
+{% block header %}
+<tr>
+<td class="email-pad" align="{% if LANGUAGE_BIDI %}right{% else %}left{% endif %}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}" style="padding:24px 32px; border-bottom:1px solid #e3e8ee;">
+{% if logo_url %}<a href="{{ base_url }}" style="text-decoration:none;"><img src="{{ logo_url }}" alt="{{ site_name }}" width="{{ logo_width|default:160 }}" height="{{ logo_height|default:40 }}" loading="eager" decoding="async" style="display:block; border:0; outline:none; text-decoration:none; height:auto;"></a>
+{% else %}<span style="font-family:Arial, Helvetica, sans-serif; font-size:18px; font-weight:bold; color:#1b1f24;">{{ site_name }}</span>
+{% endif %}
+</td>
+</tr>
+{% endblock %}
+
+<tr>
+<td class="email-pad" align="{% if LANGUAGE_BIDI %}right{% else %}left{% endif %}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}" style="padding:32px; font-family:Arial, Helvetica, sans-serif; font-size:15px; line-height:1.6; color:#1b1f24; text-align:{% if LANGUAGE_BIDI %}right{% else %}left{% endif %};">
+{% block content %}{% endblock %}
+</td>
+</tr>
+
+{% block footer %}
+<tr>
+<td class="email-pad" align="{% if LANGUAGE_BIDI %}right{% else %}left{% endif %}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}" style="padding:20px 32px 28px; border-top:1px solid #e3e8ee; font-family:Arial, Helvetica, sans-serif; font-size:12px; line-height:1.6; color:#5b6570; text-align:{% if LANGUAGE_BIDI %}right{% else %}left{% endif %};">
+{% if footer_note %}<p style="margin:0 0 8px;">{{ footer_note }}</p>{% endif %}
+<p style="margin:0;">&copy; {% now "Y" %} {{ site_name }}</p>
+{% if unsubscribe_url %}<p style="margin:8px 0 0;"><a href="{{ unsubscribe_url }}" style="color:#5b6570; text-decoration:underline;">{% translate "Unsubscribe" %}</a></p>{% endif %}
+</td>
+</tr>
+{% endblock %}
+
+</table>
+
+</td>
+</tr>
+</table>
+
+</body>
+</html>

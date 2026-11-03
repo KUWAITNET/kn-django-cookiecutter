@@ -1,0 +1,16 @@
+{% comment %}
+An oEmbed media item.
+
+The value renders as the provider's own player markup, which is why the block
+stores a URL and never raw iframe HTML pasted by an editor: pasted markup is an
+unescaped stored-HTML path into every page that renders it.
+
+The frame class owns the aspect ratio in the stylesheet, so the player reserves
+its space before it loads instead of shoving the rest of the page down.
+{% endcomment %}
+<figure class="block-embed">
+    <div class="block-embed__frame">{{ value.embed }}</div>
+    {% if value.caption %}
+        <figcaption class="block-embed__caption">{{ value.caption }}</figcaption>
+    {% endif %}
+</figure>

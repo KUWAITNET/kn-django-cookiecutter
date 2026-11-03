@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Site icon">
+    <title>Site icon</title>
+    <!-- Placeholder mark. Replace with the client's icon; keep it deliberately
+         abstract until then rather than shipping someone else's initial. -->
+    <style>
+        .bg { fill: #0f62fe; }
+        .mark { fill: #ffffff; }
+        @media (prefers-color-scheme: dark) {
+            .bg { fill: #78a9ff; }
+            .mark { fill: #0b1017; }
+        }
+    </style>
+    <rect class="bg" width="64" height="64" rx="14" />
+    <rect class="mark" x="16" y="16" width="14" height="14" rx="3" />
+    <rect class="mark" x="34" y="34" width="14" height="14" rx="3" />
+    <rect class="mark" x="34" y="16" width="14" height="14" rx="3" opacity="0.55" />
+    <rect class="mark" x="16" y="34" width="14" height="14" rx="3" opacity="0.55" />
+</svg>

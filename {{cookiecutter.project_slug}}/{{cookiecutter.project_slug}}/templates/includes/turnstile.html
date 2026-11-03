@@ -1,0 +1,19 @@
+{% load i18n %}{% get_current_language as LANGUAGE_CODE %}{% comment %}
+Cloudflare Turnstile widget. Include it inside every public form, next to the
+submit button.
+
+Rendered only when TURNSTILE_SITE_KEY is set. With no key the protection degrades
+to the honeypot field alone, so development, CI and UAT are never blocked by a
+missing secret - but a production deploy without a key is a go-live finding, and
+apps.core.checks reports it.
+
+The api.js loader is a third-party script and is therefore deferred; it is also
+the only third-party host in script-src besides the analytics domain.
+
+Server-side verification is not optional: the token this widget produces means
+nothing until apps.core.spam has POSTed it to the siteverify endpoint. A widget
+with no server check is decoration.
+{% endcomment %}{% if TURNSTILE_SITE_KEY %}<div class="turnstile">
+    <div class="cf-turnstile" data-sitekey="{{ TURNSTILE_SITE_KEY }}" data-theme="auto" data-language="{{ LANGUAGE_CODE }}"></div>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</div>{% endif %}

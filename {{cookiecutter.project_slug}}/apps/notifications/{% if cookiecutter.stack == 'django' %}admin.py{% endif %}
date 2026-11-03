@@ -1,0 +1,135 @@
+"""Unfold admin for recipients, e-mail copy and the delivery log.
+
+The log is django-post-office's own ``Email`` model, re-registered read-only:
+post-office already records every send and failure, so a second table could
+only disagree with it. Re-registering means unregistering post-office's own
+admin first - it registers itself during admin autodiscovery, and this app is
+loaded after it.
+"""
+
+from django.contrib import admin, messages
+from django.contrib.admin.sites import NotRegistered
+from django.core.exceptions import PermissionDenied
+from django.db import models as db_models
+from django.forms import Textarea
+from django.http import Http404, HttpResponseRedirect
+from django.shortcuts import get_object_or_404, render
+from django.urls import path, reverse
+from django.utils.translation import gettext_lazy as _
+from post_office.models import Email
+from unfold.admin import ModelAdmin
+
+from apps.notifications.forms import BODY_WIDGET_ATTRS, NotificationTemplateForm
+from apps.notifications.models import (
+    RESETTABLE_FIELDS,
+    NotificationRecipient,
+    NotificationTemplate,
+)
+
+
+@admin.register(NotificationTemplate)
+class NotificationTemplateAdmin(ModelAdmin):
+    form = NotificationTemplateForm
+    list_display = ["trigger_display", "recipient_type", "language", "subject", "updated_at"]
+    list_filter = ["trigger", "recipient_type", "language"]
+    search_fields = ["subject", "body"]
+    ordering = ["trigger", "recipient_type", "language"]
+    fields = ["trigger", "recipient_type", "language", "subject", "body", "updated_at"]
+    readonly_fields = ["trigger", "recipient_type", "language", "updated_at"]
+    formfield_overrides = {db_models.TextField: {"widget": Textarea(attrs=BODY_WIDGET_ATTRS)}}
+
+    def has_add_permission(self, request):
+        # One row per trigger, audience and language, provisioned by
+        # seed_notifications.
+        return False
+
+    @admin.display(description=_("Trigger"), ordering="trigger")
+    def trigger_display(self, obj):
+        return obj.get_trigger_display()
+
+    def get_urls(self):
+        # Prepended: the default admin URLs end in a catch-all that would
+        # otherwise swallow this path as an object id.
+        return [
+            path(
+                "<int:pk>/reset/<str:field_name>/",
+                self.admin_site.admin_view(self.reset_field_view),
+                name="notifications_notificationtemplate_reset_field",
+            ),
+            *super().get_urls(),
+        ]
+
+    def reset_field_view(self, request, pk, field_name):
+        """Confirm, then restore one field of one template to its built-in value."""
+        # The field name arrives from the URL, so it is checked against an
+        # allowlist before it is ever passed to setattr.
+        if field_name not in RESETTABLE_FIELDS:
+            raise Http404
+        obj = get_object_or_404(NotificationTemplate, pk=pk)
+        if not self.has_change_permission(request, obj):
+            raise PermissionDenied
+        edit_url = reverse("admin:notifications_notificationtemplate_change", args=[obj.pk])
+
+        if request.method == "POST":
+            obj.reset_field(field_name)
+            self.message_user(request, _("Reset to default."), messages.SUCCESS)
+            return HttpResponseRedirect(edit_url)
+
+        context = {
+            **self.admin_site.each_context(request),
+            "base_template": "admin/base_site.html",
+            "title": _("Reset to default"),
+            "opts": self.opts,
+            "object": obj,
+            "field_label": NotificationTemplate._meta.get_field(field_name).verbose_name,
+            "edit_url": edit_url,
+        }
+        return render(request, "notifications/admin/confirm_reset_field.html", context)
+
+
+@admin.register(NotificationRecipient)
+class NotificationRecipientAdmin(ModelAdmin):
+    list_display = ["trigger_display", "recipients"]
+    list_filter = ["trigger"]
+    fields = ["trigger", "recipients"]
+    readonly_fields = ["trigger"]
+    ordering = ["trigger"]
+
+    def has_add_permission(self, request):
+        # One row per trigger, provisioned by seed_notifications.
+        return False
+
+    @admin.display(description=_("Trigger"), ordering="trigger")
+    def trigger_display(self, obj):
+        return obj.get_trigger_display()
+
+
+try:
+    admin.site.unregister(Email)
+except NotRegistered:  # pragma: no cover - post-office may stop self-registering
+    pass
+
+
+@admin.register(Email)
+class EmailLogAdmin(ModelAdmin):
+    """Read-only delivery log: everything post-office recorded, queued or failed."""
+
+    list_display = ["to", "subject", "status_display", "last_updated"]
+    list_filter = ["status", "last_updated"]
+    search_fields = ["to", "subject"]
+    ordering = ["-last_updated"]
+    fields = ["to", "from_email", "subject", "status", "last_updated", "message"]
+    readonly_fields = fields
+
+    @admin.display(description=_("Status"), ordering="status")
+    def status_display(self, obj):
+        return obj.get_status_display()
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

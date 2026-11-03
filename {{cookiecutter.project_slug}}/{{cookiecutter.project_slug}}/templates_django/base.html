@@ -1,0 +1,82 @@
+{% load static i18n %}{% get_current_language as LANGUAGE_CODE %}{% get_current_language_bidi as LANGUAGE_BIDI %}<!DOCTYPE html>
+{% comment %}
+The site shell.
+
+Direction is derived from Django's own LANGUAGES_BIDI list, so any RTL locale
+(ar, he, fa, ur, ...) works with no project configuration. It is the ONLY thing
+that switches the site into RTL - there is no second set of templates.
+
+Stylesheet order is a contract, not an accident:
+
+    main.css -> block page_css -> block extra_css -> rtl.css
+
+rtl.css is loaded LAST, after every per-page override. The reference project
+loaded it in the middle and a later "last word wins" override file silently
+clobbered RTL rules on Arabic pages; putting it at the end makes that
+impossible. main.css uses logical properties (margin-inline-start and friends),
+so rtl.css only carries what logical properties genuinely cannot express.
+
+Navigation comes from the view as `nav_items`, a list of
+{label, url, is_active} - there is no menu model and no template tag library to
+learn. Replace it with a real menu when the project grows one.
+{% endcomment %}
+<html lang="{{ LANGUAGE_CODE }}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+
+    {# The container script goes as early as possible in head, and renders only when an id is configured. #}
+    {% include "includes/analytics_head.html" %}
+
+    {% block head_meta %}{% include "includes/meta.html" %}{% endblock %}
+    {% block structured_data %}{% include "includes/json_ld.html" %}{% endblock %}
+
+    <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
+
+    {% include "includes/styles.html" %}
+    {% block page_css %}{% endblock %}
+    {% block extra_css %}{% endblock %}
+    {% if LANGUAGE_BIDI %}<link rel="stylesheet" href="{% static 'css/rtl.css' %}">{% endif %}
+
+    {# Per-page tags: the preload hint for the LCP image belongs here. #}
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body id="top" class="{% block body_class %}{% endblock %}">
+    {% include "includes/analytics_body.html" %}
+
+    {# First focusable element on the page, so a keyboard user is not walked through the whole navigation on every page. #}
+    <a class="skip-link" href="#main-content">{% translate "Skip to main content" %}</a>
+
+    {% block header %}
+    <header class="site-header">
+        <div class="container site-header__inner">
+            <a class="site-header__brand" href="/">{{ SITE_NAME }}</a>
+            {% if nav_items %}<nav class="site-nav" aria-label="{% translate 'Main navigation' %}">
+                <ul class="site-nav__list">
+                    {% for item in nav_items %}<li class="site-nav__item"><a class="site-nav__link{% if item.is_active %} is-active{% endif %}" href="{{ item.url }}"{% if item.is_active %} aria-current="page"{% endif %}>{{ item.label }}</a></li>{% endfor %}
+                </ul>
+            </nav>{% endif %}
+            {% include "includes/language_switcher.html" %}
+        </div>
+    </header>
+    {% endblock %}
+
+    <main id="main-content" tabindex="-1">
+        {% block messages %}<div class="container">{% include "includes/messages.html" %}</div>{% endblock %}
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block footer %}
+    <footer class="site-footer">
+        <div class="container">
+            <p class="site-footer__copyright">&copy; {% now "Y" %} {% firstof CLIENT_NAME SITE_NAME %}</p>
+        </div>
+    </footer>
+    {% endblock %}
+
+    {% include "includes/scripts.html" %}
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

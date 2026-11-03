@@ -1,0 +1,86 @@
+{% load i18n wagtailcore_tags wagtailimages_tags navigation_tags %}
+{% with branding=settings.navigation.BrandingSettings contact=settings.navigation.ContactSettings social=settings.navigation.SocialMediaSettings footer=settings.navigation.FooterSettings %}
+<footer class="site-footer">
+    <div class="site-footer__inner">
+        <div class="site-footer__intro">
+            {% if branding.footer_logo or branding.logo %}
+                {% if branding.footer_logo %}
+                    {% image branding.footer_logo height-56 loading="lazy" decoding="async" alt=SITE_NAME class="site-footer__logo" %}
+                {% else %}
+                    {% image branding.logo height-56 loading="lazy" decoding="async" alt=SITE_NAME class="site-footer__logo" %}
+                {% endif %}
+            {% else %}
+                <span class="site-footer__wordmark">{{ SITE_NAME }}</span>
+            {% endif %}
+
+            {% if footer.about_text %}
+                <p class="site-footer__about">{{ footer.about_text|linebreaksbr }}</p>
+            {% endif %}
+        </div>
+
+        {% if footer.footer_menu %}
+            <nav class="site-footer__menu" aria-label="{% translate 'Footer menu' %}">
+                {% for block in footer.footer_menu %}
+                    {% with column=block.value %}
+                        <div class="site-footer__column">
+                            <h2 class="site-footer__heading">
+                                {% if column.page or column.url %}
+                                    <a href="{{ column|nav_href }}">{{ column.label }}</a>
+                                {% else %}
+                                    {{ column.label }}
+                                {% endif %}
+                            </h2>
+                            {% if column.children %}
+                                <ul class="site-footer__links">
+                                    {% for link in column.children %}
+                                        {% nav_item_active link as link_active %}
+                                        <li>
+                                            <a href="{{ link|nav_href }}"{% if link_active %} aria-current="page"{% endif %}>{{ link.label }}</a>
+                                        </li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        </div>
+                    {% endwith %}
+                {% endfor %}
+            </nav>
+        {% endif %}
+
+        <div class="site-footer__contact">
+            <h2 class="site-footer__heading">{% translate "Contact" %}</h2>
+            <address class="site-footer__address">
+                {% if contact.address %}<p>{{ contact.address|linebreaksbr }}</p>{% endif %}
+                {% if contact.po_box %}<p>{% translate "P.O. Box" %}: {{ contact.po_box }}</p>{% endif %}
+                {% if contact.phone %}
+                    <p><span dir="ltr" style="unicode-bidi:isolate">{{ contact.phone|linebreaksbr }}</span></p>
+                {% endif %}
+                {% if contact.email %}<p><a href="mailto:{{ contact.email }}">{{ contact.email }}</a></p>{% endif %}
+                {% if contact.working_hours %}<p>{{ contact.working_hours }}</p>{% endif %}
+            </address>
+
+            {% if social.links %}
+                <ul class="site-footer__social">
+                    {% for link in social.links %}
+                        <li class="site-footer__social-item site-footer__social-item--{{ link.name }}">
+                            <a href="{{ link.url }}" rel="noopener noreferrer" target="_blank">
+                                <span class="site-footer__social-icon" aria-hidden="true"></span>
+                                <span class="site-footer__social-label">{{ link.label }}</span>
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+
+        {% comment %} The newsletter app owns the sign-up form, including its honeypot and
+           Turnstile fields; a hand-rolled copy here would be rejected by its own spam
+           check. NEWSLETTER_ENABLED is a runtime flag, so this include is never
+           resolved on a project generated without the app. {% endcomment %}
+        {% if NEWSLETTER_ENABLED %}{% include "newsletter/footer_signup.html" %}{% endif %}
+    </div>
+
+    <div class="site-footer__bottom">
+        <p class="site-footer__copyright">&copy; {% now "Y" %} {{ footer.copyright_text|default:SITE_NAME }}</p>
+    </div>
+</footer>
+{% endwith %}

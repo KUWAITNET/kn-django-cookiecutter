@@ -1,0 +1,20 @@
+{% extends "wagtailadmin/login.html" %}
+{% load i18n wagtailimages_tags %}
+
+{% comment %} Two named blocks only. The reference project forked this whole template to move
+   the logo, and the fork then drifted silently across CMS upgrades.
+
+   The heading names the admin, not the site: SITE_NAME comes from the environment
+   and is often the hostname on dev and UAT servers, which read as "Sign in to
+   dev.example.com". The logo below already says whose admin it is. {% endcomment %}
+{% block branding_login %}{% translate "Sign in to admin" %}{% endblock %}
+
+{% block branding_logo %}
+    <div class="login-logo">
+        {% if settings.navigation.BrandingSettings.logo %}
+            {% image settings.navigation.BrandingSettings.logo height-48 alt=CLIENT_NAME class="admin-brand-logo" %}
+        {% else %}
+            <span class="admin-brand-logo admin-brand-logo--text">{{ CLIENT_NAME }}</span>
+        {% endif %}
+    </div>
+{% endblock %}

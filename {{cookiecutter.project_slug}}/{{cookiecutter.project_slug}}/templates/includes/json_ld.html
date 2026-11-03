@@ -1,0 +1,78 @@
+{% load i18n %}{% get_current_language as LANGUAGE_CODE %}{% comment %}
+JSON-LD structured data. JSON-LD only - no microdata, no RDFa, no itemprop
+attributes anywhere in the markup, because mixing vocabularies is how markup and
+content drift apart.
+
+Every interpolated value goes through |escapejs, which emits \uXXXX for <, >, &
+and the quote characters. That is valid JSON string content AND cannot terminate
+the <script> element, so an editor-supplied string can never break out of the
+block. Nothing here is ever marked |safe.
+
+The script carries the CSP nonce, exactly like every other inline script: without
+it a strict script-src silently drops the structured data and nothing reports it.
+
+Context it reads:
+
+  seo.noindex             when true nothing is emitted - a page excluded from the
+                          index has no business publishing structured data.
+  seo.search_url          absolute url of the site search. The SearchAction is
+                          emitted only when this is present; pointing it at a url
+                          that does not exist is worse than omitting it.
+  seo.organization_logo   absolute url of the organisation logo.
+  seo.organization_same_as   list of absolute social-profile urls.
+  breadcrumbs             list of {"name": ..., "url": ...} built by the view from
+                          the real ancestor chain, with the same labels as the
+                          visible breadcrumb trail. "url" is a root-relative path;
+                          BASE_URL is prepended here.
+
+  SITE_NAME, CLIENT_NAME, BASE_URL from apps.core.context_processors.site_context.
+
+Entities are declared once and referenced by @id, so a content type that adds an
+Article node references BASE_URL/#organization as its publisher rather than
+repeating the whole organisation block.
+{% endcomment %}{% autoescape off %}{# firstof HTML-escapes; resolve raw so |escapejs escapes exactly once. #}{% firstof seo.organization_name CLIENT_NAME SITE_NAME as organization_name %}{% endautoescape %}{% if not seo.noindex %}<script type="application/ld+json" nonce="{{ csp_nonce }}">
+[
+{
+"@context": "https://schema.org",
+"@type": "Organization",
+"@id": "{{ BASE_URL|escapejs }}/#organization",
+"name": "{{ organization_name|escapejs }}",
+"url": "{{ BASE_URL|escapejs }}/"{% if seo.organization_logo %},
+"logo": {
+"@type": "ImageObject",
+"url": "{{ seo.organization_logo|escapejs }}"
+}{% endif %}{% if seo.organization_same_as %},
+"sameAs": [{% for profile in seo.organization_same_as %}"{{ profile|escapejs }}"{% if not forloop.last %}, {% endif %}{% endfor %}]{% endif %}
+},
+{
+"@context": "https://schema.org",
+"@type": "WebSite",
+"@id": "{{ BASE_URL|escapejs }}/#website",
+"name": "{{ SITE_NAME|escapejs }}",
+"url": "{{ BASE_URL|escapejs }}/",
+"inLanguage": "{{ LANGUAGE_CODE|escapejs }}",
+"publisher": {"@id": "{{ BASE_URL|escapejs }}/#organization"}{% if seo.search_url %},
+"potentialAction": {
+"@type": "SearchAction",
+"target": {
+"@type": "EntryPoint",
+"urlTemplate": "{{ seo.search_url|escapejs }}?q={search_term_string}"
+},
+"query-input": "required name=search_term_string"
+}{% endif %}
+}{% if breadcrumbs %},
+{
+"@context": "https://schema.org",
+"@type": "BreadcrumbList",
+"itemListElement": [{% for crumb in breadcrumbs %}
+{
+"@type": "ListItem",
+"position": {{ forloop.counter }},
+"name": "{{ crumb.name|escapejs }}",
+"item": "{{ BASE_URL|escapejs }}{{ crumb.url|escapejs }}"
+}{% if not forloop.last %},{% endif %}{% endfor %}
+]
+}{% endif %}
+]
+</script>
+{% endif %}

@@ -1,0 +1,470 @@
+# The KUWAITNET approved-package list, shipped with the project.
+#
+# A copy rather than a fetch, deliberately: `tools/check_standards.py` has to run
+# in a pre-commit hook on a train and in a CI container with no outbound network,
+# and a check that silently passes when it cannot reach the internet is worse
+# than no check. Point the script at a newer copy with --packages when you need
+# one.
+#
+# The canonical source, with the full reasoning behind every entry, is
+# `approved-packages.toml` and `docs/approved-packages.md` in
+# https://bitbucket.org/KuwaitNET/kn-docs - a test there asserts the
+# two agree. The reasons below are trimmed to one line; read the document before
+# arguing with one.
+#
+# Tiers:
+#   shipped   - already in this project. Use it; do not re-litigate it.
+#   approved  - decided in advance, added when its trigger fires. No call needed.
+#   rejected  - decided against, with the reason. The checker fails the build.
+#
+# A package in no tier is UNDECIDED, not forbidden. The checker warns rather than
+# fails, because the answer is a twenty-minute review and a pull request against
+# the standards, not a workaround here.
+
+[meta]
+source = "https://bitbucket.org/KuwaitNET/kn-docs"
+document = "docs/approved-packages.md"
+updated = "2026-11-03"
+
+# --- Shipped by the template: on every project ------------------------------
+
+[[packages]]
+name = "django"
+tier = "shipped"
+scope = "always"
+reason = "The framework. Pinned to one minor release."
+
+[[packages]]
+name = "psycopg"
+tier = "shipped"
+scope = "always"
+reason = "PostgreSQL driver. We are PostgreSQL-only."
+
+[[packages]]
+name = "django-environ"
+tier = "shipped"
+scope = "always"
+reason = "Reads configuration from the environment, so one settings module serves every environment."
+
+[[packages]]
+name = "pillow"
+tier = "shipped"
+scope = "always"
+reason = "Image handling, and the server-side re-encode that strips EXIF and any payload out of an uploaded image."
+
+[[packages]]
+name = "gunicorn"
+tier = "shipped"
+scope = "always"
+reason = "The WSGI application server."
+
+[[packages]]
+name = "whitenoise"
+tier = "shipped"
+scope = "always"
+reason = "Serves compressed, hash-named static files from the application process."
+
+[[packages]]
+name = "django-unfold"
+tier = "shipped"
+scope = "always"
+reason = "The admin skin, wherever django.contrib.admin is mounted."
+
+[[packages]]
+name = "django-csp"
+tier = "rejected"
+reason = "Superseded by Django's built-in CSP in 6.0. Use SECURE_CSP and django.middleware.csp.ContentSecurityPolicyMiddleware. Note the nonce moved from request.csp_nonce to the csp_nonce context processor, and the old expression fails silently."
+
+[[packages]]
+name = "django-permissions-policy"
+tier = "shipped"
+scope = "always"
+reason = "The Permissions-Policy response header: every browser feature denied unless enabled with a reason."
+
+[[packages]]
+name = "argon2-cffi"
+tier = "shipped"
+scope = "always"
+reason = "Argon2 password hashing, with PBKDF2 retained so existing hashes still verify."
+
+[[packages]]
+name = "python-magic"
+tier = "shipped"
+scope = "always"
+reason = "Content sniffing on uploads: the real bytes must match the extension."
+
+[[packages]]
+name = "django-post-office"
+tier = "shipped"
+scope = "always"
+reason = "Wraps the real mail transport so every send is queued, logged and visible in the admin."
+
+[[packages]]
+name = "django-auditlog"
+tier = "shipped"
+scope = "always"
+reason = "Field-level, attributed audit trail of administrative changes."
+
+[[packages]]
+name = "django-solo"
+tier = "shipped"
+scope = "always"
+reason = "Site-wide configuration as one editable row."
+
+[[packages]]
+name = "django-extensions"
+tier = "shipped"
+scope = "always"
+reason = "shell_plus, show_urls, graph_models. A runtime dependency, not a dev one: it is in INSTALLED_APPS and its fields reach migrations."
+
+# --- Shipped when the corresponding option is selected ----------------------
+{%- if cookiecutter.stack == "wagtail" %}
+
+[[packages]]
+name = "wagtail"
+tier = "shipped"
+scope = "optional"
+selected_by = "stack=wagtail"
+reason = "The CMS."
+
+[[packages]]
+name = "wagtail-modeltranslation"
+tier = "shipped"
+scope = "optional"
+selected_by = "languages=en_ar on the CMS stack"
+reason = "Translated columns per language."
+
+[[packages]]
+name = "wagtail-2fa"
+tier = "shipped"
+scope = "optional"
+selected_by = "use_2fa=yes on the CMS stack"
+reason = "The second factor on administrative accounts."
+{%- endif %}
+
+[[packages]]
+name = "django-modeltranslation"
+tier = "shipped"
+scope = "optional"
+selected_by = "languages=en_ar on plain Django"
+reason = "Translated columns per language."
+
+[[packages]]
+name = "django-otp"
+tier = "shipped"
+scope = "optional"
+selected_by = "use_2fa=yes"
+reason = "The second factor on administrative accounts."
+
+[[packages]]
+name = "django-axes"
+tier = "shipped"
+scope = "optional"
+selected_by = "rate_limiting=yes"
+reason = "Login lockout with an auditable record."
+
+[[packages]]
+name = "django-ratelimit"
+tier = "shipped"
+scope = "optional"
+selected_by = "rate_limiting=yes, server-rendered"
+reason = "Rate caps on public non-DRF POST endpoints."
+
+[[packages]]
+name = "requests"
+tier = "shipped"
+scope = "optional"
+selected_by = "Turnstile or an API"
+reason = "Outbound HTTP: Turnstile verification, the outbound-integration client."
+
+[[packages]]
+name = "django-countries"
+tier = "shipped"
+scope = "optional"
+selected_by = "countries_app=django_countries"
+reason = "Country data, from the KUWAITNET fork - the country-list policy lives in the shipped data."
+
+[[packages]]
+name = "django-cities-light"
+tier = "shipped"
+scope = "optional"
+selected_by = "countries_app=cities"
+reason = "Country, region and city reference data."
+
+[[packages]]
+name = "django-phonenumber-field"
+tier = "shipped"
+scope = "optional"
+selected_by = "countries or the forms suite"
+reason = "Validated phone numbers, and the dial codes."
+
+[[packages]]
+name = "djangorestframework"
+tier = "shipped"
+scope = "optional"
+selected_by = "api != none"
+reason = "The API framework."
+
+[[packages]]
+name = "djangorestframework-simplejwt"
+tier = "shipped"
+scope = "optional"
+selected_by = "api != none"
+reason = "JWT access + rotating refresh tokens."
+
+[[packages]]
+name = "drf-spectacular"
+tier = "shipped"
+scope = "optional"
+selected_by = "api != none"
+reason = "The OpenAPI schema and the docs UI."
+
+[[packages]]
+name = "drf-standardized-errors"
+tier = "shipped"
+scope = "optional"
+selected_by = "api != none"
+reason = "One error envelope over every DRF exception path, contributed to the schema."
+
+[[packages]]
+name = "django-cors-headers"
+tier = "shipped"
+scope = "optional"
+selected_by = "api != none"
+reason = "Explicit CORS origins. Never a wildcard with credentials."
+
+[[packages]]
+name = "django-filter"
+tier = "shipped"
+scope = "optional"
+selected_by = "api != none"
+reason = "Declarative filtering on list endpoints."
+
+[[packages]]
+name = "django-storages"
+tier = "shipped"
+scope = "optional"
+selected_by = "media_storage"
+reason = "Media in object storage. Only the selected backend's SDK is installed."
+
+[[packages]]
+name = "django-compressor"
+tier = "shipped"
+scope = "optional"
+selected_by = "asset_pipeline=compressor"
+reason = "Offline CSS/JS compilation, for a theme that needs SASS without a Node toolchain."
+
+[[packages]]
+name = "redis"
+tier = "shipped"
+scope = "optional"
+selected_by = "cache=redis"
+reason = "The Redis client for the cache, rate-limit counters and the singleton cache."
+
+[[packages]]
+name = "huey"
+tier = "shipped"
+scope = "optional"
+selected_by = "task_queue=huey"
+reason = "Background work."
+
+[[packages]]
+name = "celery"
+tier = "shipped"
+scope = "optional"
+selected_by = "task_queue=celery"
+reason = "Background work, when routing, priorities or multiple queues are genuinely needed."
+
+[[packages]]
+name = "amqp"
+tier = "shipped"
+reason = "Celery's AMQP transport, pulled in by Celery. Listed so the checker does not report it as undecided."
+
+[[packages]]
+name = "kombu"
+tier = "shipped"
+reason = "Celery's messaging library, pulled in by Celery. Listed so the checker does not report it as undecided."
+
+[[packages]]
+name = "sentry-sdk"
+tier = "shipped"
+scope = "optional"
+selected_by = "sentry=yes"
+reason = "Error monitoring, initialised only when SENTRY_DSN is set."
+
+# --- Development dependencies ------------------------------------------------
+
+[[packages]]
+name = "ruff"
+tier = "shipped"
+scope = "dev"
+reason = "Lint and format."
+
+[[packages]]
+name = "pytest"
+tier = "shipped"
+scope = "dev"
+reason = "The test runner."
+
+[[packages]]
+name = "pytest-django"
+tier = "shipped"
+scope = "dev"
+reason = "Django integration for pytest."
+
+[[packages]]
+name = "pytest-cov"
+tier = "shipped"
+scope = "dev"
+reason = "The coverage gate."
+
+[[packages]]
+name = "factory-boy"
+tier = "shipped"
+scope = "dev"
+reason = "Test data."
+
+[[packages]]
+name = "django-debug-toolbar"
+tier = "shipped"
+scope = "dev"
+reason = "Request, query and template inspection in development."
+
+[[packages]]
+name = "bandit"
+tier = "shipped"
+scope = "dev"
+reason = "Static security analysis."
+
+[[packages]]
+name = "pip-audit"
+tier = "shipped"
+scope = "dev"
+reason = "Known-vulnerability scan. Fails the build."
+
+[[packages]]
+name = "pre-commit"
+tier = "shipped"
+scope = "dev"
+reason = "Runs the local hooks before a commit exists."
+
+[[packages]]
+name = "ipython"
+tier = "shipped"
+scope = "dev"
+reason = "A real REPL behind shell_plus."
+
+[[packages]]
+name = "flower"
+tier = "shipped"
+scope = "dev"
+reason = "Celery monitoring UI, on a broker that supports remote control."
+
+# --- Approved: add when the project needs it ---------------------------------
+
+[[packages]]
+name = "django-import-export"
+tier = "approved"
+trigger = "The client needs to bulk-load or export data themselves, in Excel or CSV."
+reason = "Integrates with Unfold. Check its declared Django support before adding."
+
+[[packages]]
+name = "django-allauth"
+tier = "approved"
+trigger = "The project has end-user accounts - registration, log-in, password reset, social sign-in."
+reason = "The template deliberately has no end-user auth story. This is it, not a hand-rolled registration view."
+
+[[packages]]
+name = "dj-rest-auth"
+tier = "approved"
+trigger = "The same project also exposes those accounts over the API."
+reason = "Use with django-allauth, never instead of it. One JWT configuration per project."
+
+[[packages]]
+name = "ottu-py"
+tier = "approved"
+trigger = "The project takes payments through Ottu."
+reason = "Install the base package, not the [django] extra - the extra pins django<4.3."
+
+[[packages]]
+name = "django-anymail"
+tier = "approved"
+trigger = "SMTP deliverability is not good enough, or the volume needs bounce and complaint webhooks."
+reason = "Sits behind django-post-office, which stays the outbound path so every send is still logged."
+
+[[packages]]
+name = "mypy"
+tier = "approved"
+trigger = "A long-lived project with a substantial service layer, typed from the start and run in CI."
+reason = "Adding type checking to a large untyped codebase mid-project is worse than not having it."
+
+[[packages]]
+name = "django-stubs"
+tier = "approved"
+trigger = "Paired with mypy."
+reason = "Django type stubs; useless without mypy and never added alone."
+
+[[packages]]
+name = "django-crispy-forms"
+tier = "approved"
+trigger = "More than a handful of server-rendered forms, and the design is Bootstrap 5."
+reason = "Always with crispy-bootstrap5 - the template pack is what does the rendering."
+
+[[packages]]
+name = "crispy-bootstrap5"
+tier = "approved"
+trigger = "Paired with django-crispy-forms."
+reason = "The Bootstrap 5 template pack. Never one without the other."
+
+[[packages]]
+name = "weasyprint"
+tier = "approved"
+trigger = "The project generates PDFs - invoices, certificates, reports."
+reason = "Renders HTML and CSS, so a PDF is a reviewable template. Needs pango and cairo, so it changes the Dockerfile."
+
+# --- Rejected, and why -------------------------------------------------------
+
+[[packages]]
+name = "django-braces"
+tier = "rejected"
+reason = "Declares Django 2.2-4.2, installs anyway on a Django it has never seen, and fails later at runtime. What it is reached for has been in django.contrib.auth.mixins since Django 1.9."
+
+[[packages]]
+name = "django-model-utils"
+tier = "rejected"
+reason = "Duplicates apps.core.models.TimeStampedModel, and declares support only to Django 5.1. Write StatusField and MonitorField yourself; they are a TextChoices and a DateTimeField."
+
+[[packages]]
+name = "django-redis"
+tier = "rejected"
+reason = "Django 4.0 put RedisCache in core, and it does everything we use a cache for. One less dependency, maintained by the framework authors, is the better trade."
+
+[[packages]]
+name = "django-celery-beat"
+tier = "rejected"
+reason = "Pins Django<6.1, and a schedule in database rows exists on one server, appears in no code review, and is lost with the machine."
+
+[[packages]]
+name = "django-split-settings"
+tier = "rejected"
+reason = "The base/dev/production/test settings package already does this, in plain Python imports a new developer can read without learning a library."
+
+[[packages]]
+name = "easy-thumbnails"
+tier = "rejected"
+reason = "Duplication, not health: this project already re-encodes every uploaded image server-side, so bound the dimensions there. On-the-fly thumbnailing adds a cache to back up, invalidate and get wrong."
+
+[[packages]]
+name = "sorl-thumbnail"
+tier = "rejected"
+reason = "Same reason as easy-thumbnails: resize on upload instead, so the bytes on disk are the bytes you serve."
+
+[[packages]]
+name = "drf-recaptcha"
+tier = "rejected"
+reason = "Cloudflare Turnstile is the fixed company decision and ships with a honeypot behind it. Two bot-protection systems means two sets of keys and one of them silently unmaintained."
+
+[[packages]]
+name = "django-ckeditor"
+tier = "rejected"
+reason = "Bundles CKEditor 4, which is end-of-life and has published XSS vulnerabilities. A rich-text editor is an XSS surface by construction; shipping an unsupported one is not a trade-off we make."

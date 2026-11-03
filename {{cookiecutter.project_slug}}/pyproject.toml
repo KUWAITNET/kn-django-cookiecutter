@@ -1,0 +1,269 @@
+[project]
+name = "{{ cookiecutter.project_slug }}"
+version = "0.1.0"
+description = "{{ cookiecutter.description }}"
+readme = "README.md"
+requires-python = "~={{ cookiecutter.python_version }}.0"
+dependencies = [
+{%- if cookiecutter.stack == "wagtail" %}
+    # Pinned to one Django minor on purpose: Wagtail declares only "Django>=5.2"
+    # with no upper bound, so an unpinned install silently resolves to whatever
+    # Django is newest - a combination nobody has tested. See docs/14-decisions.md.
+{%- else %}
+    # Pinned to one Django minor on purpose, so an upgrade is a deliberate change
+    # with its own test run rather than something a re-resolve does silently.
+    # See docs/14-decisions.md.
+{%- endif %}
+    # 6.1 is the current release. We track the 6.x line rather than the 5.2 LTS
+    # so the April 2027 move to the 6.2 LTS is a single-step upgrade rather than
+    # a jump across two release cycles and their accumulated deprecations.
+    "django>={{ cookiecutter._django_version }},<6.2",
+{%- if cookiecutter.stack == "wagtail" %}
+    "wagtail>={{ cookiecutter._wagtail_version }},<7.5",
+{%- endif %}
+{%- if cookiecutter.languages == "en_ar" %}
+{%- if cookiecutter.stack == "wagtail" %}
+    "wagtail-modeltranslation>=0.16",
+{%- else %}
+    "django-modeltranslation>=0.19",
+{%- endif %}
+{%- endif %}
+    "psycopg[binary]>=3.2",
+    "django-environ>=0.12",
+    "Pillow>=11.0",
+    "gunicorn>=23.0",
+    "whitenoise>=6.7",
+{%- if cookiecutter.media_storage == "s3" %}
+    # Object storage. Only the selected backend's SDK is installed - the extra is
+    # what pulls boto3 in, so a filesystem project carries no cloud dependency.
+    "django-storages[s3]>=1.14",
+{%- elif cookiecutter.media_storage == "gcs" %}
+    # Object storage. Only the selected backend's SDK is installed - the extra is
+    # what pulls google-cloud-storage in, so a filesystem project carries no cloud
+    # dependency.
+    "django-storages[google]>=1.14",
+{%- elif cookiecutter.media_storage == "azure" %}
+    # Object storage. Only the selected backend's SDK is installed - the extra is
+    # what pulls azure-storage-blob in, so a filesystem project carries no cloud
+    # dependency.
+    "django-storages[azure]>=1.14",
+{%- endif %}
+{%- if cookiecutter.asset_pipeline == "compressor" %}
+    # Asset pipeline. Offline compression only: COMPRESS_OFFLINE is on in
+    # production, so 'manage.py compress --force' is part of every deploy.
+    "django-compressor>=4.5",
+{%- endif %}
+    # Admin skin: the KUWAITNET standard wherever django.contrib.admin is mounted.
+    "django-unfold>=0.40",
+    # Security baseline.
+    "django-permissions-policy>=4.25",
+    "argon2-cffi>=23.1",
+    "python-magic>=0.4.27",
+{%- if cookiecutter.use_2fa == "yes" %}
+    "django-otp>=1.5",
+{%- if cookiecutter.stack == "wagtail" %}
+    "wagtail-2fa>=1.8",
+{%- endif %}
+{%- endif %}
+{%- if cookiecutter.rate_limiting == "yes" %}
+    "django-axes>=7.0",
+{%- if cookiecutter.frontend != "api_only" %}
+    "django-ratelimit>=4.1",
+{%- endif %}
+{%- endif %}
+{%- if cookiecutter.spam_protection == "turnstile_honeypot" or cookiecutter.api != "none" %}
+    # Outbound HTTP: Turnstile verification and the outbound-integration client
+    # in apps/api/services.py both import this at module level.
+    "requests>=2.32",
+{%- endif %}
+    # E-mail: post-office wraps the real transport so every send is logged and auditable.
+    "django-post-office>=3.9",
+    # Field-level audit trail with attribution. Upstream, not the KUWAITNET fork:
+    # the fork exists to allow superusers to delete entries, which is in tension
+    # with what an audit log is for. Switch to it deliberately, not by default.
+    "django-auditlog>=3.4.1",
+{%- if cookiecutter.stack == "wagtail" %}
+    # Site-wide configuration as a single row, edited in the Django admin. Here it
+    # carries OPERATIONAL settings only - integration toggles, thresholds, the
+    # switches an administrator flips. Editor-facing branding, contact and social
+    # details stay in the CMS site settings, where editors expect them, and a
+    # setting must never exist in both places.
+    "django-solo>=2.5",
+{%- else %}
+    # Site-wide configuration as a single row (apps.core.models.SiteConfiguration),
+    # edited in the Django admin. Replaces the hand-rolled "settings model with one
+    # instance, and a get_or_create scattered through the views" that every
+    # non-CMS project in the estate reinvented differently.
+    "django-solo>=2.5",
+{%- endif %}
+    # A RUNTIME dependency, not a dev one. It goes in INSTALLED_APPS to provide
+    # shell_plus/show_urls/graph_models, and once it is there a production install
+    # without it fails at startup. Worse, its db fields (AutoSlugField and friends)
+    # get written into migrations, so a server without the package cannot even
+    # migrate. Werkzeug is NOT pulled in (requires_dist is just django), so
+    # runserver_plus and its debugger are unavailable unless someone installs
+    # Werkzeug explicitly - which production must never do.
+    "django-extensions>=4.1",
+{%- if cookiecutter.countries_app == "cities" %}
+    # Country/region/city reference data. The concrete models live in apps/cities.
+    "django-cities-light>=3.10",
+{%- elif cookiecutter.countries_app == "django_countries" %}
+    # The KUWAITNET fork of django-countries, one commit ahead of upstream 9.0.0:
+    # the country-list policy is applied to the shipped DATA, so no queryset can
+    # reintroduce what it removes. The ref is a branch, but uv pins the exact
+    # commit in uv.lock - do not "fix" that by loosening the lock. Because it is a
+    # fork, upstream updates are a named maintenance task; see docs/14-decisions.md.
+    "django-countries @ git+https://github.com/KUWAITNET/django-countries.git@main",
+{%- endif %}
+{%- if cookiecutter.countries_app != "none" or cookiecutter.forms_suite == "yes" %}
+    # Also the source of the dial codes when the countries backend has no table of
+    # its own: apps/core/countries.py reads country_code_for_region() from it.
+    "django-phonenumber-field[phonenumbers]>=8.0",
+{%- endif %}
+{%- if cookiecutter.api != "none" %}
+    # API pack.
+    "djangorestframework>=3.15",
+    "djangorestframework-simplejwt>=5.3",
+    "drf-spectacular>=0.28",
+    # One error envelope for every DRF exception path, and the KUWAITNET house
+    # standard. The [openapi] extra is what makes it contribute error responses
+    # to the generated schema; without it the package is runtime-only.
+    "drf-standardized-errors[openapi]>=0.16",
+    "django-cors-headers>=4.4",
+    "django-filter>=24.3",
+{%- endif %}
+{%- if cookiecutter.cache == "redis" %}
+    "redis>=5.0",
+{%- endif %}
+{%- if cookiecutter.task_queue == "huey" %}
+    # Background task queue. Periodic tasks are built into the consumer, so there
+    # is no second scheduler process to deploy and keep alive.
+    "huey>=3.3",
+{%- if cookiecutter.huey_backend == "redis" and cookiecutter.cache != "redis" %}
+    # Queue storage. Declared here rather than left to the cache: this project uses
+    # Redis for nothing else, so nothing else would install the client.
+    "redis>=5.0",
+{%- endif %}
+{%- elif cookiecutter.task_queue == "celery" %}
+{%- if cookiecutter.task_broker == "redis" %}
+    # Background task queue. The [redis] extra is what installs kombu's Redis
+    # transport; celery on its own speaks only AMQP.
+    "celery[redis]>=5.5",
+{%- elif cookiecutter.task_broker == "rabbitmq" %}
+    # Background task queue. RabbitMQ needs no extra - py-amqp is already a kombu
+    # dependency - but it is named explicitly so the broker choice is visible in
+    # this list rather than implied by an absence.
+    "celery>=5.5",
+    "amqp>=5.3",
+{%- else %}
+    # Background task queue. The [sqs] extra pulls boto3, kombu[sqs], urllib3 AND
+    # pycurl, which is a C extension built against libcurl. A machine without
+    # libcurl and OpenSSL headers fails at 'uv sync', not at runtime - which is why
+    # the Dockerfile builder stage installs them. See docs/06-installation.md.
+    "celery[sqs]>=5.5",
+{%- endif %}
+    # NOT django-celery-beat. Two reasons, either of which is enough. Its current
+    # release pins "Django<6.1", so it cannot be installed here at all. And a schedule stored in
+    # database rows is a schedule that exists on one server, is absent from the
+    # repository, and is lost with the machine. See docs/14-decisions.md.
+{%- endif %}
+{%- if cookiecutter.sentry == "yes" %}
+    "sentry-sdk[django]>=2.0",
+{%- endif %}
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9",
+    "pytest>=8.3",
+    "pytest-django>=4.9",
+    "pytest-cov>=6.0",
+    "factory-boy>=3.3",
+    "django-debug-toolbar>=4.4",
+    "bandit[toml]>=1.8",
+    "pre-commit>=4.0",
+    "pip-audit>=2.7",
+    # shell_plus is much better with a real REPL; it degrades gracefully without.
+    "ipython>=8.30",
+{%- if cookiecutter.task_queue == "celery" and cookiecutter.task_broker != "sqs" %}
+    # Celery monitoring UI. A dev dependency on purpose: it is an unauthenticated
+    # web server unless you put auth in front of it, so it is a debugging tool run
+    # against a broker you can already reach, not something exposed in production.
+    "flower>=2.0",
+{%- endif %}
+]
+
+[tool.uv]
+package = false
+
+# --- Lint and format --------------------------------------------------------
+
+[tool.ruff]
+target-version = "py{{ cookiecutter.python_version.replace('.', '') }}"
+line-length = 100
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "DJ",  # flake8-django
+    "S",   # flake8-bandit (security)
+]
+ignore = [
+    "E501",  # line length is handled by the formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Migrations are generated; settings use star imports by design; asserts are the
+# point of a test.
+"*/migrations/*" = ["E501", "F401", "S"]
+"*/settings/*" = ["F403", "F405", "S105", "S106"]
+"*/tests/*" = ["S101", "S105", "S106"]
+"**/test_*.py" = ["S101", "S105", "S106"]
+"conftest.py" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# --- Tests ------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "{{ cookiecutter.project_slug }}.settings.test"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+# Coverage is deliberately NOT in addopts: it slows every local run. CI adds it
+# explicitly along with the failure threshold (see the Makefile 'test-ci' target).
+addopts = "--reuse-db"
+testpaths = ["apps"]
+filterwarnings = ["ignore::DeprecationWarning:pkg_resources"]
+
+[tool.coverage.run]
+source = ["apps"]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+# The KUWAITNET floor. It may rise; it does not fall.
+fail_under = 60
+
+# --- Static security analysis ------------------------------------------------
+
+[tool.bandit]
+# ruff's flake8-bandit ("S") rules cover most checks inline; this configuration
+# drives the standalone bandit run used by pre-commit and CI.
+exclude_dirs = [".venv", "tests", "node_modules", "migrations"]
+skips = [
+    "B101",  # assert_used - fine in tests
+]

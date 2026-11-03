@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% load i18n wagtailcore_tags %}
+
+{% comment %} The page title and the noindex directive come from the view's "seo" context,
+   which includes/meta.html reads. There is no title block here on purpose:
+   metadata is emitted in exactly one place. {% endcomment %}
+{% block body_class %}template-search{% endblock %}
+
+{% block content %}
+    <div class="search">
+        <h1 class="search__title">{% translate "Search" %}</h1>
+
+        <form class="search__form" action="{% url 'search:search' %}" method="get" role="search">
+            <label class="search__label" for="search-input">{% translate "Search this site" %}</label>
+            <input id="search-input" class="search__input" type="search" name="q" value="{{ search_query }}" autocomplete="off">
+            <button class="search__submit" type="submit">{% translate "Search" %}</button>
+        </form>
+
+        {% if rate_limited %}
+            <p class="search__notice" role="status">
+                {% translate "Too many searches from this address. Please wait a moment and try again." %}
+            </p>
+        {% elif search_query %}
+            <p class="search__summary" role="status">
+                {% blocktranslate count counter=result_count trimmed %}
+                    {{ counter }} result for "{{ search_query }}"
+                {% plural %}
+                    {{ counter }} results for "{{ search_query }}"
+                {% endblocktranslate %}
+            </p>
+
+            {% if search_results %}
+                <ol class="search__results">
+                    {% for result in search_results %}
+                        <li class="search__result">
+                            <h2 class="search__result-title">
+                                <a href="{{ result.url }}">{{ result.title }}</a>
+                            </h2>
+                            {% firstof result.description result.search_description as description %}
+                            {% if description %}
+                                <p class="search__result-description">{{ description }}</p>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ol>
+
+                <nav class="search__pagination" aria-label="{% translate 'Search results pages' %}">
+                    {% if search_results.has_previous %}
+                        <a class="search__pagination-link" href="?q={{ search_query|urlencode }}&amp;page={{ search_results.previous_page_number }}">{% translate "Previous" %}</a>
+                    {% endif %}
+                    <span class="search__pagination-status">
+                        {% blocktranslate with current=search_results.number total=search_results.paginator.num_pages trimmed %}
+                            Page {{ current }} of {{ total }}
+                        {% endblocktranslate %}
+                    </span>
+                    {% if search_results.has_next %}
+                        <a class="search__pagination-link" href="?q={{ search_query|urlencode }}&amp;page={{ search_results.next_page_number }}">{% translate "Next" %}</a>
+                    {% endif %}
+                </nav>
+            {% else %}
+                <p class="search__empty">{% translate "No pages matched your search." %}</p>
+            {% endif %}
+        {% endif %}
+    </div>
+{% endblock %}

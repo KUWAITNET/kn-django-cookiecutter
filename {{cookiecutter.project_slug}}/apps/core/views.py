@@ -1,0 +1,286 @@
+"""Project-level views: operational endpoints, protected media and error pages."""
+
+import logging
+import mimetypes
+from datetime import timedelta
+from pathlib import PurePosixPath
+from urllib.parse import quote
+
+from django.apps import apps
+from django.conf import settings
+from django.contrib.auth.views import redirect_to_login
+from django.core.exceptions import FieldDoesNotExist, PermissionDenied, ValidationError
+from django.core.files.storage import FileSystemStorage
+from django.db import DatabaseError, connections
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpResponse,
+    HttpResponseRedirect,
+    JsonResponse,
+)
+from django.shortcuts import render
+from django.template import TemplateDoesNotExist
+{%- if cookiecutter.frontend != "api_only" %}
+from django.urls import NoReverseMatch, reverse
+{%- endif %}
+from django.utils import timezone
+from django.utils.http import content_disposition_header
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_safe
+
+from apps.core.private_files import is_private_field, user_may_open
+from apps.core.storage import private_media_storage, unsign_file_name
+
+logger = logging.getLogger("{{ cookiecutter.project_slug }}")
+
+
+# --- Operational endpoints ---------------------------------------------------
+{%- if cookiecutter.frontend != "api_only" %}
+
+
+@require_safe
+def robots_txt(request):
+    """``/robots.txt``, pointing crawlers at the sitemap.
+
+    Serves ``Disallow: /`` whenever ``DEBUG`` is on or ``ROBOTS_DISALLOW_ALL`` is
+    set. Staging and UAT hosts must never be indexed - a staging copy of a client
+    site ranking alongside the real one is a real incident, and the fix after the
+    fact is slow.
+    """
+    try:
+        sitemap_url = request.build_absolute_uri(reverse("sitemap"))
+    except NoReverseMatch:
+        sitemap_url = ""
+    context = {
+        "sitemap_url": sitemap_url,
+        "robots_disallow_all": bool(settings.DEBUG or settings.ROBOTS_DISALLOW_ALL),
+    }
+    return render(request, "robots.txt", context, content_type="text/plain")
+{%- endif %}
+
+
+@require_safe
+def security_txt(request):
+    """``/.well-known/security.txt`` - RFC 9116.
+
+    How someone reports a vulnerability in this site without having to guess.
+    The alternative to publishing a contact is not silence; it is a disclosure
+    that arrives by whatever route the finder improvises.
+
+    ``Expires`` is mandatory in the RFC and is computed here rather than written
+    into the template, because a hand-written date is a date that goes stale
+    silently - and a parser may ignore an expired file completely, leaving the
+    site looking as though it publishes nothing at all. A year ahead, recomputed
+    on every request, so it is always valid and always honest.
+    """
+    context = {
+        "SECURITY_CONTACT": settings.SECURITY_CONTACT_EMAIL,
+        "EXPIRES": (timezone.now() + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+        "BASE_URL": settings.BASE_URL.rstrip("/"),
+    }
+    return render(request, "security.txt", context, content_type="text/plain")
+
+
+@never_cache
+@require_safe
+def healthz(request):
+    """Liveness probe that actually touches the database.
+
+    A probe that only proves Python is running reports "healthy" while every page
+    is a 500 because the database is unreachable, so this issues a trivial query.
+    """
+    try:
+        with connections["default"].cursor() as cursor:
+            cursor.execute("SELECT 1")
+    except DatabaseError:
+        logger.exception("Health check failed: database unreachable")
+        return JsonResponse({"status": "error", "database": "unavailable"}, status=503)
+    return JsonResponse({"status": "ok", "database": "ok"})
+{%- if cookiecutter.sentry == "yes" %}
+
+
+def trigger_error(request):
+    """Raise on purpose, to confirm events reach Sentry.
+
+    ``urls.py`` registers this only when a DSN is configured *and* DEBUG is on, so
+    it can never be routable in production - an unauthenticated endpoint that
+    forces a 500 is a free log- and quota-flood.
+    """
+    return 1 / 0
+{%- endif %}
+
+
+# --- Private files ------------------------------------------------------------
+#
+# The media storage standard, section 5. Two ways in, picked by who is asking: a
+# logged-in user clicking a link goes through the permission gate, which signs at
+# click time; an <img src> or an API client gets the storage's signed .url, which
+# on disk lands on private_file_signed below.
+
+
+def _private_download_headers(response):
+    # Belt and braces with the site-wide setting: a private download must never be
+    # interpreted as HTML by a browser that disagrees with our Content-Type, and
+    # must never be kept by the browser or a shared cache.
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+def _is_safe_name(name):
+    # Stored names are generated by the upload_to callable. A traversal segment or
+    # a leading slash means the name did not come from us.
+    return bool(name) and not name.startswith("/") and ".." not in PurePosixPath(name).parts
+
+
+def _send_private_file(storage, name):
+    """The file itself, from disk: streamed by Django, or handed to nginx.
+
+    Images open inline so an ``<img src>`` works. Everything else is an
+    attachment - SVG included, because it is a document that can carry script -
+    so an uploaded HTML file never renders on this site's own origin.
+    """
+    content_type = mimetypes.guess_type(name)[0] or "application/octet-stream"
+    inline = content_type.startswith("image/") and content_type != "image/svg+xml"
+    filename = PurePosixPath(name).name
+
+    if settings.PRIVATE_FILES_ACCEL_PREFIX:
+        # An empty response: nginx reads the X-Accel-Redirect header and sends
+        # the bytes from its internal location, so no gunicorn worker is held for
+        # the length of a large download. nginx keeps the headers set here.
+        response = HttpResponse(content_type=content_type)
+        response["X-Accel-Redirect"] = (
+            settings.PRIVATE_FILES_ACCEL_PREFIX.rstrip("/") + "/" + quote(name)
+        )
+        response["Content-Disposition"] = content_disposition_header(not inline, filename)
+    else:
+        response = FileResponse(
+            storage.open(name, "rb"),
+            as_attachment=not inline,
+            filename=filename,
+            content_type=content_type,
+        )
+    return _private_download_headers(response)
+
+
+@require_safe
+def private_file(request, model_label, pk, field_name):
+    """The permission gate: ``/files/<app.model>/<pk>/<field>/``.
+
+    Login, then the rule ``PRIVATE_FILE_PERMISSIONS`` holds for the model. 404
+    for an unknown model, a field that is not private (so this can never read a
+    public-storage path) or a missing file; 403 without permission. Then a fresh
+    link: the file itself on disk, a redirect to a presigned URL in a bucket.
+    """
+    if not request.user.is_authenticated:
+        return redirect_to_login(request.get_full_path())
+
+    try:
+        model = apps.get_model(model_label)
+        field = model._meta.get_field(field_name)
+    except LookupError, ValueError, FieldDoesNotExist:
+        raise Http404 from None
+    if not is_private_field(field):
+        raise Http404
+
+    try:
+        obj = model._default_manager.get(pk=pk)
+    except model.DoesNotExist, ValueError, ValidationError:
+        raise Http404 from None
+    if not user_may_open(request, obj):
+        raise PermissionDenied
+
+    name = getattr(obj, field.name).name
+    storage = private_media_storage()
+    if not _is_safe_name(name) or not storage.exists(name):
+        raise Http404
+    if isinstance(storage, FileSystemStorage):
+        return _send_private_file(storage, name)
+    return _private_download_headers(HttpResponseRedirect(storage.url(name)))
+
+
+@require_safe
+def private_file_signed(request, token):
+    """A signed, expiring URL to a private file on disk: ``/files/signed/<token>/``.
+
+    No login, exactly like a presigned S3 URL: the token is the authority, and it
+    cannot be forged without ``SECRET_KEY``. 404 for a bad or expired token, and
+    whenever the private storage is not on disk - a bucket signs its own URLs.
+    """
+    name = unsign_file_name(token)
+    storage = private_media_storage()
+    if (
+        name is None
+        or not _is_safe_name(name)
+        or not isinstance(storage, FileSystemStorage)
+        or not storage.exists(name)
+    ):
+        raise Http404
+    return _send_private_file(storage, name)
+{%- if cookiecutter.stack == "django" and cookiecutter.frontend != "api_only" %}
+
+
+# --- Pages -------------------------------------------------------------------
+
+
+#: Top-level navigation for the server-rendered shell. A list rather than a
+#: model because a plain-Django project has no CMS to edit one in; replace it
+#: with a query when the project grows real navigable content.
+NAV_ITEMS = [
+    {"label": "Home", "url_name": "home"},
+]
+
+
+def _nav_items(request):
+    items = []
+    for entry in NAV_ITEMS:
+        try:
+            url = reverse(entry["url_name"])
+        except NoReverseMatch:
+            continue
+        items.append({"label": entry["label"], "url": url, "is_active": request.path == url})
+    return items
+
+
+def home(request):
+    return render(request, "core/home.html", {"nav_items": _nav_items(request)})
+{%- endif %}
+
+
+# --- Error handlers ----------------------------------------------------------
+#
+# Rendered from templates so the client's branding survives an error. The
+# fallback exists because an API-only project has no HTML templates at all, and a
+# TemplateDoesNotExist inside an error handler turns a 404 into a 500.
+
+
+def _error_response(request, template_name, status):
+{%- if cookiecutter.api != "none" %}
+    if request.path.startswith("/api/"):
+        # An API client that has to parse an HTML error page is a client that
+        # breaks. Everything under /api/ answers in one error shape.
+        from apps.api.exceptions import problem_json_response
+
+        return problem_json_response(request, status)
+{%- endif %}
+    try:
+        return render(request, template_name, status=status)
+    except TemplateDoesNotExist:
+        return HttpResponse(str(status), status=status, content_type="text/plain")
+
+
+def bad_request(request, exception=None):
+    return _error_response(request, "400.html", 400)
+
+
+def permission_denied(request, exception=None):
+    return _error_response(request, "403.html", 403)
+
+
+def page_not_found(request, exception=None):
+    return _error_response(request, "404.html", 404)
+
+
+def server_error(request):
+    return _error_response(request, "500.html", 500)

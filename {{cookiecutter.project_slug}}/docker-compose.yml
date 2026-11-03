@@ -1,0 +1,150 @@
+{%- set needs_redis = cookiecutter.cache == "redis"
+    or (cookiecutter.task_queue == "huey" and cookiecutter.huey_backend == "redis")
+    or (cookiecutter.task_queue == "celery" and cookiecutter.task_broker != "rabbitmq") -%}
+# Local development services.
+#
+#   docker compose up -d              infrastructure only - db, cache, mail
+#   docker compose --profile app up   the full stack, application included
+#
+# The default is infrastructure only, and the application runs on the host with
+# 'make run'. That is the fastest loop on macOS and Windows, where a bind mount
+# into a Linux VM is markedly slower than the host filesystem, and it keeps the
+# debugger attached to a normal local process.
+#
+# On Windows, run the application inside WSL2 rather than natively: the upload
+# content sniffing needs libmagic and the translation workflow needs gettext,
+# and neither has a maintained Windows build. Everything below is the same
+# either way - the containers do not care which side of WSL the host is.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: {{ cookiecutter.project_slug }}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+{%- if needs_redis %}
+
+  redis:
+{%- if cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "sqs" %}
+    # Production uses Amazon SQS, which has no local equivalent worth running. Point
+    # CELERY_BROKER_URL at this Redis in development instead, and read
+    # docs/03-infrastructure.md: a broker that differs between environments is
+    # acceptable for a queue, but the SQS-specific behaviour (visibility timeout,
+    # redelivery, no remote control) has to be exercised on UAT before go-live.
+{%- endif %}
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+{%- endif %}
+{%- if cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "rabbitmq" %}
+
+  rabbitmq:
+    # The management plugin is on http://localhost:15672 (guest/guest). It is a
+    # development convenience: a real broker is never exposed like this.
+    image: rabbitmq:4-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+{%- endif %}
+
+  mail:
+    # Catches outbound mail in development so nothing reaches a real address.
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+{%- if cookiecutter.deploy_target == "docker_compose" %}
+
+  web:
+    profiles: ["app"]
+    build: .
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    # Migrations run as an explicit deploy step, never on container start:
+    #   docker compose run --rm web python manage.py migrate
+{%- if cookiecutter.task_queue == "huey" %}
+
+  worker:
+    profiles: ["app"]
+    # The SAME image as web, deliberately. A worker built from a different commit
+    # runs different code against the same database, and nothing reports it.
+    build: .
+    env_file: .env
+    command: python manage.py run_huey
+    depends_on:
+      db:
+        condition: service_healthy
+{%- if cookiecutter.huey_backend == "redis" %}
+      redis:
+        condition: service_healthy
+{%- endif %}
+    # No beat service: the huey consumer runs the periodic schedule itself.
+{%- elif cookiecutter.task_queue == "celery" %}
+
+  worker:
+    # The SAME image as web, deliberately. A worker built from a different commit
+    # runs different code against the same database, and nothing reports it.
+    build: .
+    env_file: .env
+    command: celery -A {{ cookiecutter.project_slug }} worker --loglevel=INFO --concurrency=2
+    depends_on:
+      db:
+        condition: service_healthy
+{%- if cookiecutter.task_broker == "rabbitmq" %}
+      rabbitmq:
+        condition: service_healthy
+{%- elif needs_redis %}
+      redis:
+        condition: service_healthy
+{%- endif %}
+
+  beat:
+    profiles: ["app"]
+    # Exactly ONE beat process, ever. Two schedulers on one schedule means every
+    # periodic task fires twice.
+    build: .
+    env_file: .env
+    command: celery -A {{ cookiecutter.project_slug }} beat --loglevel=INFO
+    depends_on:
+      db:
+        condition: service_healthy
+{%- if cookiecutter.task_broker == "rabbitmq" %}
+      rabbitmq:
+        condition: service_healthy
+{%- elif needs_redis %}
+      redis:
+        condition: service_healthy
+{%- endif %}
+{%- endif %}
+{%- endif %}
+
+volumes:
+  pgdata:
+{%- if cookiecutter.task_queue == "celery" and cookiecutter.task_broker == "rabbitmq" %}
+  rabbitmqdata:
+{%- endif %}

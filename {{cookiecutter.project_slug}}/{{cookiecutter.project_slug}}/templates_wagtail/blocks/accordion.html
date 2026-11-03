@@ -1,0 +1,22 @@
+{% load wagtailcore_tags %}{% comment %}
+Collapsible question/answer rows.
+
+Native details/summary, so the block opens and closes with no JavaScript: it is
+keyboard-operable, it is found by the browser's own find-in-page even while
+closed, and it still works on a page whose script failed to load. The rows are
+independent rather than mutually exclusive - grouping them needs a name shared
+across one accordion only, and two accordions on the same page would then fight
+each other.
+{% endcomment %}
+<section class="block-accordion">
+    {% if value.heading %}
+        <h2 class="block-accordion__heading">{{ value.heading }}</h2>
+    {% endif %}
+
+    {% for item in value.items %}
+        <details class="block-accordion__item">
+            <summary class="block-accordion__question">{{ item.question }}</summary>
+            <div class="block-accordion__answer flow">{{ item.answer|richtext }}</div>
+        </details>
+    {% endfor %}
+</section>

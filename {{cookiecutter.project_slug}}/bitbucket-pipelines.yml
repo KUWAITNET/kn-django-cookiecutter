@@ -1,0 +1,130 @@
+# CI for {{ cookiecutter.project_name }}.
+# Every gate here is a KUWAITNET standard: lint (with security rules), static
+# security analysis, a dependency vulnerability audit, a check that no model
+# change is missing a migration, and the test suite with the coverage floor.
+image: python:{{ cookiecutter.python_version }}
+
+definitions:
+  services:
+    postgres:
+      image: postgres:17-alpine
+      variables:
+        POSTGRES_DB: test_{{ cookiecutter.project_slug }}
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: postgres
+{%- if cookiecutter.cache == "redis" %}
+    redis:
+      image: redis:7-alpine
+{%- endif %}
+  caches:
+    uv: ~/.cache/uv
+
+  steps:
+    - step: &quality
+        name: Lint, security and dependency audit
+        caches: [uv]
+        script:
+          - pip install --quiet uv
+          - uv sync --frozen
+          - uv run ruff check .
+          - uv run ruff format --check .
+          - uv run bandit -c pyproject.toml -r apps {{ cookiecutter.project_slug }}
+          # Fails the build on a known-vulnerable dependency.
+          - uv run pip-audit
+          # The SBOM is evidence, not a gate: it records what this build contains
+          # so "are we affected?" can be answered later without re-resolving.
+          - uv export --format cyclonedx1.5 -o sbom.json
+        artifacts:
+          - sbom.json
+
+    # The KUWAITNET rules no linter has a rule for. Stdlib only, so there is no
+    # dependency install here at all - the step runs in seconds and cannot fail
+    # for a reason unrelated to the code.
+    - step: &standards
+        name: KUWAITNET standards checker
+        script:
+          - python3 tools/check_standards.py
+
+    - step: &tests
+        name: Tests and coverage gate
+        caches: [uv]
+        services: [postgres{% if cookiecutter.cache == "redis" %}, redis{% endif %}]
+        script:
+          - apt-get update && apt-get install -y --no-install-recommends libmagic1 gettext
+          - pip install --quiet uv
+          - uv sync --frozen
+          - export DATABASE_URL=postgres://postgres:postgres@localhost:5432/test_{{ cookiecutter.project_slug }}
+{%- if cookiecutter.cache == "redis" %}
+          - export REDIS_URL=redis://localhost:6379/1
+{%- endif %}
+          # A model change without a migration fails here, not on the server.
+          - uv run python manage.py makemigrations --check --dry-run
+          - uv run pytest --cov=apps --cov-report=term-missing --cov-fail-under=60
+        artifacts:
+          - coverage.xml
+
+    - step: &deploy_checks
+        name: Production configuration checks
+        caches: [uv]
+        script:
+          # libmagic is what content sniffing on uploads runs on, and its absence
+          # is itself one of the checks. Without it this step fails on a missing
+          # system package rather than on a misconfiguration.
+          - apt-get update && apt-get install -y --no-install-recommends libmagic1
+          - pip install --quiet uv
+          - uv sync --frozen
+          # Must report zero issues. This is a gate, not advice.
+          #
+          # The values below are a realistic dummy environment, not secrets: the
+          # step asks whether the settings are correct GIVEN an environment, so
+          # anything merely absent here would fail the gate for a reason that has
+          # nothing to do with the code.
+          - >
+            DJANGO_SETTINGS_MODULE={{ cookiecutter.project_slug }}.settings.production
+            SECRET_KEY=ci-only-not-a-secret-but-long-enough-to-pass-the-length-check
+            ALLOWED_HOSTS={{ cookiecutter.domain_name }}
+{%- if cookiecutter.spam_protection == "turnstile_honeypot" %}
+            TURNSTILE_SITE_KEY=ci-only-not-a-site-key
+            TURNSTILE_SECRET_KEY=ci-only-not-a-secret-key
+{%- endif %}
+{%- if cookiecutter.media_storage == "s3" %}
+            AWS_STORAGE_BUCKET_NAME=ci-only-media
+            AWS_PRIVATE_BUCKET_NAME=ci-only-private
+            AWS_S3_REGION_NAME=me-south-1
+{%- elif cookiecutter.media_storage == "gcs" %}
+            GS_BUCKET_NAME=ci-only-media
+            GS_PRIVATE_BUCKET_NAME=ci-only-private
+            GOOGLE_APPLICATION_CREDENTIALS=/ci-only/not-a-key.json
+{%- if cookiecutter.static_storage == "cloud" %}
+            GS_STATIC_BUCKET_NAME=ci-only-static
+{%- endif %}
+{%- elif cookiecutter.media_storage == "azure" %}
+            AZURE_CONTAINER=ci-only-media
+            AZURE_PRIVATE_CONTAINER=ci-only-private
+            AZURE_ACCOUNT_NAME=cionlyaccount
+            AZURE_ACCOUNT_KEY=ci-only-not-a-key
+{%- if cookiecutter.static_storage == "cloud" %}
+            AZURE_STATIC_CONTAINER=ci-only-static
+{%- endif %}
+{%- endif %}
+            uv run python manage.py check --deploy --fail-level WARNING
+
+pipelines:
+  default:
+    - parallel:
+        - step: *quality
+        - step: *standards
+        - step: *tests
+        - step: *deploy_checks
+  branches:
+    main:
+      - parallel:
+          - step: *quality
+          - step: *standards
+          - step: *tests
+          - step: *deploy_checks
+
+# Before go-live, run the ZAP baseline scan against staging as part of the
+# security pass (security-baseline.md section 18):
+#   docker run --rm -t ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+#     -t https://staging.{{ cookiecutter.domain_name }} -r zap-report.html

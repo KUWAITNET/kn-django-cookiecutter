@@ -1,0 +1,141 @@
+"""Wagtail admin for subscribers, the composer and the campaign log."""
+
+from django.urls import path, reverse
+from django.utils.translation import gettext_lazy as _
+from django.views.generic import FormView
+from wagtail import hooks
+from wagtail.admin import messages
+from wagtail.admin.panels import FieldPanel, MultiFieldPanel
+from wagtail.admin.ui.tables import Column
+from wagtail.admin.views.generic.base import WagtailAdminTemplateMixin
+from wagtail.admin.views.generic.permissions import PermissionCheckedMixin
+from wagtail.admin.viewsets.base import ViewSet, ViewSetGroup
+from wagtail.permission_policies import ModelPermissionPolicy
+
+from apps.core.viewsets import NoAddModelViewSet
+from apps.newsletter.forms import CampaignForm
+from apps.newsletter.models import AUDIENCE_ALL, Campaign, Subscriber
+from apps.newsletter.services import recipient_counts, send_campaign
+
+
+class SendNewsletterView(PermissionCheckedMixin, WagtailAdminTemplateMixin, FormView):
+    """Compose a campaign and send it in the same request.
+
+    Permission is the campaign log's "add": the row this view writes is the
+    record of the send, so whoever may create one may send one.
+    """
+
+    template_name = "newsletter/admin/send_newsletter.html"
+    form_class = CampaignForm
+    permission_policy = ModelPermissionPolicy(Campaign)
+    permission_required = "add"
+    page_title = _("Send newsletter")
+    header_icon = "mail"
+
+    def get_success_url(self):
+        return reverse("send-newsletter:index")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        counts = recipient_counts()
+        selected = context["form"]["audience"].value() or AUDIENCE_ALL
+        context.update(
+            base_template="wagtailadmin/generic/base.html",
+            counts=counts,
+            selected_count=counts.get(selected, 0),
+        )
+        return context
+
+    def form_valid(self, form):
+        campaign = send_campaign(
+            content=form.cleaned_data["content"],
+            audience=form.cleaned_data["audience"],
+            sent_by=self.request.user,
+        )
+        messages.success(
+            self.request,
+            _("Newsletter sent to %(count)d subscriber(s).") % {"count": campaign.recipient_count},
+        )
+        return super().form_valid(form)
+
+
+class SubscriberViewSet(NoAddModelViewSet):
+    """Subscribers arrive through the public form; a hand-typed one consented to nothing."""
+
+    model = Subscriber
+    name = "newsletter-subscribers"
+    icon = "mail"
+    menu_label = "Subscribers"
+    add_to_admin_menu = False
+    copy_view_enabled = False
+    list_per_page = 50
+    list_display = ["email", "language", "is_confirmed", "is_active", "created_at"]
+    list_filter = ["is_confirmed", "is_active", "language"]
+    search_fields = ["email"]
+    panels = [
+        MultiFieldPanel(
+            [
+                FieldPanel("email", read_only=True),
+                FieldPanel("language", read_only=True),
+                FieldPanel("created_at", read_only=True),
+                FieldPanel("confirmed_at", read_only=True),
+                FieldPanel("unsubscribed_at", read_only=True),
+            ],
+            heading="Subscription",
+        ),
+        FieldPanel("is_active"),
+    ]
+
+
+class CampaignViewSet(NoAddModelViewSet):
+    """Read-only record of what was sent, to how many people, by whom."""
+
+    model = Campaign
+    name = "newsletter-campaigns"
+    icon = "mail"
+    menu_label = "Sent newsletters"
+    add_to_admin_menu = False
+    copy_view_enabled = False
+    list_per_page = 50
+    list_display = [
+        Column("subject", label="Subject"),
+        "audience",
+        "recipient_count",
+        "sent_at",
+        "sent_by",
+    ]
+    panels = [
+        MultiFieldPanel(
+            [
+                FieldPanel("audience", read_only=True),
+                FieldPanel("recipient_count", read_only=True),
+                FieldPanel("sent_at", read_only=True),
+                FieldPanel("sent_by", read_only=True),
+            ],
+            heading="Delivery",
+        ),
+        FieldPanel("content", read_only=True),
+    ]
+
+
+class SendNewsletterViewSet(ViewSet):
+    """A single form page in the same menu group as the two listings."""
+
+    name = "send-newsletter"
+    icon = "mail"
+    menu_label = "Send newsletter"
+
+    def get_urlpatterns(self):
+        return [path("", SendNewsletterView.as_view(), name="index")]
+
+
+class NewsletterAdminGroup(ViewSetGroup):
+    menu_label = "Newsletter"
+    menu_icon = "mail"
+    menu_order = 240
+    items = (SubscriberViewSet, SendNewsletterViewSet, CampaignViewSet)
+
+
+@hooks.register("register_admin_viewset")
+def register_newsletter_admin():
+    return NewsletterAdminGroup()

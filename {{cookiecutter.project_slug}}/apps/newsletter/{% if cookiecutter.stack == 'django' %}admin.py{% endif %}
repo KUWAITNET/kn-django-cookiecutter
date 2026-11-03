@@ -1,0 +1,104 @@
+"""Unfold admin for subscribers, the composer and the campaign log."""
+
+from django.contrib import admin, messages
+from django.core.exceptions import PermissionDenied
+from django.http import HttpResponseRedirect
+from django.shortcuts import render
+from django.urls import reverse
+from django.utils.translation import gettext_lazy as _
+from unfold.admin import ModelAdmin
+
+from apps.newsletter.forms import CampaignForm
+from apps.newsletter.models import AUDIENCE_ALL, Campaign, Subscriber
+from apps.newsletter.services import recipient_counts, send_campaign
+
+
+@admin.register(Subscriber)
+class SubscriberAdmin(ModelAdmin):
+    list_display = ["email", "language", "is_confirmed", "is_active", "created_at"]
+    list_filter = ["is_confirmed", "is_active", "language"]
+    search_fields = ["email"]
+    ordering = ["-created_at"]
+    fields = [
+        "email",
+        "language",
+        "is_confirmed",
+        "is_active",
+        "created_at",
+        "confirmed_at",
+        "unsubscribed_at",
+    ]
+    readonly_fields = [
+        "email",
+        "language",
+        "is_confirmed",
+        "created_at",
+        "confirmed_at",
+        "unsubscribed_at",
+    ]
+
+    def has_add_permission(self, request):
+        # Subscribers arrive through the public form, with a confirmation step.
+        # A hand-typed address has consented to nothing.
+        return False
+
+
+@admin.register(Campaign)
+class CampaignAdmin(ModelAdmin):
+    """The campaign log, whose "add" screen is the composer.
+
+    Sending is the only way a row appears, so "Add campaign" opening the
+    composer is not a shortcut: it is what creating a campaign means. Change
+    and delete are off - a record of what left the building is not editable.
+    """
+
+    list_display = ["subject", "audience", "recipient_count", "sent_at", "sent_by"]
+    list_filter = ["audience", "sent_at"]
+    ordering = ["-sent_at"]
+    fields = ["content", "audience", "recipient_count", "sent_at", "sent_by"]
+    readonly_fields = fields
+
+    @admin.display(description=_("Subject"))
+    def subject(self, obj):
+        return obj.subject
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def add_view(self, request, form_url="", extra_context=None):
+        if not self.has_add_permission(request):
+            raise PermissionDenied
+
+        if request.method == "POST":
+            form = CampaignForm(request.POST)
+            if form.is_valid():
+                campaign = send_campaign(
+                    content=form.cleaned_data["content"],
+                    audience=form.cleaned_data["audience"],
+                    sent_by=request.user,
+                )
+                self.message_user(
+                    request,
+                    _("Newsletter sent to %(count)d subscriber(s).")
+                    % {"count": campaign.recipient_count},
+                    messages.SUCCESS,
+                )
+                return HttpResponseRedirect(reverse("admin:newsletter_campaign_changelist"))
+        else:
+            form = CampaignForm()
+
+        counts = recipient_counts()
+        selected = form["audience"].value() or AUDIENCE_ALL
+        context = {
+            **self.admin_site.each_context(request),
+            "base_template": "admin/base_site.html",
+            "title": _("Send newsletter"),
+            "opts": self.opts,
+            "form": form,
+            "counts": counts,
+            "selected_count": counts.get(selected, 0),
+        }
+        return render(request, "newsletter/admin/send_newsletter.html", context)

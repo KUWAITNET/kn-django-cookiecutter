@@ -1,0 +1,13 @@
+{% comment %}
+Footer entry point for the newsletter.
+
+Wrapped in its own template so navigation/footer.html can {% include %} it behind a
+runtime flag: {% load newsletter_tags %} would fail at compile time on a project
+generated without the newsletter app, whereas an {% include %} of a missing template
+is only resolved when it is actually rendered.
+{% endcomment %}
+{% load i18n newsletter_tags %}
+<div class="footer-newsletter">
+  <h2 class="footer-newsletter__heading">{% translate "Newsletter" %}</h2>
+  {% newsletter_signup_form %}
+</div>

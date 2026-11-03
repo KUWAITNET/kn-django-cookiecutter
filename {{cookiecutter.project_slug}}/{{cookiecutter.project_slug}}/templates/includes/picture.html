@@ -1,0 +1,42 @@
+{% comment %}
+Responsive image partial. Every public image goes through this: it is the only
+place in the project that decides loading, decoding and layout-stability
+attributes, so none of them can be forgotten on the twentieth listing card.
+
+Parameters:
+
+  src        REQUIRED. Fallback source url (jpeg/png). Never the uploaded
+             original - always a generated rendition.
+  webp       WebP source url. Emitted as a <source> ahead of the fallback.
+  avif       AVIF source url. Emitted first when present.
+  srcset     Fallback-format srcset, e.g. "a-480.jpg 480w, a-960.jpg 960w".
+             Project-wide breakpoints: 480 / 768 / 1024 / 1440 / 1920.
+  webp_srcset / avif_srcset   the same for the modern formats.
+  sizes      REQUIRED whenever a srcset is given; defaults to 100vw. It must
+             describe the slot's real rendered CSS width. A sizes value that does
+             not match the layout makes srcset actively harmful, because the
+             browser then confidently picks the wrong file.
+  width      REQUIRED. Intrinsic width of src, in pixels.
+  height     REQUIRED. Intrinsic height of src, in pixels.
+             width/height are the single highest-value CLS fix and they are free:
+             the rendition object already knows both.
+  alt        Alt text. Pass alt="" deliberately for a decorative image; omitting
+             it altogether is not the same thing.
+  eager      True for the LCP image ONLY. Emits loading="eager" and
+             fetchpriority="high" instead of loading="lazy". Pair it with a
+             rel="preload" as="image" hint in the extra_head block. The LCP image
+             must never be lazy-loaded and must never be a CSS background, which
+             the browser's preload scanner cannot see.
+  css_class  Class applied to the img element.
+  img_id     id applied to the img element.
+
+Example (generate each rendition with the CMS image tag first):
+
+  include "includes/picture.html" with src=hero.url webp=hero_webp.url
+      srcset=hero_set.srcset webp_srcset=hero_webp_set.srcset sizes="100vw"
+      width=hero.width height=hero.height alt=page.hero_alt eager=True
+{% endcomment %}{% if src %}<picture>{% if avif_srcset or avif %}
+    <source type="image/avif" srcset="{% firstof avif_srcset avif %}"{% if avif_srcset %} sizes="{{ sizes|default:'100vw' }}"{% endif %}>{% endif %}{% if webp_srcset or webp %}
+    <source type="image/webp" srcset="{% firstof webp_srcset webp %}"{% if webp_srcset %} sizes="{{ sizes|default:'100vw' }}"{% endif %}>{% endif %}
+    <img src="{{ src }}"{% if srcset %} srcset="{{ srcset }}" sizes="{{ sizes|default:'100vw' }}"{% endif %} width="{{ width }}" height="{{ height }}" alt="{{ alt|default_if_none:'' }}"{% if eager %} loading="eager" fetchpriority="high"{% else %} loading="lazy"{% endif %} decoding="async"{% if css_class %} class="{{ css_class }}"{% endif %}{% if img_id %} id="{{ img_id }}"{% endif %}>
+</picture>{% endif %}

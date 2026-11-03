@@ -1,0 +1,92 @@
+{% load i18n %}{% get_current_language as LANGUAGE_CODE %}{% comment %}
+The single place that emits page metadata. Included once from base.html, so a page
+type cannot be silently missed - which is why no tag below appears anywhere else
+in the project.
+
+Context it reads. Every key is optional and falls back sensibly, so a brand-new
+project emits a complete, valid tag set before any project code is written.
+
+  seo.title            full <title>. When absent it is built from the page title
+                       plus " | SITE_NAME", and the suffix is dropped when the
+                       result would exceed 65 characters rather than being cut off
+                       in the search result.
+  seo.base_title       title WITHOUT the site-name suffix. Used for og:title,
+                       because og:site_name already carries the site name.
+  seo.description      meta description: plain text, already word-safe truncated.
+  seo.canonical_url    absolute canonical. Falls back to BASE_URL + request.path
+                       plus ?page=, which is part of a paginated listing's own
+                       identity; utm_*, gclid and friends are never kept.
+  seo.og_type          website (default) / article / product.
+  seo.image_url        absolute share image, 1200x630. Falls back to
+                       DEFAULT_OG_IMAGE_URL from the context processor.
+  seo.image_width / seo.image_height / seo.image_alt
+  seo.og_locale        e.g. en_US; derived from the active language when absent.
+  seo.og_locale_alternates   list, e.g. ["ar_KW"].
+  seo.twitter_site     the client's handle including the @. Omitted, never guessed.
+  seo.noindex          True for search results, thank-you pages and flagged objects.
+
+  SITE_NAME, BASE_URL, SITE_DESCRIPTION, DEFAULT_OG_IMAGE_URL,
+  SEO_SITE_VERIFICATION, LANGUAGES_AVAILABLE
+                       from apps.core.context_processors.site_context.
+
+  LANGUAGES_AVAILABLE entries are {code, name, name_local, bidi, url, is_current}.
+  "url" is the ABSOLUTE url of THIS page in that language, resolved under that
+  language so it carries the translated slug - never an /en/ -> /ar/ prefix swap,
+  which 404s the moment a slug is translated. It is empty when the page does not
+  exist in that language, and that language then gets no alternate: a hreflang
+  pointing at a 404 is worse than no hreflang at all.
+{% endcomment %}
+{% comment %}
+Two things about the fallback chains below, both of which are load-bearing:
+
+* They use firstof, not the default filter. A filter ARGUMENT that fails to
+  resolve raises VariableDoesNotExist regardless of string_if_invalid, so
+  |default:page.seo_title would 500 every page of a project that has no `page`
+  in its context - i.e. the whole non-CMS stack.
+* They are wrapped in autoescape off. firstof HTML-escapes what it returns, so an
+  escaped value fed through |add: (building the title suffix) or through
+  |escapejs (the JSON-LD) would be escaped twice and reach the page as
+  "Acme &amp;amp; Co". Resolving raw here and escaping once at output is correct
+  in both destinations - nothing below is ever marked safe.
+{% endcomment %}{% autoescape off %}{% firstof seo.base_title page.seo_title page.title SITE_NAME as page_title %}{% firstof seo.description page.search_description SITE_DESCRIPTION as description %}{% firstof seo.image_url DEFAULT_OG_IMAGE_URL as image %}{% firstof seo.image_alt page_title SITE_NAME as image_alt %}{% endautoescape %}{% if seo.canonical_url %}<link rel="canonical" href="{{ seo.canonical_url }}">
+<meta property="og:url" content="{{ seo.canonical_url }}">
+{% elif request.GET.page %}<link rel="canonical" href="{{ BASE_URL }}{{ request.path }}?page={{ request.GET.page|urlencode }}">
+<meta property="og:url" content="{{ BASE_URL }}{{ request.path }}?page={{ request.GET.page|urlencode }}">
+{% else %}<link rel="canonical" href="{{ BASE_URL }}{{ request.path }}">
+<meta property="og:url" content="{{ BASE_URL }}{{ request.path }}">
+{% endif %}
+{% with suffixed=page_title|add:" | "|add:SITE_NAME %}{% if seo.title %}<title>{{ seo.title }}</title>
+{% elif page_title == SITE_NAME %}<title>{{ SITE_NAME }}</title>
+{% elif suffixed|length <= 65 %}<title>{{ suffixed }}</title>
+{% else %}<title>{{ page_title }}</title>
+{% endif %}{% endwith %}<meta property="og:title" content="{{ page_title }}">
+<meta name="twitter:title" content="{{ page_title }}">
+{% if description %}<meta name="description" content="{{ description }}">
+<meta property="og:description" content="{{ description }}">
+<meta name="twitter:description" content="{{ description }}">
+{% endif %}
+{% if seo.noindex %}<meta name="robots" content="noindex, follow">
+{% endif %}<meta property="og:type" content="{{ seo.og_type|default:'website' }}">
+<meta property="og:site_name" content="{{ SITE_NAME }}">
+{% if LANGUAGES_AVAILABLE|length > 1 %}{% if seo.og_locale %}<meta property="og:locale" content="{{ seo.og_locale }}">
+{% for alternate in seo.og_locale_alternates %}<meta property="og:locale:alternate" content="{{ alternate }}">
+{% endfor %}{% else %}{% for language in LANGUAGES_AVAILABLE %}{% if language.is_current %}<meta property="og:locale" content="{% if language.code == 'ar' %}ar_KW{% elif language.code == 'en' %}en_US{% else %}{{ language.code }}{% endif %}">
+{% else %}<meta property="og:locale:alternate" content="{% if language.code == 'ar' %}ar_KW{% elif language.code == 'en' %}en_US{% else %}{{ language.code }}{% endif %}">
+{% endif %}{% endfor %}{% endif %}{% endif %}
+{% if image %}<meta property="og:image" content="{{ image }}">
+{# Dimensions are required: without them the first scrape of a new URL frequently renders no preview at all. #}
+<meta property="og:image:width" content="{{ seo.image_width|default:1200 }}">
+<meta property="og:image:height" content="{{ seo.image_height|default:630 }}">
+<meta property="og:image:alt" content="{{ image_alt }}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="{{ image }}">
+<meta name="twitter:image:alt" content="{{ image_alt }}">
+{% else %}<meta name="twitter:card" content="summary">
+{% endif %}{% if seo.twitter_site %}<meta name="twitter:site" content="{{ seo.twitter_site }}">
+{% endif %}
+{% if LANGUAGES_AVAILABLE|length > 1 and not seo.noindex %}{# Reciprocal alternates including a self-referencing one, plus x-default on the default language. #}
+{% for language in LANGUAGES_AVAILABLE %}{% if language.url %}<link rel="alternate" hreflang="{{ language.code }}" href="{{ language.url }}">
+{% endif %}{% endfor %}{% if LANGUAGES_AVAILABLE.0.url %}<link rel="alternate" hreflang="x-default" href="{{ LANGUAGES_AVAILABLE.0.url }}">
+{% endif %}{% endif %}
+{% for token in SEO_SITE_VERIFICATION %}<meta name="google-site-verification" content="{{ token }}">
+{% endfor %}

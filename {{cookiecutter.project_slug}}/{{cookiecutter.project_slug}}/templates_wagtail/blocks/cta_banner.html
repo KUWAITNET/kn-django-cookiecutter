@@ -1,0 +1,25 @@
+{% load wagtailimages_tags %}{% comment %}
+A band with a heading and up to two buttons.
+
+The background image is a real img element, not a CSS background: the browser's
+preload scanner cannot see a background-image, so on a banner high on the page it
+is fetched late and becomes the slowest paint on the page. The stylesheet stacks
+the text over it.
+{% endcomment %}
+<section class="block-cta-banner">
+    {% if value.background_image %}
+        {% image value.background_image fill-1600x500 format-webp loading="lazy" decoding="async" alt="" class="block-cta-banner__image" %}
+    {% endif %}
+
+    <div class="block-cta-banner__text flow">
+        <h2 class="block-cta-banner__heading">{{ value.heading }}</h2>
+        {% if value.body %}
+            <p class="block-cta-banner__body">{{ value.body }}</p>
+        {% endif %}
+        {% if value.buttons %}
+            <p class="block-cta-banner__actions">
+                {% for button in value.buttons %}{% include "blocks/button.html" with value=button %}{% endfor %}
+            </p>
+        {% endif %}
+    </div>
+</section>

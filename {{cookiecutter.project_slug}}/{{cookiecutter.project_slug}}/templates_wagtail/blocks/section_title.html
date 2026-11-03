@@ -1,0 +1,14 @@
+{% comment %}
+A heading introducing the section below it.
+
+The alignment value is emitted as a modifier class whose stylesheet rule is
+"text-align: start | center | end". Logical values, never left/right: "start"
+follows the text direction, so the same stored block reads correctly in English
+and in Arabic.
+{% endcomment %}
+<header class="block-section-title block-section-title--{{ value.alignment|default:'start' }}">
+    <h2 class="block-section-title__heading">{{ value.heading }}</h2>
+    {% if value.subheading %}
+        <p class="block-section-title__subheading">{{ value.subheading }}</p>
+    {% endif %}
+</header>
